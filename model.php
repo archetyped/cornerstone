@@ -11,9 +11,20 @@ class Cornerstone {
 	var $_caller;
 	
 	/**
+	 * @var string Prefix base for elements created by plugin
+	 * @static
+	 */
+	var $_prefix = 'cnr_';
+	
+	/**
 	 * @var string Prefix for elements created by plugin
 	 */
-	var $_prefix = 'cns_';
+	var $_prefix_db = '';
+	
+	/**
+	 * @var string variable to add to queries to indicate that the plugin has modified the query
+	 */
+	var $_qry_var = 'var';
 	
 	/**
 	 * @var string Base name for Content Type Admin Menus
@@ -25,33 +36,70 @@ class Cornerstone {
 	 */
 	var $debug;
 	
+	var $path = __FILE__;
+	
+	var $url_base = '';
+	
 	/* Constructor */
 	
 	function Cornerstone($caller) {
+		//Set Properties
 		$this->_caller = $caller;
+		$this->_prefix_db = $this->get_db_prefix();
+		$this->_qry_var = $this->_prefix . $this->_qry_var;
 		$this->debug = new S_DEBUG();
+		$this->path = str_replace('\\', '/', $this->path);
+		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
 		//Initialization
 		register_activation_hook($this->_caller, $this->m('activate'));
+		
 		//Add Actions
-		//Menus
+		//Admin
+			//Head
+		add_action('admin_head', $this->m('admin_add_styles'));
+		add_action('admin_print_scripts', $this->m('admin_add_scripts'));
+			//Menus
 		add_action('admin_menu', $this->m('admin_menu'));
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
+		
 		//Add Filters
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
+		
 		//Posts
 		add_filter('the_posts', $this->m('get_children'));
 		add_filter('post_link', $this->m('post_link'), 10, 2);
+		
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
-		
-		//Debug
-		//add_filter('posts_request', $this->m('posts_request'));
-		//add_filter('posts_where', $this->m('posts_where'));
+		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
+		add_action('wp_ajax_pg_save', $this->m('pg_save'));
 	}
 	
 	/* Methods */
+	
+	function pg_save() {
+		//Create new page group using AJAX data
+		$group = new CNR_Page_Group((int)$_POST['id']);
+		$nonce_name = $group->get_nonce_name($group->parse_action($_POST['action']));
+		//Validate admin referer AND ajax_referer
+		$msg = '';
+		if (check_admin_referer($nonce_name, '_ajax_nonce')) {
+			//If nonce is valid, save page group
+			if (is_array($_POST['pages']))
+				$group->load_pages($_POST['pages']);
+			$group->save();
+			//Return success message + new nonces for actions
+			$msg = "{'msg': 'Group Saved (" . $nonce_name . ")! - Pages: " . implode(', ', $_POST['pages']) . "'}";	
+		} else {
+			$msg = "{'msg': 'Could not save group'";
+		}
+		echo $msg;
+		exit;
+	}
+	
+	/*-** Helpers **-*/
 	
 	/**
 	 * Returns callback to instance method
@@ -61,28 +109,57 @@ class Cornerstone {
 	function m($method) {
 		return array($this, $method);
 	}
-
-	function activate() {
+	
+	/**
+	 * Returns URL of file (assumes that it is in plugin directory)
+	 * @return string File path
+	 * @param string $file name of file get URL
+	 */
+	function get_file_url($file) {
+		if (is_string($file) && '' != trim($file)) {
+			$file = ltrim(trim($file), '/');
+			$file = sprintf('%s/%s', $this->url_base, $file);
+		}
+		return $file;
+	}
+	
+	/**
+	 * Returns Database prefix for Cornerstone-related DB Tables
+	 * @static
+	 * @return string Database prefix
+	 */
+	function get_db_prefix() {
 		global $wpdb;
-		$prefix = $wpdb->prefix . 'cnr_';
+		$c_vars = get_class_vars(__CLASS__);
+		return $wpdb->prefix . $c_vars['_prefix'];
+	}
+	
+	/**
+	 * Returns Class prefix
+	 * @static
+	 * @return string Class prefix
+	 */
+	function get_prefix() {
+		$c_vars = get_class_vars(__CLASS__);
+		return $c_vars['_prefix'];
+	}
+	
+	/*-** Activation **-*/
+	
+	function activate() {
+		global $wpdb, $wp_rewrite;
 		//Create DB Tables (if not yet created)
 		//Setup table definitions
 		$tables = array(
-						$prefix . 'groups' => 'CREATE TABLE ' . $prefix . "groups (                                     
-								                id smallint(5) unsigned NOT NULL auto_increment,              
-								                group_title varchar(90) NOT NULL,   
-								                group_name varchar(90) NOT NULL,    
-								                PRIMARY KEY  (id)
-								              )",
-						$prefix . 'groups_pages' => 'CREATE TABLE ' . $prefix . "groups_pages (                               
-								                      id smallint(5) NOT NULL default '0',                          
-								                      group_id smallint(5) default NULL,                            
-								                      page_id bigint(20) unsigned default NULL,                     
-								                      page_order int(11) default '0',                               
-								                      PRIMARY KEY  (id)
-								                    )" 
+						$this->_prefix_db . 'page_groups' => 'CREATE TABLE ' . $this->_prefix_db . 'page_groups (
+												group_id int(5) unsigned NOT NULL auto_increment,
+												group_title varchar(90) NOT NULL,
+												group_name varchar(90) NOT NULL,
+												group_pages text,
+												PRIMARY KEY (group_id) 
+											)'
 						);
-		//Check tables
+		//Check tables and create/modify if necessary
 		foreach ($tables as $key => $val)
 		{
 			if ($wpdb->get_var("SHOW TABLES LIKE '" . $key . "'") != $key) {
@@ -90,18 +167,24 @@ class Cornerstone {
 		        dbDelta($val);
 			}
 		}
+		
+		//Rebuild URL Rewrite rules
+		$wp_rewrite->flush_rules();
 	}
 
+	/*-** Admin **-*/
+	
 	/**
 	 * Sets up Admin menus
 	 * @return void
 	 */
 	function admin_menu() {
-		//Page Groups
-		//add_submenu_page('edit-pages.php', 'Groups ', 'Groups', 8, __FILE__, 'cnr_menu_page_groups');
 		//Content Types
 		add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_content_types'));
 		add_submenu_page($this->file_content_types, 'Manage Content Types', 'Manage', 8, $this->file_content_types . '_manage', $this->m('menu_content_types_manage'));
+		
+		//Page Groups
+		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('menu_page_groups'));
 	}
 
 	/**
@@ -110,6 +193,42 @@ class Cornerstone {
 	 */
 	function menu_content_types() {
 		echo '<div class="wrap"><h2>Content Types</h2></div>';
+	}
+	
+	/**
+	 * Content to display for Page Groups Admin Menu
+	 * @return void
+	 */
+	function menu_page_groups() {
+		?>
+		<div class="wrap"><h2>Page Groups</h2>
+			<table class="widefat page fixed" cellspacing="0">
+				<thead>
+					<tr>
+					<!--?php print_column_headers('edit-pages'); ?-->
+						<th>Name</th>
+						<th class="column-rel">Code</th>
+						<th class="column-rel">Pages</th>
+					</tr>
+				</thead>
+				
+				<tfoot>
+					<tr>
+					<!--?php print_column_headers('edit-pages', false); ?-->
+						<th>Name</th>
+						<th>Code</th>
+						<th>Pages</th>
+					</tr>
+				</tfoot>
+				
+				<tbody>
+					<!--?php page_rows($posts, $pagenum, $per_page); ?-->
+					<?php CNR_Page_Groups::rows(); ?>
+				</tbody>
+			</table>
+		</div>
+		
+		<?php
 	}
 	
 	/**
@@ -133,10 +252,31 @@ class Cornerstone {
 		wp_dropdown_pages(array('exclude_tree' => $post->ID, 'selected' => $post->post_parent, 'name' => 'parent_id', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
 	}
 	
-	/* Section */
+	function admin_add_styles() {
+		//Define file properties
+		$file_base = 'admin_styles';
+		$handle = $this->_prefix . $file_base;
+		$file_url = $this->get_file_url($file_base . '.css');
+		
+		//Add to page
+		wp_register_style($handle, $file_url);
+		wp_print_styles($handle);
+	}
 	
-	function get_children($posts)
-	{
+	function admin_add_scripts() {
+		wp_enqueue_script('jquery-ui-sortable');
+		wp_enqueue_script('jquery-ui-draggable');
+		wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
+	}
+	
+	/*-** Content **-*/
+	
+	/**
+	 * Gets children posts of specified page and stores them in global $wp_query variable
+	 * @return array $posts Posts array
+	 * @param array $posts Array of Posts (@see WP_QUERY)
+	 */
+	function get_children($posts) {
 		//Global variables
 		global $wp_query, $wpdb;
 		//Additional wp_query variables
@@ -198,11 +338,10 @@ class Cornerstone {
 	
 	/**
 	 * Modifies post permalink to reflect position of post in site structure
-	 * Example: baseurl/section-name/post-name
+	 * Example: baseurl/section-name/post-name/
 	 * @return string
 	 * @param string $permalink Current permalink url for post
 	 * @param object $post Post object
-	 * @param bool $leavename[optional] Defaults to false. Whether to keep post name or page name.
 	 */
 	function post_link($permalink, $post) {
 		global $wp_rewrite;
@@ -215,8 +354,8 @@ class Cornerstone {
 			//Get post path
 			$path = $this->get_post_path($post);
 			
-			//Set permalink
-			$permalink = $base . $path . $post->post_name;
+			//Set permalink (Add trailing slash)
+			$permalink = $base . $path . $post->post_name . '/';
 		}
 		return $permalink;
 	}
@@ -261,13 +400,15 @@ class Cornerstone {
 		return $path;
 	}
 	
+	/*-** Query **-*/
+	
 	/**
 	 * Adds custom query variables
 	 * @return array Array of query variables
 	 * @param array $query_vars WP-built list of query variables
 	 */
 	function query_vars($query_vars) {
-		$query_vars[] = 'tester';
+		$query_vars[] = $this->_qry_var;
 		return $query_vars;
 	}
 	
@@ -277,14 +418,16 @@ class Cornerstone {
 	 * @param object $query_obj WP_Query object reference to <tt>$wp_query</tt> variable
 	 */
 	function pre_get_posts($query_obj) {
-		if (!isset($query_obj->query_vars['tester'])) {
+		if (!isset($query_obj->query_vars[$this->_qry_var])) {
 			return;
 		}
-
+		//$query_obj = new WP_Query;
 		if (!isset($query_obj->queried_object_id) || !$query_obj->queried_object_id) {
 			$query_obj->query_vars['name'] = sanitize_title(basename($query_obj->query_vars['pagename']));
+			//Remove pagename variable from query
 			unset($query_obj->query_vars['pagename']);
-			$query_obj->is_page = false;
+			//Reparse query variables
+			$query_obj->parse_query($query_obj->query_vars);
 		}
 
 	}
@@ -297,10 +440,9 @@ class Cornerstone {
 	function rewrite_rules_array($rewrite_rules_array) {
 		global $wp_rewrite;
 		$rules_extra = array();
-		
-		//Posts
+		//Posts/Pages
 		//$rules_extra['([\/\w-]+)/([A-Za-z0-9-]+)$'] = $wp_rewrite->index . "?name=\$matches[2]";
-		$rules_extra['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&tester=\$matches[1]";
+		$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
 		//Pages
 		//$rules_extra['^([/\w-]+)$'] = $wp_rewrite->index . "?pagename=\$matches[1]";
 		
@@ -337,31 +479,514 @@ class Cornerstone {
 		//DEBUG - DO NOT USE $cms_rules[$section_prefix.'(.*)/?$']=$wp_rewrite->index."?pagename=\$matches[1]";
 		//$cms_rules['(feed)/?$'] = "$wp_rewrite->index?feed=feed";
 		//return ($cms_rules + $rewrite_rules_array + $cms_rules_2);
-		$rewrite_rules_array = $rules_extra + $rewrite_rules_array;
-		//Return rules with new rules prepended
+		//$rewrite_rules_array = $rewrite_rules_array + $rules_extra;
+		//Return rules with new rules added
 		return $rewrite_rules_array;
 	}
+}
+
+class CNR_Page_Groups {
 	
-	/* Remove */
+	/**
+	 * @var array Stores page groups
+	 */
+	var $_groups = array();
 	
-	function posts_request($request) {
-		$this->debug->add_message('posts_request', $request);
-		return $request;
+	var $_fetched = false;
+	
+	/**
+	 * @var string Page Group DB table base name
+	 * @static
+	 */
+	var $_db_table = 'page_groups';
+	
+	/*-** Constructor **-*/
+	
+	function CNR_Page_Groups() {
+		
 	}
 	
-	function posts_where($where) {
-		global $wp_query, $wpdb;
-		$this->debug->add_message('posts_where', $where);
-		//Check for post name request
-		if (isset($wp_query->query_vars['tester'])) {
-			//Remove post_type condition
-			$type_pattern = "/(\sAND )($wpdb->posts.post_type)\s*=\s*'*\w+'*/i";
-			$where = preg_replace($type_pattern, '$1 ($2 = \'post\' OR $2 = \'page\') ', $where);
-			//Add post name to where condition
-			$where .= sprintf(' AND %s.post_name = \'%s\'', $wpdb->posts, sanitize_title(basename($wp_query->query_vars['tester'])));
+	/**
+	 * Populates $groups variable with all Page groups in DB
+	 * @return mixed If a single group is specified, return the object, otherwise, return nothing
+	 * @param object $group_id[optional] Retrieve a specific group by ID
+	 */
+	function get($group_id = 0) {
+		global $wpdb;
+		
+		if (0 == $group_id || !is_int($group_id)) {
+			//Get all Groups
+			$qry = 'SELECT * FROM %s ORDER BY group_title';
+		} elseif (is_int($group_id)) {
+			//Get specific Group
+			$qry = 'SELECT * FROM %s WHERE ID = %d LIMIT 0, 1';
 		}
-		$this->debug->add_message('posts_where (modified)', $where);
-		return $where;
+		//Get
+		$db_table = call_user_func(array(__CLASS__, 'get_db_table'));
+		$qry = sprintf($qry, $db_table, $group_id);
+		$res_groups = $wpdb->get_results($qry);
+		
+		//Build Page_Group objects for each result
+		$groups = array();
+		foreach ($res_groups as $group) {
+				$groups[] = new CNR_Page_Group($group);
+		}
+		return $groups;
+	}
+	
+	/**
+	 * @return string Page groups as Table rows 
+	 * @static
+	 */
+	function get_rows() {
+		//Get Groups
+		$groups = call_user_func(array(__CLASS__, 'get'));
+		$rows = '';
+		
+		//Iterate through groups and build table rows
+		if (is_array($groups)) {
+			$row;
+			//All pages variable
+			$pages = get_pages();
+			//HTML element templates
+			$ul_temp = '<ul>%s</ul>';
+			$li_temp = '<li class="item-page pid_%s">%s</li>';
+			//Group list
+			$list = '';
+			foreach ($pages as $page) {
+				$list .= sprintf($li_temp, $page->ID, $page->post_title);
+			}
+			$list = sprintf($ul_temp, $list);
+			foreach ($groups as $group) {
+				//Title
+				$row = sprintf($group->get_template('col_title'), $group->name, $group->build_pages_list(true), $list);
+				//Code
+				$row .= sprintf($group->get_template('col_default'), $group->code);
+				//Page Count
+				$row .= sprintf($group->get_template('col_default'), $group->count_pages());
+				$rows .= sprintf($group->get_template('row'), $group->get_node_id(), $row);
+			}
+			$rows .= call_user_func(array(__CLASS__, 'get_groups_js'), $groups);
+		}
+		
+		return $rows;
+	}
+	
+	/**
+	 * Prints Page Groups as Table Rows
+	 * @return void
+	 */
+	function rows() {
+		echo call_user_func(array(__CLASS__, 'get_rows'));
+	}
+	
+	/**
+	 * Generates JS code to build page groups on client-side
+	 * @param array $groups Page Groups array
+	 * @return string JS code for building groups
+	 * @static
+	 */
+	function get_groups_js($groups) {
+		//var pageGroups = [new PageGroup({'id': 1, 'pages': [7,5,4], 'node': 'pg_1'})];
+		$pg_var = '<script type="text/javascript">PageGroup.setTemplate(\'%s\'); var pageGroups = [%s]</script>';
+		$pg_items = array();
+		$count = 0;
+		$li_temp = '';
+		foreach ($groups as $group) {
+			$pg_items[] = $group->build_js();
+			if ($count == 0) {
+				$li_temp = $group->get_template('page_item');
+				$count++;
+			}
+		}
+		return $pg_var = sprintf($pg_var, $li_temp, implode(', ', $pg_items));
+	}
+	
+	/**
+	 * Returns DB table that stores page groups
+	 * @return string DB Table name
+	 * @static
+	 */
+	function get_db_table() {
+		$c_vars = get_class_vars(__CLASS__);
+		return Cornerstone::get_db_prefix() . $c_vars['_db_table'];
+	}
+}
+
+/**
+ * Class for managing a Page Group
+ * @package Cornerstone
+ */
+class CNR_Page_Group {
+	
+	/*-** Properties **-*/
+	
+	/**
+	 * @var int Group ID
+	 */
+	var $id = 0;
+	
+	/**
+	 * @var string Group name
+	 */
+	var $name = '';
+	
+	/**
+	 * @var string Unique code for group
+	 */
+	var $code = '';
+	
+	/**
+	 * @var string Page separator
+	 */
+	var $sep = '|';
+	
+	/**
+	 * @var array Holds pages in group
+	 */
+	var $pages = array();
+	
+	/**
+	 * @var object Cached group object from DB
+	 */
+	var $group_cache;
+	
+	var $db_table_groups = 'page_groups';
+	
+	/**
+	 * @var string Prefix to use for Node ID
+	 */
+	var $node_prefix = "pg_";
+	
+	/**
+	 * @var array Associative array of output templates
+	 */
+	var $_templates = array(
+							'row'			=> '<tr id="%s" class="page-group">%s</tr>',
+							'col_title' 	=> '<td class="post-title page-title column-title">
+													<strong><a class="row-title" href="#">%s</a></strong>
+													<div class="row-actions">
+														<span class="inline"><a href="#">Edit</a></span> | 
+														<span class="delete"><a href="#">Delete</a></span>
+													</div>
+													<div class="group-pages_wrap">%s</div>
+													<div class="list-pages">%s</div>
+													<div class="actions">
+														<input type="button" value="Save" class="action save" />  <input type="button" value="Cancel" class="action reset" />
+													</div>
+												</td>',
+							'col_default'	=> '<td>%s</td>',
+							'pages_wrap'		=> '<ul>%s</ul>',
+							'page_item'		=> '<li class="item-page pid_%s">%s</li>'
+							);
+	
+	/*-** Constructor **-*/
+	
+	/**
+	 * Class Constructor
+	 * @return void
+	 * @param mixed $id[optional] May be ID of existing Group OR name of new group OR a Page Group row returned from DB
+	 * @param string $name[optional] Name of Group
+	 * @param string $pages[optional] Pages in Group (CSV)
+	 */
+	function CNR_Page_Group($id = 0, $name = '', $pages = '') {
+		//Get DB Values
+		$this->db_table_groups = CNR_Page_Groups::get_db_table();
+		//Check if name of a new group is being set
+		if (is_string($id)) {
+			$this->set_name($id);
+		}
+		//Check if ID of existing group is being set
+		elseif (is_int($id) || is_object($id)) {
+			$this->load($id);
+		}
+	}
+	
+	/*-** Operations **-*/
+	
+	/**
+	 * Loads Group from DB into object
+	 * @return void
+	 * @param mixed $group_id ID of group to retrieve from DB OR group object from DB
+	 */
+	function load($group_id) {
+		global $wpdb;
+
+		if (is_int($group_id) && $group_id > 0) {
+			//Get group data from DB
+			$qry = sprintf('SELECT * FROM %s WHERE group_id = %d', $this->db_table_groups, $group_id);
+			$group = $wpdb->get_row($qry);
+			if (!$group)
+				return;
+		}
+		elseif (is_object($group_id))
+			$group = $group_id;
+			
+		//Evaluate group data and set object properties
+		$this->group_cache = $group;
+		$this->id = $group->group_id;
+		$this->name = trim($group->group_title);
+		$this->code = trim($group->group_name);
+		$this->load_pages($group->group_pages);
+	}
+	
+	/**
+	 * Parses pages from DB data
+	 * @return void
+	 * @param mixed $pages list of pages, may also be DB object containing group pages property
+	 */
+	function load_pages($pages) {
+		global $wpdb;
+		$this->pages = null;
+		
+		//Check if $pages is DB resultset
+		if (is_object($pages) && property_exists($pages, 'group_pages'))
+			$pages = $pages->group_pages;
+			
+		//If $pages is an array, set it to $arr_pages
+		if (is_array($pages))
+			$arr_pages = $pages;
+			
+		//convert $pages string to array of pages
+		elseif (is_string($pages))
+			$arr_pages = explode($this->sep.$this->sep, trim($pages, $this->sep));
+		
+		//If $arr_pages in not a valid array, exit function
+		if (!$arr_pages) {
+			return;
+		}
+		
+		//Get pages in group from DB
+		$qry = sprintf('SELECT * FROM %s WHERE ID in (%s)', $wpdb->posts, implode(',', array_unique($arr_pages)));
+		$obj_pages = $wpdb->get_results($qry);
+		
+		//Build associative array of pages based on page ID
+		$arr_db_pages = array();
+		foreach ($obj_pages as $page) {
+			$arr_db_pages[$page->ID] = $page;
+		}
+		
+		//Add pages to object in set order
+		$c_id = '';
+		for ($x = 0; $x < count($arr_pages); $x++) {
+			$c_id = $arr_pages[$x];
+			if (isset($arr_db_pages[$c_id]))
+				$this->pages[$c_id] = $arr_db_pages[$c_id];
+		}
+	}
+	
+	/**
+	 * Add page to Group
+	 * @return void
+	 * @param mixed $page Page object or int ID of page to add to group
+	 * @param int $position[optional] Position in group to add the page (Default = -1 (End of list))
+	 */
+	function add_page($page, $position = -1) {
+		global $wpdb;
+
+		//Get page if only ID is supplied
+		if (is_int($page))
+			$page = get_post($page);
+		if (!is_object($page) || null == $page)
+			return false;
+		
+		//Add page to list
+		$this->pages[$page->ID] = $page;
+	}
+	
+	/**
+	 * Deletes page from group
+	 * @return void
+	 * @param mixed $page Page object or ID of page to remove from group
+	 */
+	function delete_page($page) {
+		if (is_object($page) && isset($page->ID))
+			$page = $page->ID;
+		if (array_key_exists($page, $this->pages))
+			unset($this->pages[$page]);
+	}
+	
+	/**
+	 * Saves group data to DB
+	 * @return void
+	 */
+	function save() {
+		global $wpdb;
+		
+		//Build Pages List
+		$do_save = false; //Will be cleared later if no changes to group have been made
+		$pages_list = $this->serialize_pages();
+		
+		//Compare with cached group data (if available)
+		if (isset($this->group_cache)) {
+			if (0 == $this->id
+				|| $this->group_cache->group_pages != $pages_list
+				|| $this->name != $this->group_cache->group_title)
+				$do_save = true;
+		}
+
+		if ($do_save) {
+			//Determine whether group needs to be added to or updated in DB
+			if (0 == $this->id) {
+				$qry = sprintf('INSERT INTO %s (group_title, group_pages) VALUES (\'%s\', \'%s\')', $this->db_table_groups, $this->name, $pages_list);
+			}
+			else
+				$qry = sprintf('UPDATE %s SET group_title = \'%s\', group_pages = \'%s\' WHERE group_id = %d', $this->db_table_groups, $this->name, $pages_list, $this->id);
+			
+			//Execute query
+			$res = $wpdb->query($qry);
+			if ($res) {
+				if (0 == $this->id)
+					$this->id = $wpdb->insert_id;
+			}
+			$this->cache();
+		}
+	}
+	
+	/**
+	 * Sets current group data in group cache
+	 * @return void
+	 */
+	function cache() {
+		if (!isset($this->group_cache)) {
+			$this->group_cache = new stdClass;
+		}
+		
+		$this->group_cache->ID = $this->id;
+		$this->group_cache->group_title = $this->name;
+		$this->group_cache->group_pages = $this->serialize_pages();
+	}
+	
+	/*-** Property Methods (Getters/Setters) **-*/
+	
+	function set_name($name) {
+		if (is_string($name))
+			$this->name = trim($name);
+	}
+	
+	/**
+	 * Returns string of group pages for insertion into DB
+	 * @return string 
+	 */
+	function serialize_pages() {
+		return (0 < count($this->pages)) ? $this->sep . implode($this->sep.$this->sep, array_keys($this->pages)) . $this->sep : '';
+	}
+	
+	/**
+	 * Counts pages in Group
+	 * @return int Number of pages in group
+	 */
+	function count_pages() {
+		return count($this->pages);
+	}
+	
+	/*-** Display **-*/
+	
+	/**
+	 * Generates HTML list of group pages
+	 * @return string Page list HTML
+	 * @param bool $wrap_list[optional] Whether or not to wrap list items in a UL element (Default = true)
+	 */
+	function build_pages_list($wrap_list = true) {
+		$list = '';
+		if (0 < count($this->pages)) {
+			$list_start = ($wrap_list) ? '<ul class="group-pages">' : '';
+			$list_end = ($wrap_list) ? '</ul>' : '';
+			$item_temp = '<li class="item-page %s">%s</li>';
+			foreach ($this->pages as $page) {
+				$list .= sprintf($item_temp, 'pid_' . $page->ID, $page->post_title);
+			}
+			$list = $list_start . $list . $list_end;
+		}
+		return $list;
+	}
+	
+	/**
+	 * Print HTML list of group pages
+	 * @return void
+	 * @param bool $wrap_list[optional] Whether or not to wrap list items in a UL element (Default = true)
+	 */
+	function list_pages($wrap_list = true) {
+		echo $this->build_pages_list($wrap_list);
+	}
+	
+	/**
+	 * Retrieves specified template from instance object
+	 * @param string $temp[optional] Template to retrieve
+	 * @return string Specified template
+	 */
+	function get_template($temp = '') {
+		$temp = trim($temp);
+		$temp = ('' != $temp && array_key_exists($temp, $this->_templates)) ? $this->_templates[$temp] : '';
+		return $temp;
+	}
+	
+	/**
+	 * Returns ID of DOM node containing Group data
+	 * @return string ID of DOM node
+	 */
+	function get_node_id() {
+		$ret = '';
+		if ($this->id != 0) {
+			$ret = $this->node_prefix . $this->id;
+		}
+		return $ret;
+	}
+	
+	
+	function build_js() {
+		//var pageGroups = [new PageGroup({'id': 1, 'pages': [7,5,4], 'node': 'pg_1'})];
+		$params = sprintf("'id': %s, 'pages': [%s], 'node': '%s', 'nonces': %s", $this->id, implode(',', array_keys($this->pages)), $this->get_node_id(), $this->get_nonces_js());
+		$obj = sprintf('new PageGroup({%s})', $params);
+		return $obj;
+	}
+	
+	/**
+	 * Gets nonces for the different admin actions
+	 * @return array Associative array of actions => nonce_values
+	 */
+	function get_nonces() {
+		$actions = array('save', 'delete');
+		$nonces = array();
+		foreach ($actions as $action) {
+			$nonces[$action] = wp_create_nonce($this->get_nonce_name($action)); 
+		}
+		return $nonces;
+	}
+	
+	/**
+	 * Gets Page Group nonces as JS object
+	 * @return string Nonces as JS object
+	 */
+	function get_nonces_js() {
+		$nonces = $this->get_nonces();
+		//Build JS object from associative array
+		$props = array();
+		$obj = "{%s}";
+		$prop_temp = "'%s': '%s'";
+		foreach ($nonces as $action => $nonce) {
+			$props[] = sprintf($prop_temp, $action, $nonce);
+		}
+		$obj = sprintf($obj, implode(', ', $props));
+		return $obj;
+	}
+	
+	/**
+	 * Determines nonce name for specified action
+	 * Nonce name is generated in the format: Plugin_Type_ID_Action
+	 * Example: cnr_pg_1_save
+	 * @return string Nonce name for specified action
+	 * @param string $action Action to get nonce name for
+	 */
+	function get_nonce_name($action) {
+		$name_temp = "%s%s%s_%s";
+		$name = sprintf($name_temp, Cornerstone::get_prefix(), $this->node_prefix, $this->id, $action);
+		return $name;
+	}
+	
+	function parse_action($action) {
+		$action = str_replace($this->node_prefix, '', $action);
+		return $action;
 	}
 }
 

@@ -1,0 +1,59 @@
+.actions {
+	clear: both;
+}
+
+.group-pages, .list-pages {
+	padding-left: 1em;
+	margin-top: 1em;
+	width: 20em;
+	float: left;
+	margin-right: 5em;
+}
+
+.ph {
+	background: #FFE1E2;
+	width: 15em !important;
+	height: 3px !important;
+}
+
+.group-pages li, .list-pages li {
+	border: 1px solid #bbb;
+	background: #eee;
+	padding: .5em;
+	width: 15em;	
+}
+
+.group-pages li,
+.group-pages a,
+.list-pages li,
+.list-pages a {
+	color: #333;
+}
+
+.group-pages li {
+	position: relative;
+}
+
+.js .page-group .actions {
+	display: none;
+}
+
+.group-pages li .page-delete {
+	position: absolute;
+	right: 10px;
+	top: 30%;
+	text-indent: -2000em;
+	cursor: pointer;
+	height: 11px;
+	width: 11px;
+	background: url("images/page_delete.gif") top left no-repeat;
+	opacity: .5;
+}
+
+.group-pages li .page-delete.on {
+	opacity: 1;
+}
+
+.page-group .sorting {
+	
+}
