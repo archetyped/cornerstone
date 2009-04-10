@@ -561,9 +561,9 @@ class CNR_Page_Groups {
 				//Title
 				$row = sprintf($group->get_template('col_title'), $group->name, $group->build_pages_list(true), $list);
 				//Code
-				$row .= sprintf($group->get_template('col_default'), $group->code);
+				$row .= sprintf($group->get_template('col_default'), 'group-code', $group->code);
 				//Page Count
-				$row .= sprintf($group->get_template('col_default'), $group->count_pages());
+				$row .= sprintf($group->get_template('col_default'), 'group-count', $group->count_pages());
 				$rows .= sprintf($group->get_template('row'), $group->get_node_id(), $row);
 			}
 			$rows .= call_user_func(array(__CLASS__, 'get_groups_js'), $groups);
@@ -664,7 +664,7 @@ class CNR_Page_Group {
 	var $_templates = array(
 							'row'			=> '<tr id="%s" class="page-group">%s</tr>',
 							'col_title' 	=> '<td class="post-title page-title column-title">
-													<strong><a class="row-title" href="#">%s</a></strong>
+													<strong><a class="row-title group-title" href="#">%s</a></strong>
 													<div class="row-actions">
 														<span class="inline"><a href="#">Edit</a></span> | 
 														<span class="delete"><a href="#">Delete</a></span>
@@ -675,7 +675,7 @@ class CNR_Page_Group {
 														<input type="button" value="Save" class="action save" />  <input type="button" value="Cancel" class="action reset" />
 													</div>
 												</td>',
-							'col_default'	=> '<td>%s</td>',
+							'col_default'	=> '<td class="%s">%s</td>',
 							'pages_wrap'		=> '<ul>%s</ul>',
 							'page_item'		=> '<li class="item-page pid_%s">%s</li>'
 							);

@@ -3,6 +3,22 @@
 jQuery('html').addClass('js');
 
 /* Prototypes */
+
+/**
+ * Binds a method to an object so that 'this' refers to the object instance within the method
+ * Useful for setting an object's method as a callback in another object
+ * Any arguments can also be passed to the method when it is called
+ * @param object obj Object instance to bind the method to
+ * @param function method Method of object to bind to object instance (obj)
+ * @return bound object method wrapped in an anonymous function
+ */
+bindFunc = function(obj, method) {
+	return function() {
+		if (method in obj)
+			obj[method].apply(obj, arguments);
+	}
+}
+
 /**
  * Compares another array with this array
  * @param array arr Array to compare this array with
@@ -23,6 +39,16 @@ Array.prototype.compare = function(arr) {
 	return false;
 }
 
+String.prototype.trim = function() {
+	return this.replace(/^\s+|\s+$/g,"");
+}
+String.prototype.ltrim = function() {
+	return this.replace(/^\s+/,"");
+}
+String.prototype.rtrim = function() {
+	return this.replace(/\s+$/,"");
+}
+
 /* Classes */
 
 
@@ -32,6 +58,14 @@ Array.prototype.compare = function(arr) {
  * PageGroup
  */
 function PageGroup() {
+	
+	this.defaults = {
+					'fields': [],
+					'values': {}
+					};
+	
+	this.addDefault('title', 'code', 'pages');
+	
 	/**
 	 * @var int Group ID
 	 */
@@ -69,10 +103,6 @@ function PageGroup() {
 				'def':		[],
 				'current':	[]
 				};
-	/**
-	 * @var object DOM Node containing action items
-	 */
-	//this.actionsNode;
 	
 	/**
 	 * @var object Values to use for connecting elements together
@@ -86,18 +116,49 @@ function PageGroup() {
 	 */
 	this.classes = {
 					'group':		'page-group',
+					'title':		'group-title',
+					'code':			'group-code',
+					'count':		'group-count',
 					'pages':		'group-pages',
 					'page':			'item-page',
 					'actions':		'actions',
 					'action':		'action',
 					'pageDelete':	'page-delete'
 					};
+	
+	/**
+	 * @var object actions Actions for different events
+	 */
 	this.actions = {
-					'save':		'',
-					'edit':		'',
-					'reset':	'',
-					'group':	''
+					'save':		new PageGroup.Action('save', '', 'clean'),
+					'edit':		new PageGroup.Action('edit', '', 'modify'),
+					'reset':	new PageGroup.Action('reset', '', 'clean'),
+					'page':		{
+								'delete':	new PageGroup.Action('delete',
+											bindFunc(this, 'addPageDelete'),
+											'modify')
+								}
+					};
+					
+	/**
+	 * @var object events Custom Event handlers
+	 */
+	this.events = {
+					'modify':	function(e) {
+									console.warn('Modify event triggered: %o', e);
+									console.warn(e.pg);
+									jQuery(e.pg.nodes.actions).show(300);
+								},
+					'clean':	function(e) {
+									console.warn('Clean event triggered: %o', e);
+									console.log(e.pg);
+									jQuery(e.pg.nodes.actions).hide(300);
+								}
 					}
+	
+	/**
+	 * @var object nonces Nonces from server for security validation
+	 */
 	this.nonces = {};
 	
 	/**
@@ -108,11 +169,6 @@ function PageGroup() {
 	this.states = {
 					'def':	''
 					};
-	//Add custom event to group
-	jQuery(this).bind('group', function(e) {
-		console.warn('Group Event Triggered');
-		return false;
-	});
 	this.init(arguments);
 }
 
@@ -144,6 +200,16 @@ PageGroup.prototype.init = function() {
 	this.setActions();
 }
 
+PageGroup.prototype.addDefault = function (propName) {
+	if (typeof propName == 'undefined' || arguments.length < 1 || !propName)
+		return false;
+	for (var x = 0; x < arguments.length; x++) {
+		propName = arguments[x];
+		if (this.defaults.fields.indexOf(propName) == -1)
+			this.defaults.fields.push(propName);
+	}
+}
+
 /**
  * Sets ID of Group object
  * @param mixed val ID value (should be parseable as an integer)
@@ -151,6 +217,15 @@ PageGroup.prototype.init = function() {
 PageGroup.prototype.setId = function(val) {
 	if (!isNaN(val.toString()))
 		this.id = parseInt(val);
+}
+
+PageGroup.prototype.getNodeText = function(node) {
+	var txt = '';
+	if (node in this.nodes && this.nodes[node].length) {
+		//Get DOM node
+		txt = this.nodes[node].text();
+	}
+	return txt; 
 }
 
 /**
@@ -226,6 +301,7 @@ PageGroup.prototype.getPages = function() {
  */
 PageGroup.prototype.pagesChanged = function() {
 	console.group('Comparing Pages array');
+	this.getPages();
 	console.dir(this.pages);
 	console.groupEnd();
 	return !this.pages.current.compare(this.pages.def);
@@ -267,6 +343,24 @@ PageGroup.prototype.setNode = function(groupNode) {
 		if (gMatch && gMatch.length >= 2 && gMatch[1] > 0) {
 			this.setId(gMatch[1]);
 		}
+	}
+	if (this.nodes.group) {
+		//Get other nodes
+		var subNode;
+		console.group('Getting Sub Nodes')
+		for (var node in this.nodes) {
+			console.info('Node: %o', node);
+			if (node != 'group' && node in this.classes) {
+				subNode = jQuery(this.nodes.group).find(this.getClass(node));
+				if (subNode.length) {
+					this.nodes[node] = subNode;
+					console.dir(subNode);
+				}
+			}
+			//Unset node variable for next iteration
+			subNode = null;
+		}
+		console.groupEnd();
 	}
 	console.dir(this.nodes);
 	//Add group object to DOM node
@@ -347,56 +441,48 @@ PageGroup.prototype.getNode = function() {
 	return this.nodes.group;
 }
 
+/**
+ * Sets up Actions/Events for Pages in a Group
+ */
 PageGroup.prototype.setPageActions = function() {
 	console.group('Add Actions to Page Nodes in Group');
-	//Get Page Nodes
 	var pg = this;
 	var pages = this.getPagesNodes();
-	/*
-	var delNode = document.createElement('span');
-	delNode = jQuery(delNode)
-		.text('Delete')
-		.addClass(this.classes.pageDelete)
-		.click(function() {
-			var msg = "Delete: ";
-			console.warn('Click Event for: %o', this);
-			if (pg.connections.page in this)
-				jQuery(this[pg.connections.page]).remove();
-		})
-		.hover(
-			function() {
-				jQuery(this).addClass('on');
-			},
-			function() {
-				jQuery(this).removeClass('on');
-			}
-		)
-	*/
-	pages.each(function(i) {
-		//console.dir(this);
-		pg.addPageDelete(this);
-		/*
-		var dn = delNode.clone(true);
-		console.warn('Add action to: %o', this);
-		dn.get(0)[pg.connections.page] = this;
-		console.warn('Trigger: %o', dn);
-		jQuery(this).append(dn);
-		*/
-	});
+	var actObj;
+	for (var action in this.actions.page) {
+		actObj = this.actions.page[action];
+		console.log('Action: %o', action);
+		console.dir(actObj);
+		console.dir(actObj.callback);
+		if (!actObj.hasCallback()) {
+			actObj.callback = (jQuery.isFunction(this[action])) ? this[action] : function() {};
+		}
+		console.log('Action Function: %o', actObj.callback.toSource());
+		pages.each(function(i) {
+			actObj.callback(this);
+		});
+	}
 	console.groupEnd();
 }
 
+/**
+ * Adds page delete button/element to each Page in Group
+ * @param object DOM element representing a Page in a Group
+ */
 PageGroup.prototype.addPageDelete = function(page) {
+	console.group('PageGroup.addPageDelete()');
 	var delNode = document.createElement('span');
 	var pg = this;
 	delNode = jQuery(delNode)
 		.text('Delete')
-		.addClass(this.classes.pageDelete)
-		.click(function() {
+		.addClass(pg.classes.pageDelete)
+		.click(function(e) {
 			var msg = "Delete: ";
 			console.warn('Click Event for: %o', this);
-			if (pg.connections.page in this)
+			if (pg.connections.page in this) {
 				jQuery(this[pg.connections.page]).remove();
+				pg.triggerEvent(pg.events.modify, e);
+			}
 		})
 		.hover(
 			function() {
@@ -410,6 +496,7 @@ PageGroup.prototype.addPageDelete = function(page) {
 	delNode.get(0)[this.connections.page] = page;
 	if (jQuery(page).find(this.getClass('pageDelete')).length == 0)
 		jQuery(page).append(delNode);
+	console.groupEnd();
 }
 
 /**
@@ -431,20 +518,24 @@ PageGroup.prototype.setActions = function(actionNode) {
 	if (this.nodes.actions) {
 		this.nodes.actions = jQuery(this.nodes.actions);
 		//Scan for different actions in wrapper and add event handlers
-		var self = this;
+		var pg = this;
 		//this = PageGroup instance
 		console.group('Scanning container for action elements');
 		this.nodes.actions.find(this.getClass(this.classes.action)).each(function() {
 			//this = matching DOM element
 			console.warn('Element Found: %o', this);
-			var action = self.getAction(this);
+			var action = pg.getAction(this);
+			
 			//Set action handler
 			console.log('Element: %o \nHandler: %o', this, action.toSource());
 			if (action) {
 				jQuery(this).click(function(e) {
-					//this = jQuery object (window)
+					//this = jQuery object (element firing event)
 					//e = jQuery Event object (contains DOM element that fires event)
-					action(self);
+					action.callback(pg);
+					
+					//Trigger event on object
+					pg.triggerEvent(action, e);
 				});
 			}
 		});
@@ -456,19 +547,51 @@ PageGroup.prototype.setActions = function(actionNode) {
 }
 
 /**
+ * 
+ * @param object action PageGroup.Action object
+ * @param object event jQuery.Event object
+ */
+PageGroup.prototype.triggerEvent = function(action, event) {
+	//Add Page Group instance to event
+	event.pg = this;
+	//Setup default event handler
+	var fn = function(e) {
+		console.warn('Default Event Handler Triggered: %o', e);
+	};
+	//Check if event is registered
+	if (jQuery.isFunction(action)) 
+		fn = action;
+	else {
+		var aType = (typeof action == 'object' && 'type' in action) ? action.type : action.toString();
+		if (aType in this.events) {
+			if (jQuery.isFunction(this.events[aType])) 
+				fn = this.events[aType];
+			else 
+				if (jQuery.isFunction(this[aType])) 
+					fn = this[aType];
+		}
+	}
+	//Call event handler
+	fn(event);
+}
+
+/**
  * Determine's which action specified object is supposed to trigger
  * @param {Object} el jQuery object of DOM element
- * @return function Action Handler function (if exists)
+ * @return object PageGroup.Action object (if exists), FALSE if no matching action exists
  */
 PageGroup.prototype.getAction = function(el) {
 	el = jQuery(el);
 	for (var action in this.actions) {
+		if (!(this.actions[action] instanceof PageGroup.Action))
+			continue;
 		//Check if element is assigned to action
 		if (el.hasClass(action)) {
-			if (jQuery.isFunction(this.actions[action]))
-				return this.actions[action];
-			else if (jQuery.isFunction(this[action]))
-				return this[action];
+			var actObj = this.actions[action];
+			if (!actObj.hasCallback()) {
+				actObj.callback = (jQuery.isFunction(this[action])) ? this[action] : function() {};
+			}
+			return actObj;
 		}
 	}
 	return false;
@@ -485,6 +608,10 @@ PageGroup.prototype.getClass = function(cls) {
 	return cls;
 }
 
+/**
+ * Makes the Pages in a Group sortable
+ * Part of Group initialization process
+ */
 PageGroup.prototype.makeSortable = function() {
 	console.group('Make Sortable');
 	//Sortable List
@@ -499,6 +626,8 @@ PageGroup.prototype.makeSortable = function() {
 			console.log('Stopped Sorting\nEvent: %o \nUI: %o', event, ui);
 			ui.item.removeClass('sorting');
 			pg.addPageDelete(ui.item);
+			if (pg.pagesChanged())
+				pg.triggerEvent(pg.events.modify, event);	
 		}
 	});
 	
@@ -508,7 +637,8 @@ PageGroup.prototype.makeSortable = function() {
 }
 
 /**
- * Saves Page Group properties
+ * Saves Group properties (title, code, pages, etc.) to server
+ * @param object pg Page Group instance object to save to server
  */
 PageGroup.prototype.save = function(pg) {
 	console.group('Save Group')
@@ -544,15 +674,17 @@ PageGroup.prototype.save = function(pg) {
 }
 
 /**
- * Sets page group into edit mode
+ * Sets Page Group into Edit mode
+ * @param object pg Page Group instance object to edit
  */
 PageGroup.prototype.edit = function(pg) {
 	console.info('Edit');
 }
 
 /**
- * Resets page group data from default state
- * Exit edit mode if currently in edit mode
+ * Resets page group data to its default state
+ * FUTURE: Exits Edit mode if currently in edit mode
+ * @param object pg Page Group instance object to reset
  */
 PageGroup.prototype.reset = function(pg) {
 	console.group('Reset Group');
@@ -572,6 +704,58 @@ PageGroup.setTemplate = function(temp) {
 		PageGroup.prototype.template = temp;
 }
 
+/* PageGroup Action */
+
+/**
+ * Creates PageGroup Action object
+ * @param string name Name of Action
+ * @param function callback[optional] Function to handle action
+ * @param string type[optional] Action event type
+ * 	- Examples
+ * 		- modify:	Modifies group
+ * 		- clean:	Clears group of all modifications
+ */
+PageGroup.Action = function(name, callback, type) {
+	console.group('PageGroup.Action Constructor')
+	console.info('Name: %o \nCallback: %o \nType: %o', name, callback.toSource(), type);
+	console.dir(callback);
+	//Create object
+	this.name = '';
+	this.callback = null;
+	this.type = '';
+	//Process arguments
+	
+	var paramValid = function(arg, argType) {
+		var def = typeof arg;
+		if (def != 'undefined') {
+			var argDef = typeof argType;
+			if (argDef == 'undefined' || (typeof argType != 'undefined' && argType.length > 0 && def == argType))
+				return true;
+		}
+		return false;
+	};
+	
+	//Name
+	if (paramValid(name, 'string'))
+		this.name = name.trim();
+	//Callback
+	if (paramValid(callback, 'function'))
+		this.callback = callback;
+	//type
+	if (paramValid(type, 'string'))
+		this.type = type.trim();
+	console.groupEnd();
+	return this;
+}
+
+/**
+ * Checks if Action has a callback set
+ */
+PageGroup.Action.prototype.hasCallback = function() {
+	if (jQuery.isFunction(this.callback))
+		return true;
+	return false;
+}
 
 /* Helper Functions */
 
@@ -588,7 +772,7 @@ function sprintf() {
 	return format;
 }
 
-jQuery('document').ready(function() {	
+jQuery('document').ready(function() {
 	//Draggable list (Site Pages)
 	jQuery('.list-pages ul li').draggable({
 		connectToSortable: '.group-pages',
