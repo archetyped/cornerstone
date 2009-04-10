@@ -195,12 +195,13 @@ PageGroup.prototype.init = function() {
 		}
 	}
 	this.setNode();
+	this.setDefaults();
 	this.saveState();
 	this.makeSortable();
 	this.setActions();
 }
 
-PageGroup.prototype.addDefault = function (propName) {
+PageGroup.prototype.addDefault = function(propName) {
 	if (typeof propName == 'undefined' || arguments.length < 1 || !propName)
 		return false;
 	for (var x = 0; x < arguments.length; x++) {
@@ -208,6 +209,35 @@ PageGroup.prototype.addDefault = function (propName) {
 		if (this.defaults.fields.indexOf(propName) == -1)
 			this.defaults.fields.push(propName);
 	}
+}
+
+PageGroup.prototype.getDefaults = function(propName) {
+	var ret = '';
+	if (arguments.length > 0) {
+		if (propName in this.defaults.values)
+			ret = this.defaults.values[propName];
+	} else {
+		ret = this.defaults.values;
+	}
+	return ret;
+}
+
+PageGroup.prototype.setDefaults = function() {
+	var prop;
+	this.clearDefaults();
+	//Iterate through default properties
+	for (var x = 0; x < this.defaults.fields.length; x++) {
+		prop = this.defaults.fields[x];
+		//Add property to instance if not yet declared
+		if (!(prop in this))
+			this[prop];
+		//Set default values of properties
+		this.defaults.values[prop] = this[prop];
+	}
+}
+
+PageGroup.prototype.clearDefaults = function() {
+	this.defaults.values = {};
 }
 
 /**
@@ -236,31 +266,29 @@ PageGroup.prototype.getNodeText = function(node) {
 PageGroup.prototype.setPages = function(pagesArr, pagesType) {
 	console.group('Setting Pages')
 	console.info('Type: %o \nData: %o', pagesType, pagesArr);
-	pagesType = this.getPagesType(pagesType);
 	if (pagesArr instanceof Array)
-		this.pages[pagesType] = pagesArr;
-	this.formatPages(pagesType);
+		this.pages = pagesArr;
+	this.formatPages();
 	console.dir(this.pages);
 	console.groupEnd();
-}
-
-PageGroup.prototype.getPagesType = function(pagesType) {
-	if (typeof pagesType == 'undefined' || !(pagesType in this.pages))
-		pagesType = 'current';
-	return pagesType;
 }
 
 /**
  * Formats values in pages property to integers
  * @param string [pagesType] which pages to format (def or current [default])
  */
-PageGroup.prototype.formatPages = function(pagesType) {
+PageGroup.prototype.formatPages = function() {
 	console.group('Formatting Pages Array');
-	console.info('Type: %o \nData: %o', pagesType, this.pages[pagesType]);
-	pagesType = this.getPagesType(pagesType);
-	for (x = 0; x < this.pages[pagesType].length; x++) {
-		this.pages[pagesType][x] = parseInt(this.pages[pagesType][x]);
+	console.info('Data: %o', this.pages);
+	var pVal,
+		pagesTemp = [];
+	for (x = 0; x < this.pages.length; x++) {
+		pVal = parseInt(this.pages[x]);
+		//Only add pages that have valid IDs (integers)
+		if (pVal)
+			pagesTemp.push(pVal); 
 	}
+	this.pages = pagesTemp;
 	console.groupEnd();
 }
 
@@ -291,9 +319,9 @@ PageGroup.prototype.getPages = function() {
 			pagesArr.push(parseInt(match[1]));
 	});
 	console.dir(pagesArr);
-	this.pages.current = pagesArr;
+	this.pages = pagesArr;
 	console.groupEnd();
-	return this.pages.current;
+	return this.pages;
 }
 
 /**
@@ -303,8 +331,11 @@ PageGroup.prototype.pagesChanged = function() {
 	console.group('Comparing Pages array');
 	this.getPages();
 	console.dir(this.pages);
+	console.dir(this.defaults.pages);
+	var ret = !this.pages.compare(this.getDefaults('pages'));
+	console.info('Pages have changed: %o', ret);
 	console.groupEnd();
-	return !this.pages.current.compare(this.pages.def);
+	return ret;
 }
 
 /**
@@ -354,7 +385,6 @@ PageGroup.prototype.setNode = function(groupNode) {
 				subNode = jQuery(this.nodes.group).find(this.getClass(node));
 				if (subNode.length) {
 					this.nodes[node] = subNode;
-					console.dir(subNode);
 				}
 			}
 			//Unset node variable for next iteration
@@ -362,7 +392,6 @@ PageGroup.prototype.setNode = function(groupNode) {
 		}
 		console.groupEnd();
 	}
-	console.dir(this.nodes);
 	//Add group object to DOM node
 	this.nodes.group.get(0)[this.connections.group] = this;
 	console.groupEnd();
