@@ -51,6 +51,10 @@ String.prototype.rtrim = function() {
 
 /* Classes */
 
+/* CNR */
+
+function Cnr() {}
+Cnr.urlAdmin = 'http://cns.wp/wp-admin/admin-ajax.php';
 
 /* Page Group */
 
@@ -80,7 +84,7 @@ function PageGroup() {
 	this.code = '';
 	
 	/**
-	 * @var object DOM Nodes used in Group
+	 * @var object DOM Nodes used in Group (jQuery Object)
 	 * group:	Entire group
 	 * title:	Group Title
 	 * code:	Group Code
@@ -122,8 +126,10 @@ function PageGroup() {
 					'pages':		'group-pages',
 					'page':			'item-page',
 					'actions':		'actions',
+					'actionsShy':	'actions-commit',
 					'action':		'action',
-					'pageDelete':	'page-delete'
+					'pageDelete':	'page-delete',
+					'propInput':	'prop-input'
 					};
 	
 	/**
@@ -132,6 +138,7 @@ function PageGroup() {
 	this.actions = {
 					'save':		new PageGroup.Action('save', '', 'clean'),
 					'edit':		new PageGroup.Action('edit', '', 'modify'),
+					'remove':	new PageGroup.Action('remove', '', 'clean'),
 					'reset':	new PageGroup.Action('reset', '', 'clean'),
 					'page':		{
 								'delete':	new PageGroup.Action('delete',
@@ -147,12 +154,12 @@ function PageGroup() {
 					'modify':	function(e) {
 									console.warn('Modify event triggered: %o', e);
 									console.warn(e.pg);
-									jQuery(e.pg.nodes.actions).show(300);
+									jQuery(e.pg.nodes.actions).filter(e.pg.getClass('actionsShy')).show(300);
 								},
 					'clean':	function(e) {
 									console.warn('Clean event triggered: %o', e);
 									console.log(e.pg);
-									jQuery(e.pg.nodes.actions).hide(300);
+									jQuery(e.pg.nodes.actions).filter(e.pg.getClass('actionsShy')).hide(300);
 								}
 					}
 	
@@ -173,6 +180,7 @@ function PageGroup() {
 }
 
 PageGroup.prototype.init = function() {
+	console.group('Page Group Initialization');
 	//Set object properties based on arguments passed (if available)
 	if (arguments.length > 0) {
 		var args = arguments[0];
@@ -195,10 +203,13 @@ PageGroup.prototype.init = function() {
 		}
 	}
 	this.setNode();
+	this.setTitle();
+	this.setCode();
 	this.setDefaults();
 	this.saveState();
 	this.makeSortable();
 	this.setActions();
+	console.groupEnd();
 }
 
 PageGroup.prototype.addDefault = function(propName) {
@@ -325,6 +336,25 @@ PageGroup.prototype.getPages = function() {
 }
 
 /**
+ * Determines whether a property has been changed from its default
+ * @param string prop Name of property to check
+ * @return bool TRUE if property is different from default (FALSE otherwise)
+ */
+PageGroup.prototype.propChanged = function(prop) {
+	console.group('propChanged')
+	console.log('Property: %s', prop);
+	var ret = false;
+	if (prop in this && prop in this.defaults.values) {
+		console.log('Current: %o \nDefault: %o', this[prop], this.getDefaults(prop));
+		if (typeof this[prop] == 'string' && this[prop] != this.getDefaults(prop))
+			ret = true;
+	}
+	console.log('Property Changed: %o', ret);
+	console.groupEnd();
+	return ret;
+}
+
+/**
  * Compares current pages in group to default pages in group
  */
 PageGroup.prototype.pagesChanged = function() {
@@ -395,6 +425,36 @@ PageGroup.prototype.setNode = function(groupNode) {
 	//Add group object to DOM node
 	this.nodes.group.get(0)[this.connections.group] = this;
 	console.groupEnd();
+}
+
+PageGroup.prototype.setTitle = function(title) {
+	var tType = typeof title;
+	//Check value of title parameter
+	if (tType != 'string' || title.trim().length == 0) {
+		//Get title value from node
+		title = '';
+		var tTemp = this.getNodeText('title');
+		if (tTemp.trim().length > 0)
+			title = tTemp;
+	} else {
+		//Set node value to title
+		jQuery(this.nodes.title).text(title);
+	}
+	//Set title property
+	this.title = title;
+}
+
+PageGroup.prototype.setCode = function(code) {
+	var cType = typeof code;
+	if (cType != 'string' || code.trim().length == 0) {
+		code = '';
+		var cTemp = this.getNodeText('code');
+		if (cTemp.trim().length > 0)
+			code = cTemp;
+	} else {
+		jQuery(this.nodes.code).text(code);
+	}
+	this.code = code;
 }
 
 /**
@@ -672,10 +732,9 @@ PageGroup.prototype.makeSortable = function() {
 PageGroup.prototype.save = function(pg) {
 	console.group('Save Group')
 	console.log(pg);
-	//get pages
-	//pg = new PageGroup(pg);
-	pg.getPages();
-	if (pg.pagesChanged()) {
+	//Close edit mode
+	pg.editFinalize();
+	if (pg.pagesChanged() || pg.propChanged('title') || pg.propChanged('code')) {
 		//Pages have been changed, save changes
 		console.warn('Pages have been changed, save changes');
 		//Prepare data
@@ -683,16 +742,31 @@ PageGroup.prototype.save = function(pg) {
 					'action':		'pg_save',
 					'id':			pg.id,
 					'cookie':		encodeURIComponent(document.cookie),
-					'pages[]':		pg.pages.current,
+					'title':		pg.title,
+					'code':			pg.code,
+					'pages[]':		pg.pages,
 					'_ajax_nonce':	pg.nonces.save
 					};
 		//Send data
-		jQuery.post('http://cns.wp/wp-admin/admin-ajax.php', data, function(ret) {
-			if ('msg' in ret) {
-				console.warn('Return Value: ' + ret.msg);
-				//Save current state as default
-				pg.setPages(pg.getPages(), 'def');
-				pg.saveState();
+		jQuery.post(Cnr.urlAdmin, data, function(ret) {
+			if ('success' in ret) {
+				console.dir(ret);
+				console.warn('Return Value: ' + ret.success);
+				if (ret.success) {
+					console.log('Saving Server Data to Page Group');
+					//Save current state as default
+					if ('id' in ret)
+						pg.setId(ret.id);
+					if ('title' in ret)
+						pg.setTitle(ret.title);
+					if ('code' in ret)
+						pg.setCode(ret.code);
+					if ('nonces' in ret) {
+						pg.nonces = ret.nonces;
+					}
+					pg.setPages(pg.getPages(), 'def');
+					pg.saveState();
+				}
 			}
 		},
 		'json');
@@ -708,6 +782,62 @@ PageGroup.prototype.save = function(pg) {
  */
 PageGroup.prototype.edit = function(pg) {
 	console.info('Edit');
+	if (this instanceof PageGroup)
+		pg = this;
+	var setPropClass = function(prop) {
+		return 'prop-' + prop;
+	}
+	//Replace property nodes content with input elements
+	var inTemp = jQuery(document.createElement('input'))
+				.attr('type', 'text')
+				.attr('maxlength', 30)
+				.addClass(pg.classes.propInput);
+	//Title
+	var inTitle = inTemp.clone()
+		.addClass(setPropClass('title'))
+		.val(pg.title);
+	pg.nodes.title.html(inTitle);
+	//Code
+	var inCode = inTemp.clone()
+		.addClass(setPropClass('code'))
+		.val(pg.code)
+		/*TODO: Check code via AJAX
+		.keyup(function(e) {
+			pg.codeCheck(e);
+		})*/;
+		
+	pg.nodes.code.html(inCode);
+}
+
+/**
+ * Closes Edit mode
+ */
+PageGroup.prototype.editFinalize = function() {
+	console.group('Edit Finalize');
+	//Get all property inputs
+	var pg = this,
+		prefix = 'prop-',
+		prop,
+		reProp = /.*\bprop-(\S+?)\b.*/i,
+		match,
+		el;
+	console.group('Finding Property Values for Group');
+	jQuery(this.nodes.group).find(this.getClass('propInput')).each(function(i) {
+		console.warn('Property: %o', this);
+		prop = 0;
+		//Determine property input belongs to
+		match = reProp.exec(this.className);
+		if (match && match.length >= 2 && match[1].length > 0) 
+			prop = match[1];
+		if (prop && prop in pg) {
+			el = jQuery(this);
+			console.log('Valid Property Found: %s \nValue: %o', prop, el.val());
+			pg[prop] = el.val();
+			el.replaceWith(el.val());
+		}
+	});
+	console.groupEnd();
+	console.groupEnd();
 }
 
 /**
@@ -722,6 +852,85 @@ PageGroup.prototype.reset = function(pg) {
 	console.groupEnd();
 }
 
+/**
+ * Remove a page group (from page and server)
+ * @param object pg PageGroup instance object
+ */
+PageGroup.prototype.remove = function(pg) {
+	console.group('Remove Group');
+	if (typeof pg == 'undefined') {
+		if (this instanceof PageGroup) 
+			pg = this;
+		else 
+			return false;
+	}
+	//pg = new PageGroup();
+	//Prepare data
+	var data = {
+				'action':		'pg_remove',
+				'id':			pg.id,
+				'cookie':		encodeURIComponent(document.cookie),
+				'_ajax_nonce':	pg.nonces.remove
+				};
+	//Send data
+	console.log('Removing from server');
+	if (confirm('Are you sure you want to delete this page group?')) {
+		jQuery.post(Cnr.urlAdmin, data, function(ret) {
+			if (typeof ret == 'object' && 'success' in ret) {
+				console.dir(ret);
+				console.warn('Return Value: ' + ret.success);
+				if (ret.success) {
+					clear();
+				}
+			}
+			else if (ret == -1) {
+				console.warn('Action Failed: %s', ret);
+			}
+		}, 'json');
+	}
+	var clear = function() {
+		console.log('Removing from client');
+		pg.getNode().addClass('removing', 1000).fadeOut();
+	}
+	console.groupEnd();
+}
+
+/**
+ * Validates group code for uniqueness
+ * (Not currently implemented -- awaiting client-side validation)
+ * @param object event jQuery Event object
+ */
+PageGroup.prototype.codeCheck = function(event) {
+	console.log('Code Changed');
+	var target = jQuery(event.target);
+	var savedVal = target.val();
+	var checkDelay = 1500;
+	var pg = this;
+	//TODO: Cancel current/pending server checks
+	var doCheck = function(e) {
+		console.log('Previous Value: %s \nCurrent Value: %s', savedVal, target.val());
+		if (target.val() == savedVal) {
+			console.warn('Checking code on server');
+			//Check server
+			var data = {
+					'action':		'pg_check_code',
+					'id':			pg.id,
+					'cookie':		encodeURIComponent(document.cookie),
+					'code':			target.val(),
+					};
+			//Send data
+			jQuery.post(Cnr.urlAdmin, data, function(ret) {
+				if ('val' in ret) {
+					console.warn('Return Value: %s', ret.val);
+				}
+			},
+			'json'); 
+		}
+	}
+	setTimeout(doCheck, checkDelay, event);
+	console.log('Set Value: %s', this.codeVal);
+}
+
 /* Static PageGroup Functions */
 
 /**
@@ -732,6 +941,89 @@ PageGroup.setTemplate = function(temp) {
 	if (typeof temp != 'undefined')
 		PageGroup.prototype.template = temp;
 }
+
+/**
+ * Create empty node in Groups list to create new Page Group
+ */
+PageGroup.create = function() {
+	//Get template
+	var temp = PageGroup.getTemplate('new');
+	console.log('Template: \n %s', temp);
+	//Load into group container
+	var gNode = jQuery(temp);
+	//Create Page group for node
+	var pg = new PageGroup({'node': gNode});
+	pg.edit();
+	var e = {'pg': pg};
+	PageGroup.container.append(gNode);
+	pg.events.modify(e);
+}
+
+PageGroup.initGroups = function() {
+	PageGroup.container = jQuery(".page-groups_wrap");
+	//Add event handlers
+	
+	//New Group link(s)
+	jQuery('.page-group_new').click(function(e) {
+		PageGroup.create();
+		return false;
+	});
+}
+
+PageGroup.container;
+
+PageGroup.getTemplate = function(temp) {
+	console.info('Get Template: %s', temp);
+	var ret = '';
+	console.dir(PageGroup.templates);
+	if (typeof temp == 'undefined')
+		return ret;
+	console.log('Continuing to retrieve template');
+	var proc = 'template_' + temp;
+	var count = 0;
+	if ((!(temp in PageGroup.templates) || PageGroup.templates[temp] == null) && !PageGroup.hasProcess(proc)) {
+		//Retrieve specified template from server
+		console.warn('Retrieving template from server');
+		PageGroup.setProcess(proc);
+		var data = {
+			'action': 'pg_get_template',
+			'template': 'group'
+		}
+		jQuery.ajax({
+					'async':	false,
+					'url':		Cnr.urlAdmin,
+					'dataType':	'html',
+					'data':		data,
+					'timeout':	10000,
+					'success':	function(ret, status) {
+						PageGroup.templates[temp] = ret;
+						PageGroup.clearProcess(proc);
+					}
+					});
+	}
+	return PageGroup.templates[temp];
+}
+
+PageGroup.hasProcess = function(proc) {
+	var ret = false;
+	if (proc in PageGroup.processes && PageGroup.processes[proc])
+		ret = true;
+	console.warn('Has Process (%s): %s', proc, ret);
+	return ret;
+}
+
+PageGroup.setProcess = function(proc) {
+	var pVal = (arguments.length == 2) ? arguments[1] : true;
+	PageGroup.processes[proc] = pVal;
+}
+
+PageGroup.clearProcess = function(proc) {
+	PageGroup.setProcess(proc, false);
+}
+
+PageGroup.processes = {};
+
+PageGroup.templates = {};
 
 /* PageGroup Action */
 
@@ -810,5 +1102,8 @@ jQuery('document').ready(function() {
 	});
 	
 	//Click Events
-	jQuery('.list-pages a').click(function() {return false;});	
+	jQuery('.list-pages a').click(function() {return false;});
+	
+	//Initialize Page Groups
+	PageGroup.initGroups();
 });

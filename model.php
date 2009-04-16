@@ -74,30 +74,13 @@ class Cornerstone {
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
 		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
-		add_action('wp_ajax_pg_save', $this->m('pg_save'));
+		
+		//Register Hooks for other classes
+		//Page Group
+		CNR_Page_Group::register_hooks();
 	}
 	
 	/* Methods */
-	
-	function pg_save() {
-		//Create new page group using AJAX data
-		$group = new CNR_Page_Group((int)$_POST['id']);
-		$nonce_name = $group->get_nonce_name($group->parse_action($_POST['action']));
-		//Validate admin referer AND ajax_referer
-		$msg = '';
-		if (check_admin_referer($nonce_name, '_ajax_nonce')) {
-			//If nonce is valid, save page group
-			if (is_array($_POST['pages']))
-				$group->load_pages($_POST['pages']);
-			$group->save();
-			//Return success message + new nonces for actions
-			$msg = "{'msg': 'Group Saved (" . $nonce_name . ")! - Pages: " . implode(', ', $_POST['pages']) . "'}";	
-		} else {
-			$msg = "{'msg': 'Could not save group'";
-		}
-		echo $msg;
-		exit;
-	}
 	
 	/*-** Helpers **-*/
 	
@@ -221,11 +204,12 @@ class Cornerstone {
 					</tr>
 				</tfoot>
 				
-				<tbody>
+				<tbody class="page-groups_wrap">
 					<!--?php page_rows($posts, $pagenum, $per_page); ?-->
 					<?php CNR_Page_Groups::rows(); ?>
 				</tbody>
 			</table>
+			<a href="#" class="page-group_new">Add Page Group</a>
 		</div>
 		
 		<?php
@@ -266,6 +250,7 @@ class Cornerstone {
 	function admin_add_scripts() {
 		wp_enqueue_script('jquery-ui-sortable');
 		wp_enqueue_script('jquery-ui-draggable');
+		wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
 		wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
 	}
 	
@@ -658,6 +643,11 @@ class CNR_Page_Group {
 	 */
 	var $node_prefix = "pg_";
 	
+	var $actions = array(
+						'save' => 'save',
+						'remove' => 'remove'
+						);
+	
 	/**
 	 * @var array Associative array of output templates
 	 */
@@ -665,19 +655,19 @@ class CNR_Page_Group {
 							'row'			=> '<tr id="%s" class="page-group">%s</tr>',
 							'col_title' 	=> '<td class="post-title page-title column-title">
 													<strong><a class="row-title group-title" href="#">%s</a></strong>
-													<div class="row-actions">
-														<span class="inline"><a href="#">Edit</a></span> | 
-														<span class="delete"><a href="#">Delete</a></span>
+													<div class="row-actions actions">
+														<span class="inline"><a href="#" class="action edit">Edit</a></span> | 
+														<span class="delete"><a href="#" class="action remove">Delete</a></span>
 													</div>
 													<div class="group-pages_wrap">%s</div>
 													<div class="list-pages">%s</div>
-													<div class="actions">
+													<div class="actions actions-commit">
 														<input type="button" value="Save" class="action save" />  <input type="button" value="Cancel" class="action reset" />
 													</div>
 												</td>',
 							'col_default'	=> '<td class="%s">%s</td>',
-							'pages_wrap'		=> '<ul>%s</ul>',
-							'page_item'		=> '<li class="item-page pid_%s">%s</li>'
+							'pages_wrap'	=> '<ul>%s</ul>',
+							'page_item'		=> '<li class="item-page pid_%s">%s</li>',
 							);
 	
 	/*-** Constructor **-*/
@@ -692,14 +682,24 @@ class CNR_Page_Group {
 	function CNR_Page_Group($id = 0, $name = '', $pages = '') {
 		//Get DB Values
 		$this->db_table_groups = CNR_Page_Groups::get_db_table();
-		//Check if name of a new group is being set
-		if (is_string($id)) {
-			$this->set_name($id);
-		}
 		//Check if ID of existing group is being set
-		elseif (is_int($id) || is_object($id)) {
+		if (is_numeric($id))
+			$id = (int)$id;
+		if (is_int($id) || is_object($id)) {
 			$this->load($id);
 		}
+		//Check if name of a new group is being set
+		elseif (is_string($id)) {
+			$this->set_name($id);
+		}
+	}
+	
+	function register_hooks() {
+		$cls = __CLASS__;
+		add_action('wp_ajax_pg_save', array($cls, 'save_ajax'));
+		add_action('wp_ajax_pg_check_code', array($cls, 'check_code_ajax'));
+		add_action('wp_ajax_pg_remove', array($cls, 'remove_ajax'));
+		add_action('wp_ajax_pg_get_template', array($cls, 'build_template_ajax'));
 	}
 	
 	/*-** Operations **-*/
@@ -711,7 +711,7 @@ class CNR_Page_Group {
 	 */
 	function load($group_id) {
 		global $wpdb;
-
+		$group = null;
 		if (is_int($group_id) && $group_id > 0) {
 			//Get group data from DB
 			$qry = sprintf('SELECT * FROM %s WHERE group_id = %d', $this->db_table_groups, $group_id);
@@ -721,13 +721,14 @@ class CNR_Page_Group {
 		}
 		elseif (is_object($group_id))
 			$group = $group_id;
-			
-		//Evaluate group data and set object properties
-		$this->group_cache = $group;
-		$this->id = $group->group_id;
-		$this->name = trim($group->group_title);
-		$this->code = trim($group->group_name);
-		$this->load_pages($group->group_pages);
+		if (is_object($group)) {
+			//Evaluate group data and set object properties
+			$this->group_cache = $group;
+			$this->id = $group->group_id;
+			$this->name = trim($group->group_title);
+			$this->code = trim($group->group_name);
+			$this->load_pages($group->group_pages);
+		}
 	}
 	
 	/**
@@ -738,7 +739,6 @@ class CNR_Page_Group {
 	function load_pages($pages) {
 		global $wpdb;
 		$this->pages = null;
-		
 		//Check if $pages is DB resultset
 		if (is_object($pages) && property_exists($pages, 'group_pages'))
 			$pages = $pages->group_pages;
@@ -748,15 +748,14 @@ class CNR_Page_Group {
 			$arr_pages = $pages;
 			
 		//convert $pages string to array of pages
-		elseif (is_string($pages))
+		elseif (is_string($pages) && '' != $pages)
 			$arr_pages = explode($this->sep.$this->sep, trim($pages, $this->sep));
 		
 		//If $arr_pages in not a valid array, exit function
-		if (!$arr_pages) {
+		if (!isset($arr_pages) || !is_array($arr_pages) || count($arr_pages) < 1) {
 			return;
 		}
 		
-		//Get pages in group from DB
 		$qry = sprintf('SELECT * FROM %s WHERE ID in (%s)', $wpdb->posts, implode(',', array_unique($arr_pages)));
 		$obj_pages = $wpdb->get_results($qry);
 		
@@ -814,24 +813,24 @@ class CNR_Page_Group {
 		global $wpdb;
 		
 		//Build Pages List
-		$do_save = false; //Will be cleared later if no changes to group have been made
+		$do_save = (0 == $this->id) ? true : false; //Will be cleared later if no changes to group have been made
 		$pages_list = $this->serialize_pages();
-		
 		//Compare with cached group data (if available)
 		if (isset($this->group_cache)) {
 			if (0 == $this->id
 				|| $this->group_cache->group_pages != $pages_list
-				|| $this->name != $this->group_cache->group_title)
+				|| $this->name != $this->group_cache->group_title
+				|| $this->code != $this->group_cache->group_name)
 				$do_save = true;
 		}
 
 		if ($do_save) {
 			//Determine whether group needs to be added to or updated in DB
 			if (0 == $this->id) {
-				$qry = sprintf('INSERT INTO %s (group_title, group_pages) VALUES (\'%s\', \'%s\')', $this->db_table_groups, $this->name, $pages_list);
+				$qry = $wpdb->prepare('INSERT INTO ' . $this->db_table_groups . ' (group_title, group_name, group_pages) VALUES (%s, %s, %s)', $this->name, $this->code, $pages_list);
 			}
 			else
-				$qry = sprintf('UPDATE %s SET group_title = \'%s\', group_pages = \'%s\' WHERE group_id = %d', $this->db_table_groups, $this->name, $pages_list, $this->id);
+				$qry = $wpdb->prepare('UPDATE ' . $this->db_table_groups . ' SET group_title = %s, group_name = %s, group_pages = %s WHERE group_id = %d', $this->name, $this->code, $pages_list, $this->id);
 			
 			//Execute query
 			$res = $wpdb->query($qry);
@@ -841,6 +840,98 @@ class CNR_Page_Group {
 			}
 			$this->cache();
 		}
+	}
+	
+	function save_ajax() {
+		//Create new page group using AJAX data
+		$ret = '';
+		if (isset($_POST['id'])) {
+			$g_id = (int)$_POST['id'];
+			$group = new CNR_Page_Group($g_id);
+			$nonce_name = $group->get_nonce_name($group->parse_action($_POST['action']));
+			//Validate admin referer AND ajax_referer
+			if ($g_id == 0 || check_ajax_referer($nonce_name, '_ajax_nonce')) {
+				//If nonce is valid, save page group
+				if (isset($_POST['pages']) && $_POST['pages'] != 'undefined' && is_array($_POST['pages']))
+					$group->load_pages($_POST['pages']);
+				if (array_key_exists('title', $_POST) && is_string($_POST['title']) && $_POST['title'] != 'undefined')
+					$group->name = $_POST['title'];
+				if (array_key_exists('code', $_POST) && is_string($_POST['code']) && $_POST['code'] != 'undefined')
+					$group->set_code($_POST['code']);
+				$group->save();
+				$ret = array(
+							'success'	=> true,
+							'id'		=> $group->id,
+							'title'		=> $group->name,
+							'code'		=> $group->code,
+							'nonces'	=> $group->get_nonces_js()
+							);	
+			} else {
+				$ret = array(
+							'success'	=> false
+							);
+			}
+			//Return success message + new nonces for actions
+			$ret_temp = "{%s}";
+			$ret_item = "'%s':%s";
+			$ret_props = array();
+			foreach ($ret as $key => $var) {
+				$add_prop = true;
+				if (is_string($var) && !is_numeric($var)) {
+					$var = trim($var);
+					//Check if value is a JS object (e.g. '{key:val}')
+					if (strpos($var, '{') !== 0)
+						$var = "'" . $var . "'";
+				}
+				elseif (is_bool($var))
+					$var = ($var) ? 'true' : 'false';
+				elseif (!is_numeric($var))
+					$add_prop = false;
+				if ($add_prop)
+					$ret_props[] = sprintf($ret_item, $key, $var);
+			}
+			$ret = sprintf($ret_temp, implode(',', $ret_props));
+		}
+		echo $ret;
+		exit;
+	}
+	
+	/**
+	 * Deletes Page Group from DB
+	 * @return bool TRUE if group was successfully removed, FALSE otherwise 
+	 */
+	function remove() {
+		//$wpdb = new wpdb();
+		global $wpdb;
+		$res = 0;
+		//Confirm user has permission for action
+		$nonce_name = $this->get_nonce_name($this->actions['remove']);
+		$nonce_valid = false;
+		$nonce_ajax = '_ajax_nonce';
+		$nonce_valid = (isset($_POST[$nonce_ajax])) ? check_ajax_referer($nonce_name, $nonce_ajax) : check_adin_referer($nonce_name);
+		if ($nonce_valid) {
+			//Delete from DB
+			$qry = $wpdb->prepare("DELETE FROM " . $this->db_table_groups . " WHERE group_id = %d", $this->id);
+			$res = $wpdb->query($qry);
+		}
+		return ($res > 0) ? true : false; 
+	}
+	
+	/**
+	 * Deletes Page Group from DB via AJAX request
+	 * echos string(JSON) AJAX response to client
+	 */
+	function remove_ajax() {
+		$p = $_POST;
+		$res = false;
+		if (isset($p['id'], $p['_ajax_nonce']) && is_numeric($p['id'])) {
+			$group = new CNR_Page_Group($p['id']);
+			$res = $group->remove();
+			unset($group);
+		}
+		$ret = sprintf("{'success': %s}", ($res) ? 'true' : 'false');
+		echo $ret;
+		exit;
 	}
 	
 	/**
@@ -862,6 +953,46 @@ class CNR_Page_Group {
 	function set_name($name) {
 		if (is_string($name))
 			$this->name = trim($name);
+	}
+	
+	/**
+	 * Checks whether code is unique
+	 * @return bool TRUE if code is unique (FALSE otherwise) 
+	 * @param object $code
+	 */
+	function check_code($code) {
+		global $wpdb;
+		$group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM $this->db_table_groups WHERE group_name = %s AND group_id != %d", $code, $this->id));
+		if (is_null($group_id))
+			return true;
+		return false;
+	}
+	
+	function check_code_ajax() {
+		$ret = false;
+		if (isset($_POST['id']) && isset($_POST['code'])) {
+			$group = new CNR_Page_Group($_POST['id']);
+			$ret = $group->check_code($_POST['code']);
+			printf("{val: %s, id: %s}", ($ret) ? 'true' : 'false', $group->id);
+		} else {
+			printf("{val: false}");
+		}
+		exit;
+	}
+	
+	/**
+	 * Sets code for Group
+	 * @param string $code Code to set for Group
+	 */
+	function set_code($code) {
+		$format = '%s-%d';
+		$count = 1;
+		$code_temp = $code;
+		while (!$this->check_code($code_temp)) {
+			$code_temp = sprintf($format, $code, $count);
+			$count++;
+		}
+		$this->code = $code_temp;
 	}
 	
 	/**
@@ -888,17 +1019,17 @@ class CNR_Page_Group {
 	 * @param bool $wrap_list[optional] Whether or not to wrap list items in a UL element (Default = true)
 	 */
 	function build_pages_list($wrap_list = true) {
-		$list = '';
+		$list = ($wrap_list) ? '<ul class="group-pages">%s</ul>' : '%s';
+		$item_temp = '<li class="item-page %s">%s</li>';
+		$list_items = '<li class="empty">&nbsp;</li>';
 		if (0 < count($this->pages)) {
-			$list_start = ($wrap_list) ? '<ul class="group-pages">' : '';
-			$list_end = ($wrap_list) ? '</ul>' : '';
+			$list_items = '';
 			$item_temp = '<li class="item-page %s">%s</li>';
 			foreach ($this->pages as $page) {
-				$list .= sprintf($item_temp, 'pid_' . $page->ID, $page->post_title);
+				$list_items .= sprintf($item_temp, 'pid_' . $page->ID, $page->post_title);
 			}
-			$list = $list_start . $list . $list_end;
 		}
-		return $list;
+		return sprintf($list, $list_items);
 	}
 	
 	/**
@@ -917,7 +1048,9 @@ class CNR_Page_Group {
 	 */
 	function get_template($temp = '') {
 		$temp = trim($temp);
-		$temp = ('' != $temp && array_key_exists($temp, $this->_templates)) ? $this->_templates[$temp] : '';
+		$c_vars = get_class_vars(__CLASS__);
+		$templates = $c_vars['_templates'];
+		$temp = ('' != $temp && array_key_exists($temp, $templates)) ? $templates[$temp] : '';
 		return $temp;
 	}
 	
@@ -936,7 +1069,8 @@ class CNR_Page_Group {
 	
 	function build_js() {
 		//var pageGroups = [new PageGroup({'id': 1, 'pages': [7,5,4], 'node': 'pg_1'})];
-		$params = sprintf("'id': %s, 'pages': [%s], 'node': '%s', 'nonces': %s", $this->id, implode(',', array_keys($this->pages)), $this->get_node_id(), $this->get_nonces_js());
+		$pages = (is_array($this->pages)) ? implode(',', array_keys($this->pages)) : '';
+		$params = sprintf("'id': %s, 'pages': [%s], 'node': '%s', 'nonces': %s", $this->id, $pages, $this->get_node_id(), $this->get_nonces_js());
 		$obj = sprintf('new PageGroup({%s})', $params);
 		return $obj;
 	}
@@ -946,9 +1080,8 @@ class CNR_Page_Group {
 	 * @return array Associative array of actions => nonce_values
 	 */
 	function get_nonces() {
-		$actions = array('save', 'delete');
 		$nonces = array();
-		foreach ($actions as $action) {
+		foreach ($this->actions as $action) {
 			$nonces[$action] = wp_create_nonce($this->get_nonce_name($action)); 
 		}
 		return $nonces;
@@ -987,6 +1120,26 @@ class CNR_Page_Group {
 	function parse_action($action) {
 		$action = str_replace($this->node_prefix, '', $action);
 		return $action;
+	}
+	
+	/**
+	 * Generates and returns template HTML for a Page Group based on AJAX request 
+	 * @return string Template HTML
+	 */
+	function build_template_ajax() {
+		$template = (isset($_REQUEST['template']) && !is_null($_REQUEST['template'])) ? $_REQUEST['template'] : '';
+		$tmp = '';
+		if ($template != '') { 
+			if ($template == 'group') {
+				$title = sprintf(CNR_Page_Group::get_template('col_title'), '', '', '');
+				$code = sprintf(CNR_Page_Group::get_template('col_default'), 'group-code', '');
+				$count = sprintf(CNR_Page_Group::get_template('col_default'), 'group-count', '');
+				$tmp = sprintf(CNR_Page_Group::get_template('row'), '', $title . $code . $count);
+				$tmp = str_replace('%s', '', $tmp);
+			}
+		}
+		echo $tmp;
+		exit;
 	}
 }
 

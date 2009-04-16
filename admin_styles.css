@@ -23,6 +23,13 @@
 	width: 15em;	
 }
 
+.group-pages .empty {
+	border: 0;
+	height: 0px;
+	font-size: 0;
+	padding: 0;
+}
+
 .group-pages li,
 .group-pages a,
 .list-pages li,
@@ -34,7 +41,7 @@
 	position: relative;
 }
 
-.js .page-group .actions {
+.js .page-group .actions-commit {
 	display: none;
 }
 
@@ -56,4 +63,14 @@
 
 .page-group .sorting {
 	
+}
+
+.checking {
+	border: 1px solid green;
+	background-color: #E6FFE6;
+}
+
+.removing {
+	background-color: #FFCECE;
+	opacity: 0;
 }
