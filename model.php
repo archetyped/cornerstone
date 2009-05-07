@@ -162,20 +162,55 @@ class Cornerstone {
 	 * @return void
 	 */
 	function admin_menu() {
+		global $menu, $submenu;
 		//Content Types
 		add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_content_types'));
 		add_submenu_page($this->file_content_types, 'Manage Content Types', 'Manage', 8, $this->file_content_types . '_manage', $this->m('menu_content_types_manage'));
 		
 		//Page Groups
 		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('menu_page_groups'));
+		
+		/**
+		 * TODO Enable Site Pages replacement
+		 */
+		/*
+		//Replace default Pages content
+		$edit_pages = 'edit-pages';
+		$edit_pages_file = $edit_pages . '.php';
+		$edit_pages_level = 'edit_pages';
+		$submenu[$edit_pages_file][5] = array( __('Edit'), $edit_pages_level, $edit_pages_file . '?page=' . $edit_pages);
+		$hookname = get_plugin_page_hookname($edit_pages, $edit_pages_file);
+		$function = $this->m('menu_pages_edit');
+		if (!empty ( $function ) && !empty ( $hookname ))
+			add_action( $hookname, $function );
+		*/
 	}
 
 	/**
 	 * Content to display for Content Types Admin Menu
-	 * @return 
+	 * @return void
 	 */
 	function menu_content_types() {
 		echo '<div class="wrap"><h2>Content Types</h2></div>';
+	}
+	
+	/**
+	 * Replacement content for default edit pages admin menu
+	 * @return void
+	 */
+	function menu_pages_edit() {
+		?>
+		<div class="wrap edit-pages">
+			<?php screen_icon(); ?>
+			<h2>Edit Pages</h2>
+			<ul class="site-pages">
+				<?php wp_list_pages('title_li='); ?>
+				<div class="actions actions-commit">
+					<input type="button" value="Save" class="action save button-primary" />  <input type="button" value="Cancel" class="action reset button-secondary" />
+				</div>
+			</ul>
+		</div>
+		<?php
 	}
 	
 	/**
@@ -184,7 +219,9 @@ class Cornerstone {
 	 */
 	function menu_page_groups() {
 		?>
-		<div class="wrap"><h2>Page Groups</h2>
+		<div class="wrap">
+			<?php screen_icon() ?>
+			<h2>Page Groups</h2>
 			<table class="widefat page fixed" cellspacing="0">
 				<thead>
 					<tr>
@@ -209,7 +246,11 @@ class Cornerstone {
 					<?php CNR_Page_Groups::rows(); ?>
 				</tbody>
 			</table>
-			<a href="#" class="page-group_new">Add Page Group</a>
+			<div class="tablenav">
+				<div class="alignleft actions">
+					<a href="#" class="page-group_new button-secondary">Add Page Group</a>
+				</div>
+			</div>
 		</div>
 		
 		<?php
@@ -251,7 +292,9 @@ class Cornerstone {
 		wp_enqueue_script('jquery-ui-sortable');
 		wp_enqueue_script('jquery-ui-draggable');
 		wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
+		wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
 		wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
+		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
 	}
 	
 	/*-** Content **-*/
@@ -544,7 +587,7 @@ class CNR_Page_Groups {
 			$list = sprintf($ul_temp, $list);
 			foreach ($groups as $group) {
 				//Title
-				$row = sprintf($group->get_template('col_title'), $group->name, $group->build_pages_list(true), $list);
+				$row = sprintf($group->get_template('col_title'), $group->name, $group->build_pages_list(true), '');
 				//Code
 				$row .= sprintf($group->get_template('col_default'), 'group-code', $group->code);
 				//Page Count
@@ -660,13 +703,13 @@ class CNR_Page_Group {
 														<span class="delete"><a href="#" class="action remove">Delete</a></span>
 													</div>
 													<div class="group-pages_wrap">%s</div>
-													<div class="list-pages">%s</div>
+													<div class="site-pages list-pages">%s</div>
 													<div class="actions actions-commit">
-														<input type="button" value="Save" class="action save" />  <input type="button" value="Cancel" class="action reset" />
+														<input type="button" value="Save" class="action save button-primary" />  <input type="button" value="Cancel" class="action reset button-secondary" />
 													</div>
 												</td>',
 							'col_default'	=> '<td class="%s">%s</td>',
-							'pages_wrap'	=> '<ul>%s</ul>',
+							'pages_wrap'	=> '<ul class="%s">%s</ul>',
 							'page_item'		=> '<li class="item-page pid_%s">%s</li>',
 							);
 	
@@ -685,13 +728,17 @@ class CNR_Page_Group {
 		//Check if ID of existing group is being set
 		if (is_numeric($id))
 			$id = (int)$id;
+		$this->load($id);
+		/*
 		if (is_int($id) || is_object($id)) {
 			$this->load($id);
 		}
+		
 		//Check if name of a new group is being set
 		elseif (is_string($id)) {
 			$this->set_name($id);
 		}
+		*/
 	}
 	
 	function register_hooks() {
@@ -712,15 +759,21 @@ class CNR_Page_Group {
 	function load($group_id) {
 		global $wpdb;
 		$group = null;
+		$col = 'group_name';
+		$col_format = '%s';
 		if (is_int($group_id) && $group_id > 0) {
-			//Get group data from DB
-			$qry = sprintf('SELECT * FROM %s WHERE group_id = %d', $this->db_table_groups, $group_id);
-			$group = $wpdb->get_row($qry);
-			if (!$group)
-				return;
+			$col = 'group_id';
+			$col_format = '%d';
 		}
-		elseif (is_object($group_id))
+		if (!is_object($group_id)) {
+		//Get group data from DB
+		$qry = $wpdb->prepare("SELECT * FROM $this->db_table_groups WHERE $col = $col_format", $group_id);
+		$group = $wpdb->get_row($qry);
+		} else {
 			$group = $group_id;
+		}
+		if (!$group)
+			return;
 		if (is_object($group)) {
 			//Evaluate group data and set object properties
 			$this->group_cache = $group;
@@ -1024,9 +1077,9 @@ class CNR_Page_Group {
 		$list_items = '<li class="empty">&nbsp;</li>';
 		if (0 < count($this->pages)) {
 			$list_items = '';
-			$item_temp = '<li class="item-page %s">%s</li>';
+			$item_temp = '<li class="item-page %s"><a href="%s" title="%s">%s</a></li>';
 			foreach ($this->pages as $page) {
-				$list_items .= sprintf($item_temp, 'pid_' . $page->ID, $page->post_title);
+				$list_items .= sprintf($item_temp, 'pid_' . $page->ID, get_page_link($page->ID), attribute_escape($page->post_title), $page->post_title);
 			}
 		}
 		return sprintf($list, $list_items);
@@ -1129,18 +1182,32 @@ class CNR_Page_Group {
 	function build_template_ajax() {
 		$template = (isset($_REQUEST['template']) && !is_null($_REQUEST['template'])) ? $_REQUEST['template'] : '';
 		$tmp = '';
-		if ($template != '') { 
-			if ($template == 'group') {
-				$title = sprintf(CNR_Page_Group::get_template('col_title'), '', '', '');
-				$code = sprintf(CNR_Page_Group::get_template('col_default'), 'group-code', '');
-				$count = sprintf(CNR_Page_Group::get_template('col_default'), 'group-count', '');
-				$tmp = sprintf(CNR_Page_Group::get_template('row'), '', $title . $code . $count);
-				$tmp = str_replace('%s', '', $tmp);
+		if ($template != '') {
+			switch ($template) {
+				case 'group':
+					$title = sprintf(CNR_Page_Group::get_template('col_title'), '', sprintf(CNR_Page_Group::get_template('pages_wrap'), 'group-pages', ''), '');
+					$code = sprintf(CNR_Page_Group::get_template('col_default'), 'group-code', '');
+					$count = sprintf(CNR_Page_Group::get_template('col_default'), 'group-count', '');
+					$tmp = sprintf(CNR_Page_Group::get_template('row'), '', $title . $code . $count);
+					$tmp = str_replace('%s', '', $tmp);
+					break;
+				case 'sitePages':
+					//$tmp = '<ul><li class="item-page pid_2">About</li><li class="item-page pid_4"><span class="item-page">Articles</span><ul><li class="item-page pid_8">Tutorials</li></ul></li><li class="item-page pid_7">People</li><li class="item-page pid_5">Software</li></ul>';
+					$tmp = '<ul>' . wp_list_pages('echo=0&title_li=') . '</ul>';
+					break;
 			}
 		}
 		echo $tmp;
 		exit;
 	}
+}
+
+/**
+ * Class for creating Admin Menus
+ * @package Cornerstone
+ */
+class CNR_Admin_Menu {
+	
 }
 
 /**
