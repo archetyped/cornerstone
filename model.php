@@ -40,6 +40,64 @@ class Cornerstone {
 	
 	var $url_base = '';
 	
+	/**
+	 * @var object|int Current section post object (or 0 if not in a section)
+	 */
+	var $section_current = null;
+	
+	/* Featured Content variables */
+	
+	/**
+	 * @var string Name of category that denotes a "featured" post
+	 */
+	var $posts_featured_cat = "feature";
+	
+	/**
+	 * @var array Stores featured posts
+	 */
+	var $posts_featured = array();
+	
+	/**
+	 * @var bool Whether or not there are any featured posts
+	 */
+	var $posts_featured_has = false;
+	
+	/**
+	 * @var object Featured post object currently loaded in global $post variable
+	 */
+	var $posts_featured_current = -1;
+	
+	/**
+	 * @var int Total number of featured posts
+	 */
+	var $posts_featured_count = 0;
+	
+	/**
+	 * @var string Key used to store post subtitle
+	 */
+	var $post_subtitle_field = "subtitle";
+	
+	/* Children Content Variables */
+	
+	/**
+	 * @var array Children posts of current post
+	 */
+	var $post_children = null;
+	/**
+	 * @var bool Whether or not post has children
+	 */
+	var $post_children_has = false;
+	
+	/**
+	 * @var object Child post currently loaded in global $post variable
+	 */
+	var $post_children_current = -1;
+	
+	/**
+	 * @var int Total number of children posts
+	 */
+	var $post_children_count = 0;
+	
 	/* Constructor */
 	
 	function Cornerstone($caller) {
@@ -68,11 +126,12 @@ class Cornerstone {
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
 		
 		//Posts
-		add_filter('the_posts', $this->m('get_children'));
+		add_filter('the_posts', $this->m('post_children_get'));
 		add_filter('post_link', $this->m('post_link'), 10, 2);
 		
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
+		add_filter('posts_request', $this->m('posts_request'));
 		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
 		
 		//Register Hooks for other classes
@@ -288,6 +347,10 @@ class Cornerstone {
 		wp_print_styles($handle);
 	}
 	
+	/**
+	 * Adds external javascript files to admin header
+	 * @return void
+	 */
 	function admin_add_scripts() {
 		wp_enqueue_script('jquery-ui-sortable');
 		wp_enqueue_script('jquery-ui-draggable');
@@ -299,34 +362,63 @@ class Cornerstone {
 	
 	/*-** Content **-*/
 	
+	/*-** Child Content **-*/
+	
 	/**
-	 * Gets children posts of specified page and stores them in global $wp_query variable
-	 * @return array $posts Posts array
+	 * Resets object variables for child content
+	 * @return void
+	 */
+	function post_children_reset() {
+		$this->post_children = null;
+		$this->post_children_has = false;
+		$this->post_children_current = -1;
+		$this->post_children_count = 0;
+	}
+	
+	/**
+	 * Saves the retrieved children posts to object variables
+	 * @return void
+	 * @param array $children Children posts
+	 */
+	function post_children_save($children) {
+		if (!!$children) {
+			$this->post_children = $children;
+			$this->post_children_has = true;
+			$this->post_children_count = count($children);
+		}
+	}
+	
+	/**
+	 * Gets children posts of specified page and stores them for later use
+	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
+	 * @return array $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
 	 */
-	function get_children($posts) {
+	function post_children_get($posts) {
 		//Global variables
 		global $wp_query, $wpdb;
-		//Additional wp_query variables
-		$wp_query->post_children = 0;
-		$wp_query->has_children = false;
-		$wp_query->current_child = 0;
-		$wp_query->children_count = 0;
 		
-		//Check if current item is an actual page
+		//Reset children post variables
+		$this->post_children_reset();
+		
+		//Stop here if post is not a page
 		if (!is_single() && !is_page()) {
 			return $posts;
 		}
+		
 		//Get children posts of page
 		if ($wp_query->posts) {
 			$page = $wp_query->posts[0];
+			/*
 			$qry = sprintf('SELECT * FROM %s WHERE post_parent = %s AND post_type = \'post\' AND post_status = \'publish\'', $wpdb->posts, $page->ID);
 			$children = $wpdb->get_results($qry);
-			if (!!$children) {
-				$wp_query->post_children = $children;
-				$wp_query->has_children = true;
-				$wp_query->children_count = count($wp_query->post_children);
-			}
+			*/
+			$c_args = array(
+							'post_parent'	=>	$page->ID						
+							);
+			$children = get_posts($c_args);
+			//Save any children posts in new variables in global wp_query object
+			$this->post_children_save($children);
 		}
 		
 		//Return posts (required by filter)
@@ -335,14 +427,27 @@ class Cornerstone {
 	
 	/**
 	 * Checks whether post has children
-	 * @return boolean
+	 * Children posts should have already been retrieved
+	 * 
+	 * If no accessible children are found, current post (section) is set as global post variable
+	 * 
+	 * @see 'the_posts' filter
+	 * @see post_children_get()
+	 * @return boolean TRUE if section contains children, FALSE otherwise
+	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
 	 */
-	function has_children()
+	function post_children_has()
 	{
 		global $wp_query, $post;
-		if ($wp_query->children_count > 0 && $wp_query->current_child < $wp_query->children_count) {
+		
+		//Check if any children on current page were retrieved
+		//If children are found, make sure there are more children 
+		if ($this->post_children_count > 0 && $this->post_children_current < $this->post_children_count) {
 			return true;
 		}
+		
+		//If no children were found (or the last child has been previously loaded),
+		//load parent post back into global post variable
 		if ($wp_query->current_post >= 0) {
 			$post = $wp_query->posts[$wp_query->current_post];
 			setup_postdata($post);
@@ -354,19 +459,292 @@ class Cornerstone {
 	 * Loads next child post into global post variable for use in the loop
 	 * @return void
 	 */
-	function get_child() {
+	function post_children_get_next() {
+		global $post;
+		
+		if ($this->post_children_has()) {
+			$this->post_children_current++;
+			$post = $this->post_children[$this->post_children_current];
+			setup_postdata($post);
+		}
+	}
+	
+	/*-** Post Metadata **-*/
+	
+	/**
+	 * Retrieves the post's section data 
+	 * @return string post's section data 
+	 * @param string $type[optional] Type of data to return (Default: ID)
+	 * 	Possible values:
+	 * 	ID		Returns the ID of the section
+	 * 	name	Returns the name of the section
+	 */
+	function post_get_section($type = 'ID') {
+		global $post;
+		return $post->post_parent;
+	}
+	
+	/**
+	 * Prints the post's section data
+	 * @param string $type[optional] Type of data to return (Default: ID)
+	 * @see cnr_get_the_section()
+	 */
+	function post_the_section($type = 'ID') {
+		echo $this->post_get_section($type);
+	}
+	
+	/**
+	 * Gets image associated with post
+	 * 
+	 * @return array|bool Source image data (url, width, height), or false if no image is available
+	 * @param int $post_id[optional] Post ID. Defaults to current post
+	 */
+	function post_get_image_src($post_id = 0) {
+		$_post = null;
+		if ($post_id == 0) {
+			$_post = & $GLOBALS['post'];
+			if ($_post)
+				$post_id = $_post->ID;
+		}
+		if ($post_id == 0)
+			return false;
+
+		//Get attachments for post
+		$attachments = &get_children(array( 'post_parent' => $post_id, 'post_type' => 'attachment'));
+		$src = false;
+
+		//Find image attachment
+		if ($attachments) {
+			//Stop at first image found
+			foreach ($attachments as $attachment) {
+				if (wp_attachment_is_image($attachment->ID)) {
+					$src = wp_get_attachment_image_src($attachment->ID, '');
+					break;
+				}
+			}
+		}
+		return $src;
+	}
+	
+	/*-** Featured Content **-*/
+	
+	/**
+	 * Gets featured posts matching parameters and stores them in global $wp_query variable 
+	 * 
+	 * @todo Fetch additional posts if total number of requested features are not available
+	 * 	Example: 10 features requested, but only 6 available
+	 * 		- Should perform additional query to get 4 more normal posts in order to return 10 posts total
+	 * 		- Use parameter to enable/disable this functional
+	 * 			- Ex: $fill_limit (bool) If TRUE, get additional posts to fill post limit
+	 * 
+	 * @return void
+	 * @param int $limit[optional] Maximum number of featured posts to retrieve (Default: -1 = All Featured Posts)
+	 * @param int|bool $parent[optional] Section to get featured posts of (Defaults to current section).
+	 * 	FALSE if latest featured posts should be retrieved regardless of section
+	 */
+	function posts_featured_get($limit = -1, $parent = null) {
+		//Global variables
+		global $wp_query, $wpdb;
+		
+		//Determine section
+		if ($parent == null) {
+			if ($wp_query->post_count == 1) {
+				$parent = $wp_query->posts[0]->ID;
+			}
+			elseif ($wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && property_exists($GLOBALS['post'], 'ID')) {
+				$parent = $GLOBALS['post']->ID;
+			}
+		}
+		//Check if parent is valid post ID
+		if ((int)$parent < 1) {
+			//Get featured posts from all sections if no valid parent is set
+			$parent = null;
+		}
+		
+		//Set post limit
+		$limit = (int)$limit;
+		
+		//Build query for featured posts
+		$args = array(
+					'post_parent'	=> $parent, //Section to get posts for
+					'category_name' => $this->posts_featured_cat, //Restrict to posts matching "featured" category
+					'numberposts'	=> $limit //Limit the number of posts retrieved
+					);
+		//Retrieve featured posts
+		$featured = get_posts($args);
+
+		//Load retrieved posts into wp_query variable
+		$this->posts_featured_load($featured);
+
+		//Return retrieved posts so that array may be manipulated further if desired
+		return $this->posts_featured;
+	}
+	
+	/**
+	 * Populates global wp_query variable with additional properties for managing featured posts
+	 * 
+	 * Featured post data is stored in the following $wp_query variables
+	 * --
+	 * featured_posts	array	Stores featured posts [Default: empty array]
+	 * has_featured		bool	Whether or not any featured posts were retrieved [Default: false]
+	 * current_featured	int		Featured post currently loaded in global $post variable [Default: -1]
+	 * featured_count	int		Number of featured posts [Default: 0]
+	 * 
+	 * @return void 
+	 * @param array $posts Featured posts
+	 */
+	function posts_featured_load($posts) {
+		
+		//Reset featured posts variables to default values
+		$this->posts_featured_reset();
+		
+		if (!!$posts) {
+			//Save retrieved featured posts in newly created variables in global wp_query object
+			$this->posts_featured = $posts;
+			$this->posts_featured_has = true;
+			$this->posts_featured_count = count($this->posts_featured);
+		}
+	}
+	
+	/**
+	 * Resets featured post variables to default values
+	 * @return void
+	 */
+	function posts_featured_reset() {
+		$this->posts_featured = array();
+		$this->posts_featured_has = false;
+		$this->posts_featured_current = -1;
+		$this->posts_featured_count = 0;
+	}
+	
+	/**
+	 * Checks whether featured posts are available in the current context
+	 * Note: featured posts should have already been retrieved (see @CNR::posts_featured_get())
+	 * 
+	 * If no accessible featured posts are found, current post (section) is set as global post variable
+	 * 
+	 * @see 'the_posts' filter
+	 * @see get_children()
+	 * @return boolean TRUE if section contains children, FALSE otherwise
+	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
+	 */
+	function posts_featured_has() {
 		global $wp_query, $post;
 		
-		if ($this->has_children()) {
-			$post = $wp_query->post_children[$wp_query->current_child];
-			setup_postdata($post);
-			$wp_query->current_child++;
+		//Check if any featured posts on current page were retrieved
+		//If featured posts are found, make sure there are more featured posts 
+		if ($this->posts_featured_count > 0 && $this->posts_featured_current < $this->posts_featured_count) {
+			return true;
 		}
+		
+		//Reset current featured post position if all featured posts have been processed
+		$this->posts_featured_rewind(); 
+		
+		//If no featured posts were found (or the last featured post has been previously loaded),
+		//load previous post back into global post variable
+		if ($wp_query->current_post >= 0) {
+			$post = $wp_query->posts[$wp_query->current_post];
+			setup_postdata($post);
+		}
+		return false;
+	}
+	
+	/**
+	 * Loads next featured post into global post variable for use in the loop
+	 * @return void
+	 */
+	function posts_featured_next() {
+		global $post;
+		
+		if ($this->posts_featured_has()) {
+			//Increment featured post position
+			$this->posts_featured_current++;
+			
+			//Load featured post into global post variable
+			$post = $this->posts_featured[$this->posts_featured_current];
+			
+			setup_postdata($post);
+		}
+	}
+	
+	/**
+	 * Resets position of current featured post
+	 * Allows for multiple loops over featured posts
+	 * @return void
+	 */
+	function posts_featured_rewind() {
+		$this->posts_featured_current = -1;
+	}
+	
+	/**
+	 * Gets index of current featured post
+	 * @return int Index position of current featured post
+	 */
+	function posts_featured_current() {
+		return $this->posts_featured_current;
+	}
+	
+	/**
+	 * Checks if current featured post is the first featured post
+	 * @return bool TRUE if current post is the first featured post, FALSE otherwise
+	 */
+	function posts_featured_is_first() {
+		return ($this->posts_featured_current() == 0) ? true : false;
+	}
+	
+	/**
+	 * Determines whether a post is classified as a "feature" or not
+	 * 
+	 * @return bool TRUE if post is classified as a "feature", FALSE otherwise 
+	 * @param int $post_id[optional] ID of the post.  Defaults to current post
+	 */
+	function post_is_featured($_post = null) {
+		$ret = false;
+		
+		//Set post ID
+		if ($_post) {
+			$_post = get_post($_post);
+		}
+		else {
+			$_post = & $GLOBALS['post'];
+		}
+		
+		if (!$_post)
+			return false;
+		
+		//Check if post is in the featured category
+		if (in_category($this->post_featured, $_post)) {
+			$ret = true;
+		}
+		return $ret;
+	}
+	
+	function post_get_subtitle($post = null) {
+		$p_id = null;
+		if (is_int($post))
+			$p_id = $post;
+		else {
+			if (!is_object($post) || !property_exists($post, 'ID'))
+				$post =& $GLOBALS['post'];
+			$p_id = $post->ID;
+		}
+		$subtitle = '';
+		if (!((int)$p_id))
+			return $subtitle;
+		
+		//Get post subtitle data
+		$subtitle = get_post_meta($post->ID, $this->post_subtitle_field, true);
+		return $subtitle;
+	}
+	
+	function post_the_subtitle($post = null) {
+		echo $this->post_get_subtitle($post);
 	}
 	
 	/**
 	 * Modifies post permalink to reflect position of post in site structure
 	 * Example: baseurl/section-name/post-name/
+	 * 
 	 * @return string
 	 * @param string $permalink Current permalink url for post
 	 * @param object $post Post object
@@ -380,7 +758,7 @@ class Cornerstone {
 			$base = get_bloginfo('url');
 			
 			//Get post path
-			$path = $this->get_post_path($post);
+			$path = $this->post_get_path($post);
 			
 			//Set permalink (Add trailing slash)
 			$permalink = $base . $path . $post->post_name . '/';
@@ -395,7 +773,7 @@ class Cornerstone {
 	 * @return array of Post Objects
 	 * @param object $post Post to get path for
 	 */
-	function get_post_parents($post) {
+	function post_get_parents($post) {
 		$parents = array();
 		if ( is_object($post) ) {
 			$post_parent = $post;
@@ -417,9 +795,9 @@ class Cornerstone {
 	 * Example: /path/to/post/
 	 * @param object $post Post object
 	 */
-	function get_post_path($post) {
+	function post_get_path($post) {
 		//Get post parents
-		$parents = $this->get_post_parents($post);
+		$parents = $this->post_get_parents($post);
 		$sep = '/';
 		$path = $sep;
 		foreach ($parents as $post_parent) {
@@ -449,6 +827,7 @@ class Cornerstone {
 		if (!isset($query_obj->query_vars[$this->_qry_var])) {
 			return;
 		}
+		
 		//$query_obj = new WP_Query;
 		if (!isset($query_obj->queried_object_id) || !$query_obj->queried_object_id) {
 			$query_obj->query_vars['name'] = sanitize_title(basename($query_obj->query_vars['pagename']));
@@ -457,7 +836,23 @@ class Cornerstone {
 			//Reparse query variables
 			$query_obj->parse_query($query_obj->query_vars);
 		}
-
+	}
+	
+	/**
+	 * Filter posts request prior to querying DB for posts
+	 * 
+	 * Operations:
+	 * If query is for the home page
+	 * - Clear request so no posts are retrieved from DB
+	 *  
+	 * @return string Updated posts request
+	 * @param string $request Posts request
+	 */
+	function posts_request($request) {
+		if (is_home())
+			$request = '';
+		
+		return $request;
 	}
 	
 	/**
