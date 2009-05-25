@@ -27,6 +27,11 @@ class Cornerstone {
 	var $_qry_var = 'var';
 	
 	/**
+	 * @var string Name of property to store post parts under
+	 */
+	var $_post_parts_var = 'parts';
+	
+	/**
 	 * @var string Base name for Content Type Admin Menus
 	 */
 	var $file_content_types = 'content-types';
@@ -40,6 +45,18 @@ class Cornerstone {
 	
 	var $url_base = '';
 	
+	/* State Variables */
+	
+	/**
+	 * @var bool Whether the current request is occuring during WP initialization
+	 */
+	var $state_init = false;
+	
+	/**
+	 * @var bool Whether the current request is occuring during section children request
+	 */
+	var $state_children = false;
+	
 	/**
 	 * @var object|int Current section post object (or 0 if not in a section)
 	 */
@@ -48,7 +65,8 @@ class Cornerstone {
 	/* Featured Content variables */
 	
 	/**
-	 * @var string Name of category that denotes a "featured" post
+	 * @var string Category slug value that denotes a "featured" post
+	 * @see posts_featured_cat()
 	 */
 	var $posts_featured_cat = "feature";
 	
@@ -105,6 +123,7 @@ class Cornerstone {
 		$this->_caller = $caller;
 		$this->_prefix_db = $this->get_db_prefix();
 		$this->_qry_var = $this->_prefix . $this->_qry_var;
+		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
 		$this->debug = new S_DEBUG();
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
@@ -125,13 +144,21 @@ class Cornerstone {
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
 		
+		//Post Filtering
+		
+		//Initial request
+		add_action('parse_request', $this->m('request_init_start'));
+		add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
+		add_action('wp', $this->m('request_init_end'));
+		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
 		add_filter('post_link', $this->m('post_link'), 10, 2);
+		add_filter('wp_list_pages', $this->m('post_section_highlight'));
 		
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
-		add_filter('posts_request', $this->m('posts_request'));
+		//add_filter('posts_request', $this->m('posts_request'));
 		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
 		
 		//Register Hooks for other classes
@@ -184,6 +211,17 @@ class Cornerstone {
 	function get_prefix() {
 		$c_vars = get_class_vars(__CLASS__);
 		return $c_vars['_prefix'];
+	}
+	
+	/**
+	 * Get the IDs of a collection of posts
+	 * @return array IDs of Posts passed to function
+	 * @param array $posts Array of Post objects 
+	 */
+	function posts_get_ids($posts) {
+		$callback = create_function('$post', 'return $post->ID;');
+		$arr_ids = array_map($callback, $posts);
+		return $arr_ids;
 	}
 	
 	/*-** Activation **-*/
@@ -360,7 +398,60 @@ class Cornerstone {
 		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
 	}
 	
+	/*-** State Settings **-*/
+	
+	function toggle_state(&$state_var) {
+		$state_var = !$state_var;
+	}
+	
 	/*-** Content **-*/
+	
+	/*-** Request **-*/
+	
+	function request_init_start() {
+		$this->state_init = true;
+	}
+	
+	function request_init_end() {
+		$this->state_init = false;
+	}
+	
+	function request_children_start() {
+		$this->state_children = true;
+		$this->request_init_end();
+	}
+	
+	function request_children_end() {
+		$this->state_children = false;
+	}
+	
+	function post_section_highlight($output) {
+
+		$class_current = 'current_page_item';
+		$class_item_pre = 'page-item-';
+		
+		global $post;
+		
+		//Check if no pages are marked as 'current' yet
+		if ($post && stripos($output, $class_current) === false) {
+			//Get all parents of current post
+			$parents = $this->post_get_parents($post);
+			
+			//Add current post to array
+			$parents[] = $post;
+			
+			//Reverse array so we start with the current post first
+			$parents = array_reverse($parents);
+			
+			//Iterate through current posts's parents to highlight all parents found
+			foreach ($parents as $page) {
+				$class_item = $class_item_pre . $page->ID;
+				$class_replace = $class_item . ' ' . $class_current;
+				$output = str_replace($class_item, $class_replace, $output);
+			}
+		}
+		return $output;
+	}
 	
 	/*-** Child Content **-*/
 	
@@ -368,7 +459,7 @@ class Cornerstone {
 	 * Resets object variables for child content
 	 * @return void
 	 */
-	function post_children_reset() {
+	function post_children_init() {
 		$this->post_children = null;
 		$this->post_children_has = false;
 		$this->post_children_current = -1;
@@ -399,7 +490,7 @@ class Cornerstone {
 		global $wp_query, $wpdb;
 		
 		//Reset children post variables
-		$this->post_children_reset();
+		$this->post_children_init();
 		
 		//Stop here if post is not a page
 		if (!is_single() && !is_page()) {
@@ -409,16 +500,19 @@ class Cornerstone {
 		//Get children posts of page
 		if ($wp_query->posts) {
 			$page = $wp_query->posts[0];
-			/*
-			$qry = sprintf('SELECT * FROM %s WHERE post_parent = %s AND post_type = \'post\' AND post_status = \'publish\'', $wpdb->posts, $page->ID);
-			$children = $wpdb->get_results($qry);
-			*/
+			
+			//Set arguments to retrieve children posts of current page
 			$c_args = array(
 							'post_parent'	=>	$page->ID						
 							);
+			//Set State
+			$this->request_children_start();
+			//Get children posts
 			$children = get_posts($c_args);
 			//Save any children posts in new variables in global wp_query object
 			$this->post_children_save($children);
+			//Set State;
+			$this->request_children_end();
 		}
 		
 		//Return posts (required by filter)
@@ -526,6 +620,83 @@ class Cornerstone {
 		return $src;
 	}
 	
+		/* Post Parts */
+	
+	/**
+	 * Gets array of parts in post
+	 * Parts are sorted by order in post
+	 * @return array Parts in post
+	 */
+	function post_get_parts() {
+		global $post;
+		$parts = array();
+		$matches = array();
+		if ($post) {
+			//Check if parts have already been fetched
+			if ($this->post_check_parts()) {
+				$parts = $post->{$this->_post_parts_var};
+			}
+			else {
+				//Fetch the post's content
+				$content = get_the_content();
+				
+				$part_code = 'part';
+				$part_start = '[' . $part_code;
+				$re_part = '/\[' . $part_code . '.*?\]/i';
+				
+				//Check if any parts exist in content
+				$pos = stripos($content, $part_start);
+				if ($pos !== false) {
+					//Get all matches
+					preg_match_all($re_part, $content, $matches);
+					//Add part to array	
+					if (is_array($matches))
+						$parts = $matches;
+				}
+				//Add parts array to post variable for future reference
+				$post->{$this->_post_parts_var} = $parts;
+			}
+		}
+		
+		//Return array of post parts
+		return $parts;
+	}
+	
+	function post_check_parts($post = null) {
+		$ret = false;
+		if (is_null($post) && isset($GLOBALS['post']))
+			$post =& $GLOBALS['post'];
+		else
+			return $ret;
+		
+		//Check if post parts have already been fetched and added to post object
+		if (property_exists($post, $this->_post_parts_var) && is_array($post->{$this->_post_parts_var}))
+			$ret = true;
+		return $ret;
+		
+	}
+	
+	function post_the_parts() {
+		//Get Post parts
+		$parts = $this->post_get_parts();
+		
+		$output = '';
+		
+		//Build parts output
+		foreach ($parts as $part) {
+			
+		}
+		
+		//Echo output
+		echo $output;
+	}
+	
+	function post_have_parts() {
+		if ($this->post_get_parts())
+			return true;
+		return false;
+	}
+	
 	/*-** Featured Content **-*/
 	
 	/**
@@ -548,7 +719,7 @@ class Cornerstone {
 		
 		//Determine section
 		if ($parent == null) {
-			if ($wp_query->post_count == 1) {
+			if (count($wp_query->posts) == 1) {
 				$parent = $wp_query->posts[0]->ID;
 			}
 			elseif ($wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && property_exists($GLOBALS['post'], 'ID')) {
@@ -567,17 +738,67 @@ class Cornerstone {
 		//Build query for featured posts
 		$args = array(
 					'post_parent'	=> $parent, //Section to get posts for
-					'category_name' => $this->posts_featured_cat, //Restrict to posts matching "featured" category
+					'category' => $this->posts_featured_get_cat_id(), //Restrict to posts matching "featured" category
 					'numberposts'	=> $limit //Limit the number of posts retrieved
 					);
+					
 		//Retrieve featured posts
 		$featured = get_posts($args);
+		
+		//Check to make sure the correct number of posts are returned
+		if ($limit && count($featured) < $limit) {
+			//Set arguments to fetch additional (non-feature) posts to meet limit
+			
+			//Remove category argument
+			unset($args['category']);
+			
+			//Adjust Limit
+			$args['numberposts'] = $limit - count($featured);
+			
+			//Exclude posts already fetched
+			$args['post__not_in'] = $this->posts_get_ids($featured);
+			
+			//Get more posts
+			$additional = get_posts($args);
+			$featured = array_merge($featured, $additional);
+		}
 
 		//Load retrieved posts into wp_query variable
 		$this->posts_featured_load($featured);
-
+		
 		//Return retrieved posts so that array may be manipulated further if desired
 		return $this->posts_featured;
+	}
+	
+	/**
+	 * Retrieves featured post category object
+	 * @return object Featured post category object
+	 */
+	function posts_featured_get_cat() {
+		static $cat = null;
+		
+		//Only fetch category object if it hasn't already been retrieved
+		if (is_null($cat) || !is_object($cat)) {
+			//Retrieve category object
+			if (is_int($this->posts_featured_cat)) {
+				$cat = get_category((int)$this->posts_featured_cat);
+			}
+			elseif (is_string($this->posts_featured_cat) && strlen($this->posts_featured_cat) > 0) {
+				$cat = get_category_by_slug($this->posts_featured_cat);
+			}
+		}
+		
+		return $cat;
+	}
+	
+	function posts_featured_get_cat_id() {
+		static $id = '';
+		if ($id == '') {
+			$cat = $this->posts_featured_get_cat();
+			if (!is_null($cat) && property_exists($cat, 'cat_ID'))
+				$id = $cat->cat_ID;
+		}
+		return $id;
 	}
 	
 	/**
@@ -596,7 +817,7 @@ class Cornerstone {
 	function posts_featured_load($posts) {
 		
 		//Reset featured posts variables to default values
-		$this->posts_featured_reset();
+		$this->posts_featured_init();
 		
 		if (!!$posts) {
 			//Save retrieved featured posts in newly created variables in global wp_query object
@@ -610,7 +831,7 @@ class Cornerstone {
 	 * Resets featured post variables to default values
 	 * @return void
 	 */
-	function posts_featured_reset() {
+	function posts_featured_init() {
 		$this->posts_featured = array();
 		$this->posts_featured_has = false;
 		$this->posts_featured_current = -1;
@@ -836,6 +1057,69 @@ class Cornerstone {
 			//Reparse query variables
 			$query_obj->parse_query($query_obj->query_vars);
 		}
+	}
+	
+	/**
+	 * Fetches posts before actual post query
+	 * Excludes retrieved posts from actual post query
+	 * @return void
+	 * @param object $query_obj WP_Query object reference to <tt>$wp_query</tt> variable
+	 */
+	function pre_get_posts_excluded(&$query_obj) {
+		//Featured posts
+		//Only get featured posts during initial (on home page) or child requests
+		if ((is_home() && $this->state_init)		/* Initial Query on Home Page */
+		 || (is_page() && $this->state_children)	/* Children Query on Section Page */ ) {
+
+			//Toggle states (to avoid issues with queries)
+			$this->toggle_state($this->state_init);
+			$this->toggle_state($this->state_children);
+			
+			$this->posts_featured_get(4);
+			
+			//Toggle states back to original value (so that state can be used by other code)
+			$this->toggle_state($this->state_init);
+			$this->toggle_state($this->state_children);
+			
+			//Add retrieved posts to excluded variables
+			$this->posts_add_excluded($this->posts_featured, $query_obj);
+		}
+	}
+	
+	/**
+	 * Adds IDs of posts to excluded posts array for current query
+	 * Posts will not be retrieved in current array as a result
+	 * @return void
+	 * @param array $posts Array of Post objects
+	 * @param object $query_obj WP_Query object
+	 */
+	function posts_add_excluded($posts, &$query_obj) {
+		//Validate posts array
+		if (!is_array($posts) || count($posts) < 1)
+			return false;
+			
+		//Validate query object
+		if (!isset($query_obj)) {
+			if (!isset($GLOBALS['wp_query']))
+				return false;
+			$query_obj =& $GLOBALS['wp_query'];
+		}
+		
+		if (!property_exists($query_obj, 'query_vars'))
+			return false;
+		
+		//Query vars shorthand
+		$q =& $query_obj->query_vars;
+		
+		//Get array of Post IDs
+		$excluded = $this->posts_get_ids($posts);
+		
+		//Add to query variable in query object
+		if (!isset($q['post__not_in']) || !is_array($q['post__not_in'])) {
+			$q['post__not_in'] = array();
+		}
+		
+		$q['post__not_in'] = array_merge($q['post__not_in'], $excluded);
 	}
 	
 	/**

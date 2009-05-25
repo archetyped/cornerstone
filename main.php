@@ -68,6 +68,11 @@ function cnr_is_first_featured() {
 	return $cnr->posts_featured_is_first();
 }
 
+function cnr_featured_count() {
+	global $cnr;
+	return $cnr->posts_featured_count;
+}
+
 /**
  * Checks if Post is "featured"
  * 
@@ -80,6 +85,8 @@ function cnr_is_featured($post = null) {
 }
 
 /*-** Post Content **-*/
+
+	/* Images */
 
 /**
  * Gets Image associated with post
@@ -99,7 +106,9 @@ function cnr_the_subtitle() {
 	global $cnr;
 	$cnr->post_the_subtitle();
 }
-
+	
+	/* Section */
+	
 /**
  * Retrieves the post's section data 
  * @return string post's section data 
@@ -121,6 +130,36 @@ function cnr_get_the_section($type = 'ID') {
 function cnr_the_section($type = 'ID') {
 	global $cnr;
 	$cnr->post_the_section($type);
+}
+
+	/* Parts (Sections within a Post) */
+
+/**
+ * Gets an array of parts within post
+ * Parts are sorted by their order in the post
+ * @return array Headings in post
+ */
+function cnr_get_the_parts() {
+	global $cnr;
+	return $cnr->post_get_parts();
+}
+
+/**
+ * Outputs links to parts within post
+ * @return string List of links to headings within post
+ */
+function cnr_the_parts() {
+	global $cnr;
+	$cnr->post_the_parts();
+}
+
+/**
+ * Checks whether post contains any parts
+ * @return bool TRUE if post contains 1 or more headings
+ */
+function cnr_have_parts() {
+	global $cnr;
+	return $cnr->post_have_parts();
 }
 
 /**
