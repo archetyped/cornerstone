@@ -431,9 +431,10 @@ class Cornerstone {
 		$class_item_pre = 'page-item-';
 		
 		global $post;
-		
+
 		//Check if no pages are marked as 'current' yet
-		if ($post && stripos($output, $class_current) === false) {
+		//Also make sure current page is not home page (no links should be marked as current)
+		if (!is_home() && $post && stripos($output, $class_current) === false) {
 			//Get all parents of current post
 			$parents = $this->post_get_parents($post);
 			
@@ -450,6 +451,7 @@ class Cornerstone {
 				$output = str_replace($class_item, $class_replace, $output);
 			}
 		}
+
 		return $output;
 	}
 	
@@ -561,6 +563,60 @@ class Cornerstone {
 			$post = $this->post_children[$this->post_children_current];
 			setup_postdata($post);
 		}
+	}
+	
+	/*-** Template **-*/
+	
+	/**
+	 * Builds Page title for current Page/Content
+	 * @return string Page title 
+	 * @param array|string $args[optional] Parameters for customizing Page title
+	 */
+	function page_title_get($args = '') {
+		$defaults = array(
+							'sep'	=>	' &raquo; ',
+							'base'	=>	get_bloginfo('title')
+							);
+		$args =  wp_parse_args($args, $defaults);
+		$title_parts = array();
+		$page_title = '';
+		//Add Site Title
+		$title_parts[] = $args['base'];
+		
+		//Add additional parts to title based on current page/post
+		if (!is_home()) {
+			if (is_page() || is_single()) {
+				//Get section title
+				global $post;
+				if ($post->post_parent != 0) {
+					$parent = get_post($post->post_parent);
+					if ($parent)
+						$title_parts[] = $parent->post_title;
+				}
+				
+				//Get current post title
+				$title_parts[] = $post->post_title;
+			}
+		}
+		
+		//Build title based on parts
+		$title_parts = array_reverse($title_parts);
+		for ($x = 0; $x < count($title_parts); $x++) {
+			$page_title .= $title_parts[$x];
+			if ($x < (count($title_parts) - 1))
+				$page_title .= $args['sep'];
+		}
+		
+		return $page_title;
+	}
+	
+	/**
+	 * Outputs formatted page title
+	 * @return void
+	 * @param array|string $args[optional] Parameters for customizing Page title
+	 */
+	function page_title($args = '') {
+		echo $this->page_title_get($args);
 	}
 	
 	/*-** Post Metadata **-*/
@@ -994,7 +1050,7 @@ class Cornerstone {
 	 * @return array of Post Objects
 	 * @param object $post Post to get path for
 	 */
-	function post_get_parents($post) {
+	function post_get_parents($post, $depth = '') {
 		$parents = array();
 		if ( is_object($post) ) {
 			$post_parent = $post;

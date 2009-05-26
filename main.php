@@ -14,6 +14,19 @@ Author URI: http://archetyped.com
 require_once('model.php');
 $cnr = new Cornerstone(__FILE__);
 
+/* Page Level */
+
+/**
+ * Outputs formatted page title for current page
+ * @return void
+ * @param string|array Arguments for formatting page title
+ * May be an associative array or querystring-style list of arguments
+ */
+function cnr_page_title($args = '') {
+	global $cnr;
+	$cnr->page_title($args);
+}
+
 /**
  * Checks if current post/page has children elements
  * 
