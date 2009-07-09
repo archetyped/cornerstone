@@ -47,6 +47,21 @@ function cnr_next_child() {
 	$cnr->post_children_get_next();
 }
 
+function cnr_children_count() {
+	global $cnr;
+	return $cnr->post_children_count();	
+}
+
+function cnr_is_first_child() {
+	global $cnr;
+	return $cnr->post_children_is_first();
+}
+
+function cnr_is_last_child() {
+	global $cnr;
+	return $cnr->post_children_is_last();
+}
+
 /*-** Featured Content **-*/
 
 /**

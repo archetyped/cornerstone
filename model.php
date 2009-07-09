@@ -501,7 +501,6 @@ class Cornerstone {
 		if (!is_page() || $posts != $wp_query->posts) {
 			return $posts;
 		}
-		echo '<h1>Get Post Children</h1>';
 		
 		//Reset children post variables
 		$this->post_children_init();
@@ -559,6 +558,14 @@ class Cornerstone {
 	}
 	
 	/**
+	 * Returns the total number of children posts
+	 * @return int Number of children posts
+	 */
+	function post_children_count() {
+		return $this->post_children_count;
+	}
+	
+	/**
 	 * Loads next child post into global post variable for use in the loop
 	 * @return void
 	 */
@@ -569,6 +576,18 @@ class Cornerstone {
 			$post = $this->post_children[$this->post_children_current];
 			setup_postdata($post);
 		}
+	}
+	
+	function post_children_is_first() {
+		if ($this->post_children_current == 0)
+			return true;
+		return false;
+	}
+	
+	function post_children_is_last() {
+		if ($this->post_children_current == ($this->post_children_count - 1))
+			return true;
+		return false;
 	}
 	
 	/*-** Template **-*/
@@ -681,41 +700,36 @@ class Cornerstone {
 			return false;
 		global $wpdb;
 		
+		$filter_special = true;
+		
 		//Default arguments
 		$defaults = array(
 						'post_type'			=>	'attachment',
 						'post_parent'		=>	(int) $post->ID,
-						'suppress_filters'	=>	false,
 						'suppress_special'	=>	true
 						);
 		
 		$args = wp_parse_args($args, $defaults);
 		
-		//Determine if query needs to be adjusted for special conditions
-		$where_condition = array();
 		//Special items 
 		if (isset($args['special_req']) && !empty($args['special_req'])) {
-			$where_condition[] =  $wpdb->posts . '.post_title = \'[' . $args['special_req'] . ']\'';
-		}
-		elseif ($args['suppress_special'])
-		{
-			//Retrieve all attachments except for special items
-			$where_condition[] =  $wpdb->posts . '.post_title NOT LIKE \'[%]\'';
-		}
-		
-		//Add filter (if conditions exist)
-		if (!empty($where_condition)) {
-			$callback_where_code = '$where .= " AND ' . implode(' AND ', $where_condition) . '"; return $where;';
-			$callback_where = create_function('$where', $callback_where_code);
-			add_filter('posts_where', $callback_where);
+			$args['s'] =  "[" . $args['special_req'] . "]";
+			$args['exact'] = true;
+			$args['sentence'] = true;
+			$filter_special = false;
 		}
 		
 		//Get attachments
 		$attachments = get_children($args);
-
-		//Remove filter (if set)
-		if (isset($callback_where)) 
-			remove_filter('posts_where', $callback_where);
+		
+		//Filter special items
+		if (!empty($attachments) && $filter_special) {
+			foreach($attachments as $key => $attachment) {
+				if (strpos($attachment->post_title, '[') === 0 && strrpos($attachment->post_title, ']') === (strlen($attachment->post_title) - 1))
+					unset($attachments[$key]);
+			}
+			$attachments = array_values($attachments);
+		}
 		
 		//Return attachments
 		return $attachments;
@@ -741,13 +755,9 @@ class Cornerstone {
 				$image_type = null;
 				$limit = 0;
 		}
-		//Add filter to query only for image mime-types
-		$callback_where_code =  '$where .= " AND LEFT(post_mime_type, 5) = \'image\' "; return $where;';
-		$callback_where = create_function('$where', $callback_where_code);
-		add_filter('posts_where', $callback_where);
 		
 		//Get attachments
-		$args = array('orderby' => 'menu_order', 'order' => 'ASC');
+		$args = array('post_mime_type' => 'image/%', 'orderby' => 'menu_order', 'order' => 'ASC');
 		//Set special item request
 		if (!is_null($image_type))
 			$args['special_req'] = $image_type;
@@ -756,8 +766,7 @@ class Cornerstone {
 			$args['numberposts'] = (int) $limit;
 
 		$post_images = $this->post_get_attachments($post, $args);
-		//Remove mime-type query filter
-		remove_filter('posts_where', $callback_where);
+
 		if (!$post_images)
 			$post_images = array();
 		else
@@ -778,7 +787,7 @@ class Cornerstone {
 			return $ret;
 			
 		$prop = $this->post_get_image_property($image_type);
-		if ($this->post_has_image($post, $image_type, TRUE))
+		if ($this->post_has_image($post, $image_type, true))
 			$ret = $post->{$prop};
 		else {
 			$img = $this->post_get_images($post, $image_type);
