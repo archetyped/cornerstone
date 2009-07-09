@@ -101,6 +101,12 @@ class Cornerstone {
 	 * @var array Children posts of current post
 	 */
 	var $post_children = null;
+	
+	/**
+	 * @var int ID of Page that children were retrieved for
+	 */
+	var $post_children_parent = null;
+	
 	/**
 	 * @var bool Whether or not post has children
 	 */
@@ -148,7 +154,7 @@ class Cornerstone {
 		
 		//Initial request
 		add_action('parse_request', $this->m('request_init_start'));
-		add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
+		//add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
 		add_action('wp', $this->m('request_init_end'));
 		
 		//Posts
@@ -491,13 +497,14 @@ class Cornerstone {
 		//Global variables
 		global $wp_query, $wpdb;
 		
-		//Reset children post variables
-		$this->post_children_init();
-		
 		//Stop here if post is not a page
-		if (!is_single() && !is_page()) {
+		if (!is_page() || $posts != $wp_query->posts) {
 			return $posts;
 		}
+		echo '<h1>Get Post Children</h1>';
+		
+		//Reset children post variables
+		$this->post_children_init();
 		
 		//Get children posts of page
 		if ($wp_query->posts) {
@@ -532,13 +539,13 @@ class Cornerstone {
 	 * @return boolean TRUE if section contains children, FALSE otherwise
 	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
 	 */
-	function post_children_has()
-	{
+	function post_children_has() {
 		global $wp_query, $post;
 		
 		//Check if any children on current page were retrieved
-		//If children are found, make sure there are more children 
-		if ($this->post_children_count > 0 && $this->post_children_current < $this->post_children_count) {
+		//If children are found, make sure there are more children
+		 
+		if ($this->post_children_count > 0 && $this->post_children_current < ($this->post_children_count - 1)) {
 			return true;
 		}
 		
@@ -557,7 +564,6 @@ class Cornerstone {
 	 */
 	function post_children_get_next() {
 		global $post;
-		
 		if ($this->post_children_has()) {
 			$this->post_children_current++;
 			$post = $this->post_children[$this->post_children_current];
@@ -566,6 +572,24 @@ class Cornerstone {
 	}
 	
 	/*-** Template **-*/
+	
+	function check_post(&$post) {
+		if (empty($post)) {
+			if (isset($GLOBALS['post'])) {
+				$post = $GLOBALS['post'];
+				$GLOBALS['post'] =& $post;
+			}
+			else
+				return false;
+		}
+		if (is_array($post))
+			$post = (object) $post;
+		if (is_int($post))
+			$post = get_post($post);
+		if (!is_object($post))
+			return false;
+		return true;
+	}
 	
 	/**
 	 * Builds Page title for current Page/Content
@@ -641,6 +665,222 @@ class Cornerstone {
 	 */
 	function post_the_section($type = 'ID') {
 		echo $this->post_get_section($type);
+	}
+	
+		/*-** Post Attachments **-*/
+		
+	/**
+	 * Retrieves matching attachments for post
+	 * @return array|bool Array of post attachments
+	 * @param object|int $post Post object or Post ID
+	 * @param array $args[optional] Associative array of query arguments
+	 * @see get_posts() for query arguments
+	 */
+	function post_get_attachments($post = null, $args = '') {
+		if (!$this->check_post($post))
+			return false;
+		global $wpdb;
+		
+		//Default arguments
+		$defaults = array(
+						'post_type'			=>	'attachment',
+						'post_parent'		=>	(int) $post->ID,
+						'suppress_filters'	=>	false,
+						'suppress_special'	=>	true
+						);
+		
+		$args = wp_parse_args($args, $defaults);
+		
+		//Determine if query needs to be adjusted for special conditions
+		$where_condition = array();
+		//Special items 
+		if (isset($args['special_req']) && !empty($args['special_req'])) {
+			$where_condition[] =  $wpdb->posts . '.post_title = \'[' . $args['special_req'] . ']\'';
+		}
+		elseif ($args['suppress_special'])
+		{
+			//Retrieve all attachments except for special items
+			$where_condition[] =  $wpdb->posts . '.post_title NOT LIKE \'[%]\'';
+		}
+		
+		//Add filter (if conditions exist)
+		if (!empty($where_condition)) {
+			$callback_where_code = '$where .= " AND ' . implode(' AND ', $where_condition) . '"; return $where;';
+			$callback_where = create_function('$where', $callback_where_code);
+			add_filter('posts_where', $callback_where);
+		}
+		
+		//Get attachments
+		$attachments = get_children($args);
+
+		//Remove filter (if set)
+		if (isset($callback_where)) 
+			remove_filter('posts_where', $callback_where);
+		
+		//Return attachments
+		return $attachments;
+	}
+	
+	/**
+	 * Retrieve all images attached to post
+	 * @return array Images attached to post. If there are no images attached to post, an empty array is returned
+	 * @param object $post
+	 * @param string $image_type [optional] Defines the type of image to retrieve.  (Default: null - All images)
+	 * Image Types:
+	 * 	- thumbnail:	Used as thumbnail for post
+	 * 	- header:		Used as main header image for post (on post page, etc.)
+	 */
+	function post_get_images($post = null, $image_type = null) {
+		//Determine/Normalize image type
+		switch ($image_type) {
+			case 'thumbnail':
+			case 'header':
+				$limit = 1;
+				break;
+			default:
+				$image_type = null;
+				$limit = 0;
+		}
+		//Add filter to query only for image mime-types
+		$callback_where_code =  '$where .= " AND LEFT(post_mime_type, 5) = \'image\' "; return $where;';
+		$callback_where = create_function('$where', $callback_where_code);
+		add_filter('posts_where', $callback_where);
+		
+		//Get attachments
+		$args = array('orderby' => 'menu_order', 'order' => 'ASC');
+		//Set special item request
+		if (!is_null($image_type))
+			$args['special_req'] = $image_type;
+		//Set Limit
+		if (0 < $limit)
+			$args['numberposts'] = (int) $limit;
+
+		$post_images = $this->post_get_attachments($post, $args);
+		//Remove mime-type query filter
+		remove_filter('posts_where', $callback_where);
+		if (!$post_images)
+			$post_images = array();
+		else
+			$post_images = array_values($post_images);
+		return $post_images;
+	}
+	
+	/**
+	 * Retrieves specified image attached to Post
+	 * @param object $post [optional] Post Object (Default: current global post)
+	 * @param string $image_type [optional] Type of image to retrieve for post (Default: header image)
+	 * @return array Image metadata array (src, width, height)
+	*/ 
+	function post_get_image($post = null, $image_type = 'header') {
+		//Default return value: Empty Array
+		$ret = array();
+		if (!$this->check_post($post))
+			return $ret;
+			
+		$prop = $this->post_get_image_property($image_type);
+		if ($this->post_has_image($post, $image_type, TRUE))
+			$ret = $post->{$prop};
+		else {
+			$img = $this->post_get_images($post, $image_type);
+			if (!empty($img)) {
+				//Get image metadata
+				$ret = wp_get_attachment_image_src($img[0]->ID, '');
+				//Save to post object
+				$post->{$prop} = $ret;
+			}
+		}
+
+		return $ret;
+	}
+	
+	/**
+	 * Generates property name for storing specified image data in Post object 
+	 * @param object $image_type [optional] Image type to generate property for
+	 * @return string Property name
+	 */
+	function post_get_image_property($image_type = 'header') {
+		return 'post_image_' . $image_type;
+	}
+	
+	/**
+	 * Determine whether or not special image is attached to post
+	 * @param object $post [optional] Post object (Default: current global post)
+	 * @param string $image_type [optional] Image type to check for (Default: header image)
+	 * @see post_get_images() for list of image types
+	 * @param bool $object_only [optional] Check only post object for property existence/data if TRUE
+	 * @return bool TRUE if post has specified image, FALSE otherwise
+	 */
+	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
+		if (!$this->check_post($post))
+			return false;
+		$prop = $this->post_get_image_property($image_type);
+		if (property_exists($post, $prop) && !empty($post->{$prop}))
+			return true;
+		elseif (!$object_only) {
+			$image = $this->post_get_image($post, $image_type);
+			if (is_array($image) && !empty($image)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * Outputs img element of image retrieved for post
+	 * @param object $post [optional]
+	 * @return 
+	 */
+	function post_the_image($post = null, $image_type = 'header') {
+		$img = $this->post_get_image($post, $image_type);
+		$ret = '';
+		if (!empty($img) && $this->check_post($post)) {
+			$attributes = array(
+								'alt'	=> $post->post_title,
+								'class' => 'image_' . $image_type
+								);
+			$ret = $this->post_get_image_element($img, $attributes);
+		}
+		echo $ret;
+	}
+	
+	/**
+	 * Build HTML IMG element of an Image
+	 * @param array $image Array of image properties
+	 * 	0:	Source URI
+	 * 	1:	Width
+	 * 	2:	Height
+	 * @return string HTML IMG element of specified image
+	 */
+	function post_get_image_element($image, $attributes = '') {
+		$ret = '';
+		if (is_array($image) && count($image) >= 3) {
+			//Build attribute string
+			if (is_array($attributes)) {
+				$attribs = '';
+				$attr_format = '%s = "%s" ';
+				foreach ($attributes as $attr => $val) {
+					$attribs .= sprintf($attr_format, $attr, attribute_escape($val));
+				}
+				$attributes = $attribs;
+			}
+			$format = '<img src="%1$s" width="%2$d" height="%3$d" ' . $attributes . ' />';
+			$ret = sprintf($format, $image[0], $image[1], $image[2]);
+		}
+		return $ret;
+	}
+	
+	/**
+	 * Outputs HTML IMG element to browser for specified image
+	 * @param array $image Array of image properties
+	 * 	0:	Source URI
+	 * 	1:	Width
+	 * 	2:	Height
+	 * @param string $alt [optional] Alt text for image
+	 * @return void
+	 */
+	function post_the_image_element($image, $alt = '') {
+		$ret = $this->post_get_image_element($image, $alt);
+		echo $ret;
 	}
 	
 	/**
@@ -851,7 +1091,7 @@ class Cornerstone {
 		static $id = '';
 		if ($id == '') {
 			$cat = $this->posts_featured_get_cat();
-			if (!is_null($cat) && property_exists($cat, 'cat_ID'))
+			if (!is_null($cat) && is_object($cat) && property_exists($cat, 'cat_ID'))
 				$id = $cat->cat_ID;
 		}
 		return $id;
@@ -994,6 +1234,14 @@ class Cornerstone {
 			$ret = true;
 		}
 		return $ret;
+	}
+	
+	function post_has_content($post = null) {
+		if (!$this->check_post($post))
+			return false;
+		if (isset($post->post_content) && trim($post->post_content) != '')
+			return true;
+		return false;
 	}
 	
 	function post_get_subtitle($post = null) {

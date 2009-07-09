@@ -99,6 +99,16 @@ function cnr_is_featured($post = null) {
 
 /*-** Post Content **-*/
 
+/**
+ * Checks if post has content to display
+ * @param object $post [optional] Post object
+ * @return bool TRUE if post has content, FALSE otherwise
+ */
+function cnr_has_content($post = null) {
+	global $cnr;
+	return $cnr->post_has_content($post);
+}
+
 	/* Images */
 
 /**
@@ -119,7 +129,27 @@ function cnr_the_subtitle() {
 	global $cnr;
 	$cnr->post_the_subtitle();
 }
-	
+
+function cnr_has_image($image_type = 'header') {
+	global $cnr;
+	return $cnr->post_has_image(null, $image_type);
+}
+
+function cnr_get_image($image_type = 'header') {
+	global $cnr;
+	return $cnr->post_get_image(null, $image_type);
+}
+
+function cnr_the_image($image_type = 'header') {
+	global $cnr;
+	$cnr->post_the_image(null, $image_type);
+}
+
+function cnr_get_attachments($post = null) {
+	global $cnr;
+	return $cnr->post_get_attachments($post);
+}
+
 	/* Section */
 	
 /**
