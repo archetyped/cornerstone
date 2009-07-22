@@ -126,6 +126,16 @@ function cnr_has_content($post = null) {
 
 	/* Images */
 
+function cnr_is_lightbox_enabled() {
+	global $cnr;
+	return $cnr->lightbox_is_enabled();
+}
+
+function cnr_lightbox_initialize() {
+	global $cnr;
+	$cnr->lightbox_initialize();
+}
+
 /**
  * Gets Image associated with post
  * 

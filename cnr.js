@@ -88,18 +88,20 @@ jQuery('document').ready(function() {
 	});
 	*/
 	
-	jQuery('.site-pages').jTree({
-		showHelper: true,
-		hOpacity: 0.5,
-		hBg: "#FCC",
-		hColor: "#222",
-		pBorder: "1px dashed #CCC",
-		pBg: "#EEE",
-		pColor: "#222",
-		pHeight: "20px",
-		snapBack: 1200,
-		childOff: 20
-	});
+	if (jQuery.jTree) {
+		jQuery('.site-pages').jTree({
+			showHelper: true,
+			hOpacity: 0.5,
+			hBg: "#FCC",
+			hColor: "#222",
+			pBorder: "1px dashed #CCC",
+			pBg: "#EEE",
+			pColor: "#222",
+			pHeight: "20px",
+			snapBack: 1200,
+			childOff: 20
+		});
+	}
 	jQuery('.site-pages a').click(function() { return false; });
 	//Initialize Page Groups
 	PageGroup.initGroups();

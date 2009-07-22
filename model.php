@@ -138,12 +138,18 @@ class Cornerstone {
 		
 		//Add Actions
 		//Admin
+			//Initialization
+		add_action('admin_init', $this->m('admin_init'));
 			//Head
 		add_action('admin_head', $this->m('admin_add_styles'));
 		add_action('admin_print_scripts', $this->m('admin_add_scripts'));
 			//Menus
 		add_action('admin_menu', $this->m('admin_menu'));
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
+			//Management
+		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
+		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
+		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
 		
 		//Add Filters
 		//Rewrite Rules
@@ -259,6 +265,111 @@ class Cornerstone {
 	}
 
 	/*-** Admin **-*/
+	
+	/**
+	 * Performs specified operations when admin is initialized
+	 * @return void
+	 */
+	function admin_init() {
+		$this->admin_settings_lightbox();
+	}
+	
+	/**
+	 * Adds settings section for Lightbox functionality
+	 * Section is added to Settings > Media Admin menu
+	 * @return void
+	 */
+	function admin_settings_lightbox() {
+		$page = 'media';
+		$section = 'cnr_lb';
+		//Section
+		add_settings_section($section, 'Lightbox Settings', $this->m('admin_lb_section'), $page);
+		//Fields
+		$fields = array(
+						'enabled'			=>	'Enable Lightbox Functionality',
+						'autostart'			=>	'Automatically Start Slideshow',
+						'duration'			=>	'Slide Duration (Seconds)',
+						'loop'				=>	'Loop through images',
+						'overlay_opacity'	=>	'Overlay Opacity (0 - 1)'
+						);
+		foreach ($fields as $key => $title) {
+			$id = 'cnr_lb_' . $key;
+			$callback = $this->m('admin_lb_' . $key);
+			add_settings_field($id, $title, $callback, $page, $section, array('label_for' => $id));
+			register_setting('media', $id);
+		}
+	}
+	
+	/**
+	 * Placeholder function for lightbox admin settings
+	 * @return void
+	 */
+	function admin_lb_section() { }
+	
+	/**
+	 * Lightbox setting - Enabled/Disabled
+	 * @return void
+	 */
+	function admin_lb_enabled() {
+		$checked = '';
+		$id = 'cnr_lb_enabled';
+		if (get_option($id))
+			$checked = ' checked="checked" ';
+		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
+		echo sprintf($format, $checked, $id);
+	}
+	
+	/**
+	 * Lightbox setting - Slideshow autostart
+	 * @return void
+	 */
+	function admin_lb_autostart() {
+		$checked = '';
+		$id = 'cnr_lb_autostart';
+		if (get_option($id))
+			$checked = ' checked="checked" ';
+		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
+		echo sprintf($format, $checked, $id);
+	}
+	
+	/**
+	 * Lightbox setting - Slide duration
+	 * @return void
+	 */
+	function admin_lb_duration() {
+		$val = 6;
+		$id = 'cnr_lb_duration';
+		$opt = get_option($id); 
+		if ($opt) $val = $opt;
+		$format = '<input type="text" size="3" maxlength="3" value="%1$s" id="%2$s" name="%2$s" class="code" /> (Default: 6)';
+		echo sprintf($format, $val, $id);
+	}
+	
+	/**
+	 * Lightbox setting - Looping
+	 * @return void
+	 */
+	function admin_lb_loop() {
+		$checked = '';
+		$id = 'cnr_lb_loop';
+		if (get_option($id))
+			$checked = ' checked="checked" ';
+		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
+		echo sprintf($format, $checked, $id);
+	}
+	
+	/**
+	 * Lightbox setting - Overlay Opacity
+	 * @return void
+	 */
+	function admin_lb_overlay_opacity() {
+		$val = 0.8;
+		$id = 'cnr_lb_overlay_opacity';
+		$opt = get_option($id); 
+		if ($opt) $val = $opt;
+		$format = '<input type="text" size="3" maxlength="5" value="%1$s" id="%2$s" name="%2$s" class="code" /> (Default: 0.8)';
+		echo sprintf($format, $val, $id);
+	}
 	
 	/**
 	 * Sets up Admin menus
@@ -396,12 +507,52 @@ class Cornerstone {
 	 * @return void
 	 */
 	function admin_add_scripts() {
-		wp_enqueue_script('jquery-ui-sortable');
-		wp_enqueue_script('jquery-ui-draggable');
-		wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
-		wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
+		if (strpos($_SERVER['QUERY_STRING'], 'page=page-groups') !== false) {
+			wp_enqueue_script('jquery-ui-sortable');
+			wp_enqueue_script('jquery-ui-draggable');
+			wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
+			wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
+		}
 		wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
 		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
+	}
+	
+	/**
+	 * Modifies the columns that are displayed on the Post Management Admin Page
+	 * @param array $columns Array of columns for displaying post data on each post's row
+	 * @return array Modified columns array
+	 */
+	function admin_manage_posts_columns($columns) {
+		$columns['section'] = __('Section');
+		return $columns;
+	}
+	
+	function admin_manage_posts_custom_column($column_name, $post_id) {
+		$section_id = $this->post_get_section();
+		$section = null;
+		if ($section_id > 0) 
+			$section = get_post($section_id);
+		if (!empty($section))
+			echo $section->post_title;
+		else
+			echo 'None';
+	}
+	
+	function admin_quick_edit_custom_box($column_name, $type) {
+		global $post;
+		if ($column_name == 'section' && $type == 'post') :
+		?>
+		<fieldset class="inline-edit-col-right">
+			<div class="inline-edit-col">
+				<div class="inline-edit-group">
+					<label><span class="title">Section</span></label>
+					<?php
+					wp_dropdown_pages(array('exclude_tree' => $post->ID, 'name' => 'post_parent', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
+					?>
+				</div>
+			</div>
+		</fieldset>
+		<?php endif;
 	}
 	
 	/*-** State Settings **-*/
@@ -511,7 +662,8 @@ class Cornerstone {
 			
 			//Set arguments to retrieve children posts of current page
 			$c_args = array(
-							'post_parent'	=>	$page->ID						
+							'post_parent'	=>	$page->ID,
+							'numberposts'	=>	-1					
 							);
 			//Set State
 			$this->request_children_start();
@@ -651,6 +803,43 @@ class Cornerstone {
 		}
 		
 		return $page_title;
+	}
+	
+	/**
+	 * Checks whether lightbox is currently enabled/disabled
+	 * @return bool TRUE if lightbox is currently enabled, FALSE otherwise
+	 */
+	function lightbox_is_enabled() {
+		if (get_option('cnr_lb_enabled'))
+			return true;
+		return false;
+	}
+	
+	/**
+	 * Sets options/settings to initialize lightbox functionality on page load
+	 * @return void
+	 */
+	function lightbox_initialize() {
+		$options = array();
+		$out = array();
+		$out['script_start'] = '<script type="text/javascript">Event.observe(window,"load",function(){ Lightbox.initialize(';
+		$out['script_end'] = '); });</script>';
+		//Get options
+		$options['autoPlay'] = get_option('cnr_lb_autostart');
+		$options['slideTime'] = get_option('cnr_lb_duration');
+		$options['loop'] = get_option('cnr_lb_loop');
+		$options['overlayOpacity'] = get_option('cnr_lb_overlay_opacity');
+		$obj = '{';
+		foreach ($options as $option => $val) {
+			if ($val === TRUE || $val == 'on')
+				$val = 'true';
+			elseif ($val === FALSE || empty($val))
+				$val = 'false';
+			$obj .= "'{$option}': {$val},";
+		}
+		$obj = rtrim($obj, ',');
+		$obj .= '}';
+		echo $out['script_start'] . $obj . $out['script_end'];
 	}
 	
 	/**
