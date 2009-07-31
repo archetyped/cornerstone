@@ -769,7 +769,7 @@ class Cornerstone {
 	 */
 	function page_title_get($args = '') {
 		$defaults = array(
-							'sep'	=>	' &raquo; ',
+							'sep'	=>	' &laquo; ',
 							'base'	=>	get_bloginfo('title')
 							);
 		$args =  wp_parse_args($args, $defaults);
@@ -803,6 +803,15 @@ class Cornerstone {
 		}
 		
 		return $page_title;
+	}
+	
+	/**
+	 * Outputs formatted page title
+	 * @return void
+	 * @param array|string $args[optional] Parameters for customizing Page title
+	 */
+	function page_title($args = '') {
+		echo $this->page_title_get($args);
 	}
 	
 	/**
@@ -840,15 +849,6 @@ class Cornerstone {
 		$obj = rtrim($obj, ',');
 		$obj .= '}';
 		echo $out['script_start'] . $obj . $out['script_end'];
-	}
-	
-	/**
-	 * Outputs formatted page title
-	 * @return void
-	 * @param array|string $args[optional] Parameters for customizing Page title
-	 */
-	function page_title($args = '') {
-		echo $this->page_title_get($args);
 	}
 	
 	/*-** Post Metadata **-*/
