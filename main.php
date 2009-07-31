@@ -175,6 +175,16 @@ function cnr_get_attachments($post = null) {
 	return $cnr->post_get_attachments($post);
 }
 
+function cnr_get_filesize($post = null, $formatted = true) {
+	global $cnr;
+	return $cnr->post_get_attachment_filesize($post, $formatted);
+}
+
+function cnr_the_filesize($post = null, $formatted = true) {
+	global $cnr;
+	$cnr->post_the_attachment_filesize($post, $formatted);
+}
+
 	/* Section */
 	
 /**

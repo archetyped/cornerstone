@@ -924,6 +924,48 @@ class Cornerstone {
 		return $attachments;
 	}
 	
+	function post_get_attachment_path($post = null) {
+		if (!$this->check_post($post))
+			return '';
+		//Get Attachment URL
+		$url = wp_get_attachment_url($post->ID);
+		//Replace with absolute path
+		$path = str_ireplace(get_bloginfo('wpurl') . '/', ABSPATH, $url);
+		return $path;
+	}
+	
+	function post_get_attachment_filesize($post = null, $formatted = true) {
+		$size = 0;
+		if (!$this->check_post($post))
+			return $size;
+		//Get path to attachment
+		$path = $this->post_get_attachment_path($post);
+		//Get file size
+		if (file_exists($path))
+			$size = filesize($path);
+		if ($size > 0 && $formatted) {
+			$size = (int) $size;
+			$label = 'b';
+			$format = "%s%s";
+			//Format file size
+			if ($size >= 1024 && $size < 102400) {
+				$label = 'kb';
+				$size = intval($size/1024);
+			}
+			elseif ($size >= 102400) {
+				$label = 'mb';
+				$size = round(($size/1024)/1024, 1);
+			}
+			$size = sprintf($format, $size, $label);
+		}
+		
+		return $size;
+	}
+	
+	function post_the_attachment_filesize($post = null, $formatted = true) {
+		echo $this->post_get_attachment_filesize($post, $formatted);
+	}
+	
 	/**
 	 * Retrieve all images attached to post
 	 * @return array Images attached to post. If there are no images attached to post, an empty array is returned
