@@ -147,6 +147,11 @@ function cnr_get_post_image_src($post_id = 0) {
 	return $cnr->post_get_image_src($post_id);
 }
 
+function cnr_has_subtitle() {
+	global $cnr;
+	return $cnr->post_has_subtitle();
+}
+
 /**
  * Prints the post's subtitle text
  */

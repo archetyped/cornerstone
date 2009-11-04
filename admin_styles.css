@@ -83,3 +83,19 @@ ul.empty {
 	background-color: #FFCECE;
 	opacity: 0;
 }
+
+/* Post/Page Edit Form */
+
+#quicktags #cnr_inturl {
+	color: #00f;
+	text-decoration: underline;
+}
+
+.buttons {
+	padding: 6px;
+}
+
+.options-default,
+.confirmation-default {
+	visibility: hidden;
+}

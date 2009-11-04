@@ -1,8 +1,12 @@
 <?php
+
+require_once 'includes/class.base.php';
+require_once 'includes/class.content-types.php';
+
 /**
  * @package Cornerstone
  */
-class Cornerstone {
+class Cornerstone extends CNR_Base {
 	/* Variables */
 	
 	/**
@@ -39,7 +43,7 @@ class Cornerstone {
 	/**
 	 * @var object Debug object
 	 */
-	var $debug;
+	//var $debug;
 	
 	var $path = __FILE__;
 	
@@ -122,18 +126,44 @@ class Cornerstone {
 	 */
 	var $post_children_count = 0;
 	
+	/* Instance Variables */
+	
+	/**
+	 * @var CNR_Content_Types Content Types instance
+	 */
+	var $ct;
+	
+	/* Content Types */
+	
+	var $post_images = array(
+							'thumbnail',
+							'header'
+							);
+	
 	/* Constructor */
 	
 	function Cornerstone($caller) {
+		$this->__construct($caller);
+	}
+							
+	function __construct($caller) {
+		//Parent Constructor
+		parent::__construct();
+		
 		//Set Properties
 		$this->_caller = $caller;
 		$this->_prefix_db = $this->get_db_prefix();
 		$this->_qry_var = $this->_prefix . $this->_qry_var;
 		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
-		$this->debug = new S_DEBUG();
+		//$this->debug = new S_DEBUG();
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
+
 		//Initialization
+		
+		//Initialize instance variables
+		$this->ct = new CNR_Content_Types();
+
 		register_activation_hook($this->_caller, $this->m('activate'));
 		
 		//Add Actions
@@ -141,15 +171,32 @@ class Cornerstone {
 			//Initialization
 		add_action('admin_init', $this->m('admin_init'));
 			//Head
-		add_action('admin_head', $this->m('admin_add_styles'));
+		//add_action('admin_head', $this->m('admin_add_styles'));
 		add_action('admin_print_scripts', $this->m('admin_add_scripts'));
+		add_action('admin_print_styles', $this->m('admin_add_styles'));
 			//Menus
 		add_action('admin_menu', $this->m('admin_menu'));
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
+		add_action('admin_menu', $this->m('admin_post_edit'));
+			//Dynamically built function call (media_upload_$type)
+		add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
+			//Attachments
+		add_filter('attachment_fields_to_edit', $this->m('attachment_fields_to_edit'), 11, 2);
+		add_action('pre-html-upload-ui', $this->m('attachment_html_upload_ui'));
+		add_filter('media_meta', $this->m('media_meta'), 10, 2);
+		add_filter('admin_url', $this->m('media_upload_url'), 10, 2);
+		add_action('save_post', $this->m('post_save'), 10, 2);
+		
 			//Management
 		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
 		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
 		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
+			//TinyMCE
+		//add_action('init', $this->m('admin_mce_register'));
+		add_filter('tiny_mce_before_init', $this->m('admin_mce_before_init'));
+		add_filter('mce_buttons', $this->m('admin_mce_buttons'));
+		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
+		add_action('admin_print_scripts', $this->m('admin_post_quicktags'));
 		
 		//Add Filters
 		//Rewrite Rules
@@ -160,7 +207,7 @@ class Cornerstone {
 		
 		//Initial request
 		add_action('parse_request', $this->m('request_init_start'));
-		//add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
+		add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
 		add_action('wp', $this->m('request_init_end'));
 		
 		//Posts
@@ -173,6 +220,9 @@ class Cornerstone {
 		//add_filter('posts_request', $this->m('posts_request'));
 		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
 		
+		//Activate Shortcodes
+		$this->sc_activate();
+		
 		//Register Hooks for other classes
 		//Page Group
 		CNR_Page_Group::register_hooks();
@@ -181,15 +231,6 @@ class Cornerstone {
 	/* Methods */
 	
 	/*-** Helpers **-*/
-	
-	/**
-	 * Returns callback to instance method
-	 * @return array
-	 * @param string $method
-	 */
-	function m($method) {
-		return array($this, $method);
-	}
 	
 	/**
 	 * Returns URL of file (assumes that it is in plugin directory)
@@ -378,8 +419,8 @@ class Cornerstone {
 	function admin_menu() {
 		global $menu, $submenu;
 		//Content Types
-		add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_content_types'));
-		add_submenu_page($this->file_content_types, 'Manage Content Types', 'Manage', 8, $this->file_content_types . '_manage', $this->m('menu_content_types_manage'));
+		//add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_content_types'));
+		//add_submenu_page($this->file_content_types, 'Manage Content Types', 'Manage', 8, $this->file_content_types . '_manage', $this->m('menu_content_types_manage'));
 		
 		//Page Groups
 		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('menu_page_groups'));
@@ -478,19 +519,6 @@ class Cornerstone {
 		echo '<div class="wrap"><h2>Manage Content Types</h2></div>';
 	}
 	
-	function admin_post_sidebar() {
-		add_meta_box($this->_prefix . 'section', 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
-	}
-	
-	/**
-	 * Adds Section selection box to post sidebar
-	 * @return void
-	 * @param object $post Post Object
-	 */
-	function admin_post_sidebar_section($post) {
-		wp_dropdown_pages(array('exclude_tree' => $post->ID, 'selected' => $post->post_parent, 'name' => 'parent_id', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
-	}
-	
 	function admin_add_styles() {
 		//Define file properties
 		$file_base = 'admin_styles';
@@ -512,9 +540,164 @@ class Cornerstone {
 			wp_enqueue_script('jquery-ui-draggable');
 			wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
 			wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
+			wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
 		}
-		wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
 		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
+	}
+	
+	/**
+	 * Adds quicktags to post edit form
+	 * @return void
+	 */
+	function admin_post_quicktags() {
+		if (strpos($_SERVER['REQUEST_URI'], 'page-new.php') !== false || strpos($_SERVER['REQUEST_URI'], 'post-new.php') !== false) {
+			wp_enqueue_script('cnr_quicktags', plugin_dir_url($this->path) . 'js/cnr_quicktags.js', array('quicktags'));
+		}
+	}
+	
+	/**
+	 * Add content to post edit form
+	 * @return void
+	 */
+	function admin_post_edit() {
+		foreach ($this->post_images as $img) {
+			add_meta_box($this->_prefix . 'image_' . $img, 'Post ' . ucwords(strtolower($img)), $this->m('admin_post_box_image_' . $img), 'post');
+		}
+	}
+	
+	function admin_post_box_image_thumbnail($post) {
+		$this->admin_post_box_image($post, 'thumbnail');
+	}
+	
+	function admin_post_box_image_header($post) {
+		$this->admin_post_box_image($post, 'header');
+	}
+	
+	/**
+	 * Add Post Image meta box to Post edit form
+	 * @param object $post Post Object
+	 * @return void
+	 */
+	function admin_post_box_image($post, $img) {
+		global $post_ID, $temp_ID;
+		$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
+		$media_upload_iframe_src = "media-upload.php?post_id=$uploading_iframe_ID";
+		$image_upload_iframe_src = apply_filters('image_upload_iframe_src', "$media_upload_iframe_src&amp;type=post_image&amp;cnr_action=post_image&amp;cnr_image_type=$img");
+		$image_name = "cnr-image-$img";
+		$image_title = __('Set Post ' . ucwords(strtolower($img)));
+		
+		$post_image = get_post_meta($post_ID, $image_name, TRUE);
+		//Get Attachment Image URL
+		$post_image_src = ( ((int) $post_image) > 0 ) ? wp_get_attachment_image_src($post_image, '') : FALSE;
+		if (!$post_image_src)
+			$post_image = false;
+		else
+			$post_image_src = $post_image_src[0];
+		
+		//Start output
+		ob_start();
+?>
+		<div id="<?php echo "$image_name-wrap" ?>" class="container">
+	<?php
+		if ($post_image) { 
+	?>
+			<img id="<?php echo "$image_name-frame"?>" src="<?php echo $post_image_src ?>" class="image_frame" />
+			<input type="hidden" name="<?php echo "$image_name"?>" id="<?php echo "$image_name"?>" value="<?php echo $post_image ?>" />
+	<?php
+		}
+	?>
+			<div class="buttons">
+				<a href="<?php echo "{$image_upload_iframe_src}&amp;TB_iframe=true" ?>" id="<?php echo "$image_name-lnk"?>" class="thickbox button" title="<?php echo $image_title ?>" onclick="return false;">Select Image</a>
+				<span id="<?php echo "$image_name-options"?>" class="options <?php if (!$post_image) : ?> options-default <?php endif; ?>">
+				or <a href="#" title="Remove Image" class="del-link" id="<?php echo "$image_name-option_remove"?>" onclick="postImageAction(this); return false;">Remove Image</a>
+				 <span id="<?php echo "$image_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$image_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$image_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
+				</span>
+			</div>
+		</div>
+	<?php
+		//Output content
+		ob_end_flush();
+	}
+	
+	/**
+	 * Executed whenever a post is saved
+	 * @param int $post_id ID of post being saved
+	 * @param object $post Post data
+	 * @return void
+	 */
+	function post_save($post_id, $post) {
+		$this->post_save_image($post_id, $post);
+	}
+	
+	/**
+	 * Saves image to meta data for post
+	 * @param int $post_id ID of post being saved
+	 * @param object $post Post data
+	 * @return void
+	 */
+	function post_save_image($post_id, $post) {
+		//Check for existence of post variable ('cnr_post_image_id')
+		foreach ($this->post_images as $img) {
+			$img_id = 'cnr-image-' . $img;
+			if (!isset($_POST[$img_id]))
+				return false;
+			//Set Image ID as meta data for post
+			$img_data = intval($_POST[$img_id]);
+			//Remove meta data from post if no image is set
+			if ($img_data <= 0) {
+				delete_post_meta($post_id, $img_id);
+			}
+			else
+				update_post_meta($post_id, $img_id, $img_data);
+		}
+	}
+	
+	/**
+	 * Handles upload of Post image on post edit form
+	 * @return 
+	 */
+	function admin_media_upload_post_image() {
+		$errors = array();
+		$id = 0;
+		if (!isset($_POST['setimage'])) {
+			wp_iframe( 'media_upload_type_form', 'post_image', $errors, $id );
+		} else { /* Send image data to main post edit form and close popup */
+			//Get Attachment ID
+			$attachment_id = array_keys($_POST['setimage']);
+			$attachment_id = array_shift($attachment_id); 
+		 	//Get Attachment Image URL
+			$src = wp_get_attachment_image_src($attachment_id, '');
+			if (!$src)
+				$src = '';
+			else
+				$src = $src[0];
+			//Build JS Arguments string
+			$args = "'$attachment_id', '$src'";
+			if (isset($_POST['attachments'][$attachment_id]['cnr_image_type']))
+				$args .= ", '" . $_REQUEST['attachments'][$attachment_id]['cnr_image_type'] . "'";
+		?>
+		<script type="text/javascript">
+		/* <![CDATA[ */
+		var win = window.dialogArguments || opener || parent || top;
+		win.setPostImage(<?php echo $args; ?>);
+		/* ]]> */
+		</script>
+		<?php
+		exit;
+		}
+	}
+	
+	function admin_post_sidebar() {
+		add_meta_box($this->_prefix . 'section', 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
+	}
+	
+	/**
+	 * Adds Section selection box to post sidebar
+	 * @return void
+	 * @param object $post Post Object
+	 */
+	function admin_post_sidebar_section($post) {
+		wp_dropdown_pages(array('exclude_tree' => $post->ID, 'selected' => $post->post_parent, 'name' => 'parent_id', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
 	}
 	
 	/**
@@ -553,6 +736,32 @@ class Cornerstone {
 			</div>
 		</fieldset>
 		<?php endif;
+	}
+	
+	function admin_mce_before_init($initArray) {
+		$initArray['content_css'] = $this->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
+		return $initArray;
+	}
+	
+	function admin_mce_external_plugins($plugin_array) {
+		$plugin_array['cnr_inturl'] = $this->url_base . "/mce/plugins/inturl/editor_plugin.js";
+		return $plugin_array;
+	}
+	
+	function admin_mce_buttons($buttons) {
+		//Find Link button
+		$pos = array_search('unlink', $buttons);
+		if ($pos !== false)
+			$pos += 1;
+		else
+			$pos = count($buttons);
+		
+		//Insert button into buttons array
+		$start = array_slice($buttons, 0, $pos);
+		$end = array_slice($buttons, $pos);
+		$start[] = 'cnr_inturl';
+		$buttons = array_merge($start, $end);
+		return $buttons;
 	}
 	
 	/*-** State Settings **-*/
@@ -610,6 +819,69 @@ class Cornerstone {
 		}
 
 		return $output;
+	}
+	
+	/*-** Shortcodes **-*/
+	
+	/**
+	 * Shortcode activation
+	 * @return void
+	 */
+	function sc_activate() {
+		add_shortcode("inturl", $this->m('sc_inturl'));
+	}
+	
+	/**
+	 * Internal URL Shortcode
+	 * 
+	 * Creates links to internal content based on the current permalink structure
+	 * @return string Output for shortcode
+	 */
+	function sc_inturl($atts, $content = null) {
+		$ret = '';
+		$url_default = '#';
+		$format = '<a href="%1$s" title="%2$s">%3$s</a>';
+		$defaults = array(
+						 'id'		=>	0,
+						 'type'		=>	'post',
+						 'title'	=>	'',
+						 'anchor'	=>	''
+						 );
+		
+		extract(shortcode_atts($defaults, $atts));
+		
+		$anchor = trim($anchor);
+		if (!empty($anchor))
+			$anchor = $url_default . $anchor;
+		
+		//Get URL/Permalink
+		if ($type == 'post') {
+			$id = (is_numeric($id)) ? (int) $id : 0;
+			if ($id != 0) {
+				$url = get_permalink($id);
+				if (!$url)
+					$url = $url_default;
+			}
+			else
+				$url = $url_default;
+			
+			//Add anchor to URL
+			if ($url != $url_default)
+				$url .= $anchor;
+			
+			//Link Title
+			$title = trim($title);
+			if ($title == '' && $url != $url_default)
+				$title = get_post_field('post_title', $id);
+			$title = attribute_escape($title);
+		
+			if (empty($content) && $url != $url_default)
+				$content = $url;
+				
+			$ret = sprintf($format, $url, $title, $content);
+		}
+		
+		return $ret;
 	}
 	
 	/*-** Child Content **-*/
@@ -744,6 +1016,12 @@ class Cornerstone {
 	
 	/*-** Template **-*/
 	
+	/**
+	 * Checks if $post is a valid Post object
+	 * If $post is not valid, assigns global post object to $post (if available)
+	 * @return bool TRUE if $post is valid object by end of function processing
+	 * @param object $post Post object to evaluate
+	 */
 	function check_post(&$post) {
 		if (empty($post)) {
 			if (isset($GLOBALS['post'])) {
@@ -876,7 +1154,109 @@ class Cornerstone {
 	}
 	
 		/*-** Post Attachments **-*/
+	
+	function is_custom_media() {
+		$ret = false;
+		$action = 'cnr_action';
+		$upload = false;
+		if (isset($_REQUEST[$action]))
+			$ret = true;
+		else {
+			$qs = array();
+			parse_str(parse_url($_SERVER['HTTP_REFERER'], PHP_URL_QUERY), $qs);
+			if (array_key_exists($action, $qs))
+				$ret = true;
+		}
 		
+		return $ret;
+	}
+	
+	/**
+	 * Add HTML Media upload form
+	 * @return void
+	 */
+	function attachment_html_upload_ui() {
+		if (!isset($_REQUEST['cnr_action']))
+			return false;
+		echo '<input type="hidden" name="cnr_action" id="cnr_action" value="' . esc_attr($_REQUEST['cnr_action']) . '" />';
+	}
+	
+	/**
+	 * Adds additional media meta data to media item display
+	 * @param object $meta Meta data to display
+	 * @param object $post Attachment post object
+	 * @return string Meta data to display
+	 */
+	function media_meta($meta, $post) {
+		if ($this->is_custom_media() && wp_attachment_is_image($post->ID)) {
+			//Get attachment image info
+			$img = wp_get_attachment_image_src($post->ID, '');
+			if (is_array($img) && count($img) > 2) {
+				//Add image dimensions to output
+				$meta .= sprintf('<div>%dpx&nbsp;&times;&nbsp;%dpx</div>', $img[1], $img[2]);
+			}
+		}
+		return $meta;
+	}
+	
+	function media_upload_url($url, $path) {
+		if (strpos($path, 'media-upload.php') === 0) {
+			//Get query vars
+			$qs = parse_url($url, PHP_URL_QUERY);
+			$q = array();
+			parse_str($qs, $q);
+			//Check for tab variable
+			if (isset($q['tab'])) {
+				//Replace tab value
+				$q['cnr_tab'] = $q['tab'];
+				$q['tab'] = 'type';
+			}
+			//Rebuild query string
+			$qs_upd = build_query($q);
+			//Update query string on URL
+			$url = str_replace($qs, $qs_upd, $url);
+		}
+		return $url;
+	}
+	
+	/**
+	 * Modifies array of form fields to display on Attachment edit form
+	 * Array items are in the form:
+	 * 'key' => array(
+	 * 				  'label' => "Label Text",
+	 * 				  'value' => Value
+	 * 				  )
+	 * 
+	 * @return array Form fields to display on Attachment edit form 
+	 * @param array $form_fields Associative array of Fields to display on form (@see get_attachment_fields_to_edit())
+	 * @param object $attachment Attachment post object
+	 */
+	function attachment_fields_to_edit($form_fields, $attachment) {
+		
+		if ($this->is_custom_media()) {
+			$post =& get_post($attachment);
+			//Clear all form fields
+			$form_fields = array();
+			if ( substr($post->post_mime_type, 0, 5) == 'image' ) {
+				//Add "Set as Image" button to form fields array
+				$field = array(
+								'input'		=> 'html',
+								'html'		=> '<input type="submit" class="button" value="Set as thumbnail" name="setimage[' . $post->ID . ']" />'
+								);
+				$form_fields['buttons'] = $field;
+				//Add image type property as hidden field (if set)
+				if (isset($_REQUEST['cnr_image_type'])) {
+					$field = array(
+									'input'	=> 'hidden',
+									'value'	=> $_REQUEST['cnr_image_type']
+									);
+					$form_fields['cnr_image_type'] = $field;
+				}
+			}
+		}
+		return $form_fields;
+	}
+	
 	/**
 	 * Retrieves matching attachments for post
 	 * @return array|bool Array of post attachments
@@ -1273,9 +1653,9 @@ class Cornerstone {
 		
 		//Build query for featured posts
 		$args = array(
-					'post_parent'	=> $parent, //Section to get posts for
-					'category' => $this->posts_featured_get_cat_id(), //Restrict to posts matching "featured" category
-					'numberposts'	=> $limit //Limit the number of posts retrieved
+					'post_parent'	=>	$parent, //Section to get posts for
+					'category'		=>	$this->posts_featured_get_cat_id(), //Restrict to posts matching "featured" category
+					'numberposts'	=>	$limit //Limit the number of posts retrieved
 					);
 					
 		//Retrieve featured posts
@@ -1500,6 +1880,12 @@ class Cornerstone {
 		//Get post subtitle data
 		$subtitle = get_post_meta($post->ID, $this->post_subtitle_field, true);
 		return $subtitle;
+	}
+	
+	function post_has_subtitle($post = null) {
+		if (trim($this->post_get_subtitle($post)) != '')
+			return true;
+		return false;
 	}
 	
 	function post_the_subtitle($post = null) {
@@ -2431,39 +2817,5 @@ class CNR_Page_Group {
  */
 class CNR_Admin_Menu {
 	
-}
-
-/**
- * Class for debugging
- */
-class S_DEBUG {
-	/**
-	 * @var array Associative array of debug messages
-	 */
-	var $msgs = array();
-	
-	/**
-	 * Adds debug data to object
-	 * @return void
-	 * @param String $title Title of debug message
-	 * @param mixed $message value to store in message for debugging purposes
-	 */
-	function add_message($title, $message) {
-		$this->msgs[$title] = $message;
-	}
-	
-	/**
-	 * Returns debug message array
-	 * @return array Debug message array
-	 */
-	function get_messages() {
-		return $this->msgs;
-	}
-	
-	function show_messages() {
-		echo '<pre>';
-		var_dump($this->get_messages());
-		echo '</pre>';
-	}
 }
 ?>
