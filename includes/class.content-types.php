@@ -587,7 +587,6 @@ class CNR_Content_Types extends CNR_Base {
 		$ph_values = $ph_index = array();
 		
 		//TODO Parse elements placeholders first and retrieve data from element objects for other placeholders
-		//TODO Refactor path data retrieval into single function
 		
 		//Find all nested layouts in layout
 		while ($ph_layouts = $this->parse_field_layout($out, $re_ph_layout)) {
@@ -597,23 +596,6 @@ class CNR_Content_Types extends CNR_Base {
 				foreach ($instances as $instance) {
 					//Build path to item
 					$path_data = $this->get_field_data_from_path($instance, $field_definition);
-					/*
-					$path = $tag;
-				
-					//Get base path
-					$ref_base = (isset($instance['attributes'][$this->field_ph_attr_reserved['ref_base']])) ? $instance['attributes'][$this->field_ph_attr_reserved['ref_base']] : '';
-					$path_base = (!empty($ref_base)) ? (('root' != $ref_base) ? $ref_base : '') : $this->field_ph_base_default;
-					
-					//Append item path to base path
-					if (!empty($path_base)) 
-						$path = $path_base . $this->field_path_delim . $path;
-					//Check if reference exists in field definition
-					$path = '$field_definition["' . implode('"]["', explode($this->field_path_delim, $path)) . '"]';
-					if (!eval('return isset(' . $path . ');')) {
-						continue;
-					}
-					$path = eval('return ' . $path . ';');
-					*/
 					
 					//Replace layout placeholder with retrieved item data
 					$out = str_replace($ph_start . $instance['match'] . $ph_end, $path_data, $out);
@@ -629,22 +611,7 @@ class CNR_Content_Types extends CNR_Base {
 				foreach ($instances as $instance) {
 					//Build path to replacement data
 					$path_data = $this->get_field_data_from_path($instance, $field_definition);
-					/*
-					$path = $tag;
-				
-					//Get base path
-					$ref_base = (isset($instance['attributes'][$this->field_ph_attr_reserved['ref_base']])) ? $instance['attributes'][$this->field_ph_attr_reserved['ref_base']] : '';
-					$path_base = (!empty($ref_base)) ? (('root' != $ref_base) ? $ref_base : '') : $this->field_ph_base_default;
-					//Append item path to base path 
-					if (!empty($path_base))
-						$path = $path_base . $this->field_path_delim . $path;
-					//Check if reference exists in field definition
-					$path = '$field_definition["' . implode('"]["', explode($this->field_path_delim, $path)) . '"]';
-					if (!eval('return isset(' . $path . ');')) {
-						continue;
-					}
-					$path_data = eval('return ' . $path . ';');
-					*/
+					
 					/* Get actual value for item */
 					
 					//Check if value is group (properties, etc.)
