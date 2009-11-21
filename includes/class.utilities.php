@@ -33,31 +33,45 @@ class CNR_Utilities {
 	
 	/**
 	 * Merges 1 or more arrays together
-	 * 
+	 * Methodology
+	 * - Set first parameter as base array
+	 *   - All other parameters will be merged into base array
+	 * - Iterate through other parameters (arrays)
+	 *   - Skip all non-array parameters
+	 *   - Iterate though key/value pairs of current array
+	 *     - Merge item in base array with current item based on key name
+	 *     - If the current item's value AND the corresponding item in the base array are BOTH arrays, recursively merge the the arrays
+	 *     - If the current item's value OR the corresponding item in the base array is NOT an array, current item overwrites base item
 	 * @todo Append numerical elements (as opposed to overwriting element at same index in base array)
 	 * @param array Variable number of arrays
 	 * @return array Merged array
 	 */
 	function array_merge_recursive_distinct() {
 		//Get all arrays passed to function
-		$args = & func_get_args();
+		$args = func_get_args();
 		if (empty($args))
 			return false;
+		$this->debug = new CNR_Debug();
+		//$this->debug->print_message('Arguments', $args);
 		//Set first array as base array
 		$merged = $args[0];
 		//Iterate through arrays to merge
-		for ($x = 1; $x < count($args); $x++) {
-			//Skip if argument is not an array
+		$arg_length = count($args);
+		for ($x = 1; $x < $arg_length; $x++) {
+			//Skip if argument is not an array (only merge arrays)
 			if (!is_array($args[$x]))
 				continue;
+			//Iterate through argument items
 			foreach ($args[$x] as $key => $val) {
-				if (is_numeric($key))
-					$merged[] = $val;
-				else
-					$merged[$key] = (is_array($val)) ? $this->array_merge_recursive_distinct($merged[$key], $val) : $val;
+					if (!isset($merged[$key]) || !is_array($merged[$key]) || !is_array($val)) {
+						$merged[$key] = $val;
+					} elseif (is_array($merged[$key]) && is_array($val)) {
+						$merged[$key] = $this->array_merge_recursive_distinct($merged[$key], $val);
+					}
+					//$merged[$key] = (is_array($val) && isset($merged[$key])) ? $this->array_merge_recursive_distinct($merged[$key], $val) : $val;
 			}
 		}
-		
+		//$this->debug->print_message('Merged Array', $merged);
 		return $merged;
 	}
 	
