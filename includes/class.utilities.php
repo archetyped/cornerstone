@@ -98,6 +98,62 @@ class CNR_Utilities {
 		
 		return $arr_subject;
 	}
+	
+	/**
+	 * Checks if item at specified path in array is set
+	 * @param array $arr Array to check for item
+	 * @param array $path Array of segments that form path to array (each array item is a deeper dimension in the array)
+	 * @return boolean TRUE if item is set in array, FALSE otherwise
+	 */
+	function array_item_isset(&$arr, &$path) {
+		$f_path = $this->get_array_path($path);
+		return eval('return isset($arr' . $f_path . ');');
+	}
+	
+	/**
+	 * Returns value of item at specified path in array
+	 * @param array $arr Array to get item from
+	 * @param array $path Array of segments that form path to array (each array item is a deeper dimension in the array)
+	 * @return mixed Value of item in array (Default: empty string)
+	 */
+	function &get_array_item(&$arr, &$path) {
+		$item = '';
+		if ($this->array_item_isset($arr, $path)) {
+			eval('$item =& $arr' . $this->get_array_path($path) . ';');
+		}
+		return $item;
+	}
+	
+	function get_array_path($attribute = '', $format = null) {
+		//Formatted value
+		$fmtd = '';
+		if (!empty($attribute)) {
+			//Make sure attribute is array
+			if (!is_array($attribute)) {
+				$attribute = array($attribute);
+			}
+			//Format attribute
+			switch (strtolower($format)) {
+				case 'id':
+					$fmtd = array_shift($attribute) . '[' . implode('][', $attribute) . ']';
+					break;
+				case 'attribute':
+					//Join segments
+					$delim = '_';
+					$fmtd = implode($delim, $attribute);
+					//Replace white space and repeating delimiter
+					$fmtd = str_replace(' ', $delim, $fmtd);
+					while (strpos($fmtd, $delim.$delim) !== false)
+						$fmtd = str_replace($delim.$delim, $delim, $fmtd);
+					break;
+				case 'path':
+				case 'post':
+				default:
+					$fmtd = '["' . implode('"]["', $attribute) . '"]';
+			}
+		}
+		return $fmtd;
+	}
 }
 
 /**
@@ -108,6 +164,11 @@ class CNR_Debug {
 	 * @var array Associative array of debug messages
 	 */
 	var $msgs = array();
+	
+	/**
+	 * @var array Holds various timer objects
+	 */
+	var $timers = array();
 	
 	/* Constructor */
 	
@@ -153,6 +214,41 @@ class CNR_Debug {
 			}
 			echo '</pre>';
 		}
+	}
+	
+	function microtime_float() {
+		list($usec, $sec) = explode(' ', microtime());
+		return (float)$usec + (float)$sec;
+	}
+	
+	function timer_start($name = 'default', $time = null) {
+		if (empty($time)) $time = $this->microtime_float();
+		$this->timers[$name] = new stdClass();
+		$this->timers[$name]->start = $time;
+		$this->timers[$name]->end = $time;
+	}
+	
+	function timer_stop($name = 'default') {
+		$time = $this->microtime_float();
+		if (!isset($this->timers[$name])
+			|| !is_object($this->timers[$name])
+		) {
+			$this->timer_start($name, $time);
+		} else {
+			$this->timers[$name]->end = $time;
+		}
+	}
+	
+	function timer_show($name = 'default', $format = 'Elapsed time: %s') {
+		if (!isset($this->timers[$name]) 
+			|| !is_object($this->timers[$name])
+			|| $this->timers[$name]->end < $this->timers[$name]->start
+		) {
+			$this->timer_start($name);
+		}
+		//Get difference in times
+		$res = (float)$this->timers[$name]->end - (float)$this->timers[$name]->start;
+		$this->print_message(sprintf($format, $res));
 	}
 }
 
