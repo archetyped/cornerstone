@@ -399,7 +399,7 @@ class CNR_Content_Types extends CNR_Base {
 	 * @param bool $full Fully retrieve field properties (for child fields) (Default: TRUE)
 	 * @return mixed Field definition or FALSE if field does not exist
 	 */
-	function get_field($field, $field_path = array(), $full = true) {
+	function get_field($field, $field_path = array(), $field_data = array(), $full = true) {
 		/* Get Valid Field */
 		if ($this->is_field_populated($field)) {
 			return $field;
@@ -424,13 +424,30 @@ class CNR_Content_Types extends CNR_Base {
 								'data'			=> null
 								);
 		$field = array_merge($props_default, $field);
-			
+		
 		//Field path processing
 		if (!is_array($field['path'])) {
 			if (!empty($field['path']))
 				$field['path'] = array(strval($field['path']));
 			else
 				$field['path'] = array();
+		}
+		
+		/* Data Processing */
+		
+		//Build path to current field
+		if (!empty($field_data)) {
+			//Get path (all path elements except first element)
+			$attr_path = array_slice($field['path'], 1);
+			
+			//Check if data for field exists
+			if (!empty($attr_path) && $this->util->array_item_isset($field_data, $attr_path)) {
+				//Get data for field
+				$field['data'] = $this->util->get_array_item($field_data, $attr_path);
+			} else {
+				$field['data'] = $field_data;
+			}
+			$this->debug->print_message('Processing Field Data', $field_data, 'Current field path', $field_path, 'Field', $field);
 		}
 		
 		//Parse properties for field
@@ -476,7 +493,7 @@ class CNR_Content_Types extends CNR_Base {
 		//Recurse through parents field definitions and get inherited properties
 		while (isset($curr_field['parent'])) {
 			//Get Parent field definition (basic)
-			$curr_field = $this->get_field($curr_field['parent'], false, false);
+			$curr_field = $this->get_field($curr_field['parent'], false, null, false);
 
 			//Check Child for inhertied values (deep)
 			$field = $this->util->array_replace_recursive('{inherit}', $curr_field, $field);
@@ -600,8 +617,7 @@ class CNR_Content_Types extends CNR_Base {
 	 * @return mixed Field property targeted by $properties
 	 */
 	function &get_field_data_from_path(&$field, &$properties) {
-		$var = '$field';
-		
+		$field_data = $field['data'];
 		/* Setup path to property */
 		
 		if (!isset($properties['path'])) {
@@ -645,11 +661,13 @@ class CNR_Content_Types extends CNR_Base {
 		) {
 			if ($el) $this->debug->print_message('Item is nested field', $nested_field);
 			//Retrieve element
-			$element = $this->get_field($nested_field, $field['path']);
+			$element = $this->get_field($nested_field, $field['path'], $field['data']);
 			//Replace element in field definition with retrieved element
 			if (!empty($element)) {
 				$element['field'] = $nested_field['field'];
 				$nested_field = $element;
+				$field_data = $nested_field['data'];
+				$this->debug->print_message('Nested Field', $nested_field);
 			}
 		}
 		if ($el) $this->debug->print_message('Nested Field', $nested_field);
@@ -659,7 +677,7 @@ class CNR_Content_Types extends CNR_Base {
 		if ($this->uses_field_data($target_property) && !empty($field['data'])) {
 			$this->debug->print_message('Using Data', $target_property);
 			//Wrap property in array
-			$target_property['value'] = $field['data'];
+			$target_property['value'] = $field_data;
 			$target_property['data_retrieved'] = true;
 			$this->debug->print_message('Data populated', $target_property);
 		}
@@ -692,7 +710,7 @@ class CNR_Content_Types extends CNR_Base {
 	 */
 	function build_field($field, $field_path = array(), &$attr_data, $parent_matched = true) {
 		$out = '';
-		$field_definition = $this->get_field($field, $field_path);
+		$field_definition = $this->get_field($field, $field_path, $attr_data);
 
 		//Stop processing & return empty string if field is not valid
 		if (empty($field_definition)
@@ -701,21 +719,6 @@ class CNR_Content_Types extends CNR_Base {
 		|| !isset($field_definition['layout']['form'])
 		)
 		return $out;
-		
-		/* Data Processing */
-
-		//Build path to current field
-		if ($parent_matched) {
-			//Get path (all path elements except first element)
-			$attr_path = array_slice($field_definition['path'], 1);
-			//Check if data for field exists
-			if (!empty($attr_path) && $this->util->array_item_isset($attr_data, $attr_path)) {
-				//Get data for field
-				$field_definition['data'] = $this->util->get_array_item($attr_data, $attr_path);
-			} else {
-				$parent_matched = false;
-			}
-		}
 		
 		/* Layout */
 		
@@ -795,7 +798,7 @@ class CNR_Content_Types extends CNR_Base {
 					}
 					elseif (is_array($target_property) && isset($target_property['field'])) { /* Check if item is a nested field */
 						$this->debug->print_message("Requested property is a nested field");
-						$target_property = $this->build_field($target_property, $field_definition['path'], $attr_data, $parent_matched);
+						$target_property = $this->build_field($target_property, $field_definition['path'], $field_definition['data'], $parent_matched);
 					}
 					elseif (is_array($target_property) && isset($target_property['value']) && is_scalar($target_property['value'])) { /* Check if item has a value property */
 						$this->debug->print_message('Requested property is a value');
