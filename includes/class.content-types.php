@@ -196,7 +196,7 @@ class CNR_Content_Types extends CNR_Base {
 					)
 				),
 				'layout'		=> array (
-					'form'		=> '<span>({id ref_base="elements.latitude.properties"}){latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>'
+					'form'		=> '<span>({properties group="attr" ref_base="elements.longitude"}){latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>'
 				)
 			),
 			'phone'			=> array(
@@ -389,48 +389,103 @@ class CNR_Content_Types extends CNR_Base {
 	}
 
 	function is_field_populated($field = '') {
-		return (is_array($field) && isset($field[$this->field_populated]) && $field[$this->field_populated]) ? true : false;
+		return (is_array($field) && !empty($field[$this->field_populated])) ? true : false;
 	}
 
 	/**
 	 * Retrieves specified field definition
 	 * @param string|array $field Field name or Field definition array
+	 * @param array $field_path Field ancestors
 	 * @param bool $full Fully retrieve field properties (for child fields) (Default: TRUE)
 	 * @return mixed Field definition or FALSE if field does not exist
 	 */
 	function get_field($field, $field_path = array(), $full = true) {
+		/* Get Valid Field */
 		if ($this->is_field_populated($field)) {
 			return $field;
 		}
 		$props = array();
+		//Separate field specifier and field properties for later use
 		if (is_array($field) && isset($field['field'])) {
 			if (isset($field['properties']))
-			$props = $field['properties'];
+				$props = $field['properties'];
 			$field = $field['field'];
 		}
+		//Get base definition for specified field (if exists)
 		$field = ($this->is_field($field)) ? $this->field_types[$field] : false;
 		if (!$field)
-		return $field;
-		//Add Properties array (if it does not exist)
-		if (!isset($field['properties']))
-		$field['properties'] = array();
+			return false;
+		
+		/* Setup field properties */
+
+		$props_default = array (
+								'properties'	=> array(),
+								'path'			=> $field_path,
+								'data'			=> null
+								);
+		$field = array_merge($props_default, $field);
+			
+		//Field path processing
+		if (!is_array($field['path'])) {
+			if (!empty($field['path']))
+				$field['path'] = array(strval($field['path']));
+			else
+				$field['path'] = array();
+		}
+		
 		//Parse properties for field
 		if ($full) {
 			$field = $this->get_field_properties($field, $props);
 			$field[$this->field_populated] = true;
 		}
 		
-		//Field path processing
-		if (!empty($field_path)) {
-			//Convert to array (if necessary)
-			if (!is_array($field_path))
-				$field_path = array($field_path);
-		} else {
-			$field_path = array();
+		return $field;
+	}
+
+	/**
+	 * Retrieves properties for a field
+	 *
+	 * Returns array of properties defined with field as well as all properties from parent fields
+	 * @param array|string $field Field definition (array) or field identifier (string)
+	 * @param array $props Additional properties to add to field
+	 * @return array Updated field definition
+	 */
+	function get_field_properties($field, $props = null) {
+		/* Get valid field */
+		if (is_string($field)) {
+			if ($this->is_field($field)) {
+				$field = $this->get_field($field);
+				return $field;
+			} else {
+				$field = false;
+			}
+		}
+
+		if (empty($field) || !is_array($field))
+			return false;
+		
+		/* Setup basic properties */
+			
+		//Merge additional properties with field properties
+		if (is_array($props) && !empty($props)) {
+			$field['properties'] = $this->util->array_merge_recursive_distinct($field['properties'], $props);
+		}
+		//Merge parent properties (if field is a child of another field)
+		$curr_field = $field;
+
+		//Recurse through parents field definitions and get inherited properties
+		while (isset($curr_field['parent'])) {
+			//Get Parent field definition (basic)
+			$curr_field = $this->get_field($curr_field['parent'], false, false);
+
+			//Check Child for inhertied values (deep)
+			$field = $this->util->array_replace_recursive('{inherit}', $curr_field, $field);
+				
+			//Merge child with parent (child overwrites)
+			$field = $this->util->array_merge_recursive_distinct($curr_field, $field);
 		}
 		
-		//Set as item in field defintion
-		$field['path'] = $field_path;
+		/* Setup field properties specific to current field usage */
 		
 		//Process properties dependent on field path
 		//ID
@@ -443,49 +498,6 @@ class CNR_Content_Types extends CNR_Base {
 			$field['properties']['id']['value'] = $this->get_attribute_name($field['path']); 
 		}
 		
-		return $field;
-	}
-
-	/**
-	 * Retrieves properties for a field
-	 *
-	 * Returns array of properties defined with field as well as all properties from parent fields
-	 * @param array|string $field Field definition (array) or field identifier (string)
-	 * @return array Updated field definition
-	 */
-	function get_field_properties($field, $props = null) {
-		//$this->debug->print_message('Getting Field Properties');
-		if (is_string($field)) {
-			if ($this->is_field($field)) {
-				$field = $this->get_field($field);
-				return $field;
-			} else {
-				$field = false;
-			}
-		}
-
-		if (empty($field) || !is_array($field))
-		return false;
-
-		//Merge additional properties with field properties
-		if (is_array($props) && !empty($props)) {
-			$field['properties'] = $this->util->array_merge_recursive_distinct($field['properties'], $props);
-		}
-		//Merge parent properties (if field is a child of another field)
-		$curr_field = $field;
-
-		//Recurse through parents field definitions and get inherited properties
-		while (isset($curr_field['parent'])) {
-			//Get Parent field definition
-			$curr_field = $this->get_field($curr_field['parent'], false);
-
-			//Check Child for inhertied values (deep)
-			$field = $this->util->array_replace_recursive('{inherit}', $curr_field, $field);
-				
-			//Merge child with parent (child overwrites)
-			$field = $this->util->array_merge_recursive_distinct($curr_field, $field);
-		}
-
 		return $field;
 	}
 
@@ -583,13 +595,15 @@ class CNR_Content_Types extends CNR_Base {
 	 * 		- Any other attributes set in placeholder will be included as well
 	 *  match (string) The layout placeholder to be replaced by the retrieved property
 	 *
-	 * @param array $properties Data used to retrieve targeted property in a field definition
 	 * @param array $field Field definition to get property from
+	 * @param array $properties Data used to retrieve targeted property in a field definition
 	 * @return mixed Field property targeted by $properties
 	 */
 	function &get_field_data_from_path(&$field, &$properties) {
 		$var = '$field';
-		$el = false;
+		
+		/* Setup path to property */
+		
 		if (!isset($properties['path'])) {
 			//Build path
 			$path = $properties['tag'];
@@ -617,40 +631,37 @@ class CNR_Content_Types extends CNR_Base {
 				}
 			}
 		}
+		$el = ('properties' == $path_segments[count($path_segments) - 1] && 'longitude' == $path_segments[count($path_segments) - 2]) ? true : false;
+		if ($el) $this->debug->print_message('Get Longitude element');
+		if ($el) $this->debug->print_message('Path to element', $path_segments);
 		
-		if ('elements.latitude.properties.id' == implode('.', $path_segments)) {
-			$el = true;
-			$this->debug->print_message('Element being processed', $path_segments);
-		}
+		/* Get requested data */
 		
 		//Check if path points to a nested field or a property of a nested field property
 		if (1 < count($path_segments) 													//Path is made up of more than 1 segment
-			&& is_array($nested_field = &$field[$path_segments[0]][$path_segments[1]])	//Field property located at first 2 segments is an array
+			&& is_array($nested_field =& $this->util->get_array_item($field, array_slice($path_segments, 0, 2)))	//Field property located at first 2 segments is an array
 			&& isset($nested_field['field'])			 								//Field property is a nested field
-			&& !isset($nested_field[$this->field_populated])							//Nested field has not already been populated (e.g. by a previous request for the same field)
+			&& !$this->is_field_populated($nested_field)									//Nested field has not already been populated (e.g. by a previous request for the same field)
 		) {
-			if ($el) {
-				$this->debug->print_message('Element to use', $nested_field);
-			}
+			if ($el) $this->debug->print_message('Item is nested field', $nested_field);
 			//Retrieve element
-			//$field_props = $field[$path_segments[0]][$path_segments[1]];
-			$element = $this->get_field($nested_field);
+			$element = $this->get_field($nested_field, $field['path']);
 			//Replace element in field definition with retrieved element
-			if (!!$element) {
+			if (!empty($element)) {
 				$element['field'] = $nested_field['field'];
 				$nested_field = $element;
 			}
-			if ($el)
-				$this->debug->print_message('Element Retrieved', $nested_field);
 		}
-		
+		if ($el) $this->debug->print_message('Nested Field', $nested_field);
 		$target_property =& $this->util->get_array_item($field, $path_segments);
-		
+		if ($el) $this->debug->print_message('Base Field', $field, 'Path Segments', $path_segments, 'Retrieved Property', $target_property);
 		//Set property data
-		if ($this->uses_field_data($target_property) && isset($field['data'])) {
+		if ($this->uses_field_data($target_property) && !empty($field['data'])) {
+			$this->debug->print_message('Using Data', $target_property);
 			//Wrap property in array
 			$target_property['value'] = $field['data'];
 			$target_property['data_retrieved'] = true;
+			$this->debug->print_message('Data populated', $target_property);
 		}
 		
 		return $target_property;
@@ -679,7 +690,7 @@ class CNR_Content_Types extends CNR_Base {
 	 * @param array $attr_data Data for current field (Passed by reference)
 	 * @param bool $parent_match TRUE if $attr_data contains a reference to the current field's parent FALSE if not (to avoid searching data for current item if parent is not in data)
 	 */
-	function build_field($field, $field_path = '', &$attr_data, $parent_matched = true) {
+	function build_field($field, $field_path = array(), &$attr_data, $parent_matched = true) {
 		$out = '';
 		$field_definition = $this->get_field($field, $field_path);
 
@@ -691,33 +702,8 @@ class CNR_Content_Types extends CNR_Base {
 		)
 		return $out;
 		
-		/*
-		//Set ID for field
-		//Remove - $id_format = '%s[%s]';
-		$field_id = array();
-		if (!empty($field_path)) {
-			//Set default ID base
-			if (is_array($field_path))
-			$field_id = $field_path;
-			else
-			$field_id[] = $field_path;
-		}
-
-		if (isset($field['properties']['id']['value'])) {
-			//Set field-specific ID
-			$field_id[] = $field['properties']['id']['value'];
-		}
-
-		//Set formatted ID property for current field
-		if (!isset($field_definition['properties']['id']))
-			$field_definition['properties']['id'] = array();
-		$field_definition['properties']['id']['value'] = $this->get_attribute_name($field_id);
-		*/
-		
 		/* Data Processing */
 
-		$field_definition['data'] = null;
-		
 		//Build path to current field
 		if ($parent_matched) {
 			//Get path (all path elements except first element)
@@ -730,7 +716,9 @@ class CNR_Content_Types extends CNR_Base {
 				$parent_matched = false;
 			}
 		}
-
+		
+		/* Layout */
+		
 		//Parse Layout
 		$out = $field_definition['layout']['form'];
 		$ph_start = '{';
@@ -753,9 +741,6 @@ class CNR_Content_Types extends CNR_Base {
 			}
 		}
 
-		//TODO Populate dynamic data for elements before retrieving values from element properties
-		//Example: elements.latitude.properties.id will need to be properly formatted (with base ID attached) prior to retrieving this value
-		
 		//Search layout for placeholders
 		if ($ph_match = $this->parse_field_layout($out, $re_ph)) {
 			//Iterate through placeholders (tag, id, etc.)
@@ -763,8 +748,9 @@ class CNR_Content_Types extends CNR_Base {
 				//Iterate through instances of current placeholder
 				foreach ($instances as $instance) {
 					//Build path to replacement data
-					$target_property =& $this->get_field_data_from_path($field_definition, $instance);
-					
+					$target_property = $this->get_field_data_from_path($field_definition, $instance);
+					$el = ($instance['tag'] == 'properties' && strpos($instance['attributes']['ref_base'], 'longitude') !== false) ? true : false;
+					if ($el) $this->debug->print_message('Processing Placeholder', $instance, 'Targeted Property', $target_property, 'Updated Field', $field_definition);
 					//Check if value is group (properties, etc.)
 					//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
 					if (is_array($target_property)
@@ -777,16 +763,19 @@ class CNR_Content_Types extends CNR_Base {
 						//Iterate through items in group
 						while (list($item_key,) = each($target_property)) {
 							//Set value as reference so that changes will be reflected in field definition
+							if ($el) $this->debug->print_message('Getting group item', $item_key);
 							$item_val =& $this->get_field_data_from_path($field_definition, $instance, $item_key);
 							
-							if (!is_array($item_val))
+							if (!is_array($item_val)) {
+								unset($item_val);
 								continue;
+							}
 								
 							$valid_item = false;
 							//Check item for each attribute
 							foreach ($attribs as $attrib) {
 								if (isset($item_val[$attrib]) && $item_val[$attrib] == $instance['attributes'][$attrib])
-								$valid_item = true;
+									$valid_item = true;
 								else {
 									$valid_item = false;
 									break;
@@ -805,14 +794,17 @@ class CNR_Content_Types extends CNR_Base {
 						}
 					}
 					elseif (is_array($target_property) && isset($target_property['field'])) { /* Check if item is a nested field */
-						//$this->debug->print_message("Build nested field");
+						$this->debug->print_message("Requested property is a nested field");
 						$target_property = $this->build_field($target_property, $field_definition['path'], $attr_data, $parent_matched);
 					}
-					elseif (is_array($target_property) && isset($target_property['value'])) { /* Check if item has a value property */
+					elseif (is_array($target_property) && isset($target_property['value']) && is_scalar($target_property['value'])) { /* Check if item has a value property */
+						$this->debug->print_message('Requested property is a value');
 						$target_property = $target_property['value'];
 					}
 					elseif (!is_scalar($target_property)) { /* Set default value for item */
+						$this->debug->print_message('Requested property is not scalar');
 						$target_property = '';
+						if ($el) $this->debug->print_message('Is field modified?', $field_definition);
 					}
 					//Replace layout placeholder with retrieved item data
 					$out = str_replace($ph_start . $instance['match'] . $ph_end, $target_property, $out);
@@ -824,7 +816,9 @@ class CNR_Content_Types extends CNR_Base {
 		if ($ph_match = $this->parse_field_layout($out, $re_ph)) {
 			$out = preg_replace($re_ph, '', $out);
 		}
-
+		
+		/* Return generated value */
+		
 		return $out;
 	}
 
