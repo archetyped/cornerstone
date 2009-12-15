@@ -1047,7 +1047,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function page_title_get($args = '') {
 		$defaults = array(
-							'sep'	=>	' &laquo; ',
+							'sep'	=>	' &ndash; ',
 							'base'	=>	get_bloginfo('title')
 							);
 		$args =  wp_parse_args($args, $defaults);
