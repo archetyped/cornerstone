@@ -191,6 +191,7 @@ class Cornerstone extends CNR_Base {
 		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
 		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
 		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
+
 			//TinyMCE
 		//add_action('init', $this->m('admin_mce_register'));
 		add_filter('tiny_mce_before_init', $this->m('admin_mce_before_init'));
@@ -218,7 +219,6 @@ class Cornerstone extends CNR_Base {
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
 		//add_filter('posts_request', $this->m('posts_request'));
-		//printf('Plugin Path (Full): %s<br />Plugins Directory: %s<br />Plugins URL: %s<br />CNR URL: %s<br />', $this->path, WP_PLUGIN_DIR, WP_PLUGIN_URL, $this->url_base);
 		
 		//Activate Shortcodes
 		$this->sc_activate();
@@ -710,6 +710,11 @@ class Cornerstone extends CNR_Base {
 		return $columns;
 	}
 	
+	/**
+	 * Adds section name that post belongs to in custom column on Post Management admin page
+	 * @param string $column_name Name of current custom column
+	 * @param int $post_id ID of current post
+	 */
 	function admin_manage_posts_custom_column($column_name, $post_id) {
 		$section_id = $this->post_get_section();
 		$section = null;
@@ -721,6 +726,11 @@ class Cornerstone extends CNR_Base {
 			echo 'None';
 	}
 	
+	/**
+	 * Adds field for Section selection on the Quick Edit form for posts
+	 * @param string $column_name Name of custom column 
+	 * @param string $type Type of current item (post, page, etc.)
+	 */
 	function admin_quick_edit_custom_box($column_name, $type) {
 		global $post;
 		if ($column_name == 'section' && $type == 'post') :
@@ -1259,10 +1269,10 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Retrieves matching attachments for post
-	 * @return array|bool Array of post attachments
-	 * @param object|int $post Post object or Post ID
+	 * @param object|int $post Post object or Post ID (Default: current global post)
 	 * @param array $args[optional] Associative array of query arguments
 	 * @see get_posts() for query arguments
+	 * @return array|bool Array of post attachments
 	 */
 	function post_get_attachments($post = null, $args = '') {
 		if (!$this->check_post($post))
@@ -1392,6 +1402,7 @@ class Cornerstone extends CNR_Base {
 	 * @return array Image metadata array (src, width, height)
 	*/ 
 	function post_get_image($post = null, $image_type = 'header') {
+		
 		//Default return value: Empty Array
 		$ret = array();
 		if (!$this->check_post($post))
@@ -1423,7 +1434,7 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * Determine whether or not special image is attached to post
+	 * Determines whether or not specified image is attached to post
 	 * @param object $post [optional] Post object (Default: current global post)
 	 * @param string $image_type [optional] Image type to check for (Default: header image)
 	 * @see post_get_images() for list of image types
