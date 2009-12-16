@@ -1461,22 +1461,13 @@ class Cornerstone extends CNR_Base {
 	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
 		if (!$this->check_post($post))
 			return false;
-		/*
-		$prop = $this->post_get_image_property($image_type);
-		if (property_exists($post, $prop) && !empty($post->{$prop}))
-			return true;
-		elseif (!$object_only) {
-			$image = $this->post_get_image($post, $image_type);
-			if (is_array($image) && !empty($image)) {
-				return true;
-			}
-		}
-		*/
 			
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
 		//Check for post meta info
 		$val = get_post_meta($post->ID, $prop, true);
+		//Make sure attachment still exists
+		$val = get_post($val);
 		return (empty($val)) ? false : true;
 	}
 	
