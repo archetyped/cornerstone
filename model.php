@@ -1396,6 +1396,15 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
+	 * Generates property name for storing specified image data in Post object 
+	 * @param object $image_type [optional] Image type to generate property for
+	 * @return string Property name
+	 */
+	function post_get_image_property($image_type = 'header') {
+		return $this->prefix . '-image-' . $image_type;
+	}
+	
+	/**
 	 * Retrieves specified image attached to Post
 	 * @param object $post [optional] Post Object (Default: current global post)
 	 * @param string $image_type [optional] Type of image to retrieve for post (Default: header image)
@@ -1407,7 +1416,7 @@ class Cornerstone extends CNR_Base {
 		$ret = array();
 		if (!$this->check_post($post))
 			return $ret;
-			
+		/*
 		$prop = $this->post_get_image_property($image_type);
 		if ($this->post_has_image($post, $image_type, true))
 			$ret = $post->{$prop};
@@ -1420,17 +1429,25 @@ class Cornerstone extends CNR_Base {
 				$post->{$prop} = $ret;
 			}
 		}
-
+		*/
+			
+		//Get image name to retrieve
+		$prop = $this->post_get_image_property($image_type);
+		//Check for post meta info
+		$val = get_post_meta($post->ID, $prop, true);
+		//Get attachment with matching ID
+		$img = wp_get_attachment_image_src($val, '');
+		//Add properties to image data array
+		$attr = array('src', 'width', 'height');
+		$limit = count($attr);
+		if (!empty($img)) {
+			for ($x = 0; $x < $limit; $x++) {
+				if (isset($img[$x]))
+					$img[$attr[$x]] = $img[$x];
+			}
+			$ret = $img;
+		}
 		return $ret;
-	}
-	
-	/**
-	 * Generates property name for storing specified image data in Post object 
-	 * @param object $image_type [optional] Image type to generate property for
-	 * @return string Property name
-	 */
-	function post_get_image_property($image_type = 'header') {
-		return 'post_image_' . $image_type;
 	}
 	
 	/**
@@ -1444,6 +1461,7 @@ class Cornerstone extends CNR_Base {
 	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
 		if (!$this->check_post($post))
 			return false;
+		/*
 		$prop = $this->post_get_image_property($image_type);
 		if (property_exists($post, $prop) && !empty($post->{$prop}))
 			return true;
@@ -1453,7 +1471,13 @@ class Cornerstone extends CNR_Base {
 				return true;
 			}
 		}
-		return false;
+		*/
+			
+		//Get image name to retrieve
+		$prop = $this->post_get_image_property($image_type);
+		//Check for post meta info
+		$val = get_post_meta($post->ID, $prop, true);
+		return (empty($val)) ? false : true;
 	}
 	
 	/**
@@ -1511,6 +1535,16 @@ class Cornerstone extends CNR_Base {
 	 */
 	function post_the_image_element($image, $alt = '') {
 		$ret = $this->post_get_image_element($image, $alt);
+		echo $ret;
+	}
+	
+	function post_the_image_data($data = 'src', $image_type = 'header') {
+		$ret = '';
+		//Get specified post image (array)
+		$img_data = $this->post_get_image(null, $image_type);
+		
+		if (isset($img_data[$data]))
+			$ret = $img_data[$data];
 		echo $ret;
 	}
 	

@@ -175,6 +175,11 @@ function cnr_the_image($image_type = 'header') {
 	$cnr->post_the_image(null, $image_type);
 }
 
+function cnr_the_image_data($data = 'src', $image_type = 'header') {
+	global $cnr;
+	$cnr->post_the_image_data($data, $image_type);
+}
+
 function cnr_get_attachments($post = null) {
 	global $cnr;
 	return $cnr->post_get_attachments($post);
