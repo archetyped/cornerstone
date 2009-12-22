@@ -1467,7 +1467,7 @@ class Cornerstone extends CNR_Base {
 		//Check for post meta info
 		$val = get_post_meta($post->ID, $prop, true);
 		//Make sure attachment still exists
-		$val = get_post($val);
+		$val = (!empty($val) && is_numeric($val)) ? get_post($val) : null;
 		return (empty($val)) ? false : true;
 	}
 	
