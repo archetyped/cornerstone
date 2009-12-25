@@ -1057,7 +1057,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function page_title_get($args = '') {
 		$defaults = array(
-							'sep'	=>	' &ndash; ',
+							'sep'	=>	' | ',
 							'base'	=>	get_bloginfo('title')
 							);
 		$args =  wp_parse_args($args, $defaults);
@@ -1079,6 +1079,8 @@ class Cornerstone extends CNR_Base {
 				
 				//Get current post title
 				$title_parts[] = $post->post_title;
+			} elseif (is_404()) {
+				$title_parts[] = 'Page Not Found';
 			}
 		}
 		
@@ -2034,13 +2036,12 @@ class Cornerstone extends CNR_Base {
 	function pre_get_posts_excluded(&$query_obj) {
 		//Featured posts
 		//Only get featured posts during initial (on home page) or child requests
-		if ((is_home() && $this->state_init)		/* Initial Query on Home Page */
-		 || (is_page() && $this->state_children)	/* Children Query on Section Page */ ) {
-
+		if (((is_home()) && $this->state_init)		/* Initial Query on Home Page */
+			|| (is_page() && $this->state_children)				/* Children Query on Section Page */
+		) {
 			//Toggle states (to avoid issues with queries)
 			$this->toggle_state($this->state_init);
 			$this->toggle_state($this->state_children);
-			
 			$this->posts_featured_get(4);
 			
 			//Toggle states back to original value (so that state can be used by other code)
