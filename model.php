@@ -155,7 +155,6 @@ class Cornerstone extends CNR_Base {
 		$this->_prefix_db = $this->get_db_prefix();
 		$this->_qry_var = $this->_prefix . $this->_qry_var;
 		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
-		//$this->debug = new S_DEBUG();
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
 
@@ -214,6 +213,7 @@ class Cornerstone extends CNR_Base {
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
 		add_filter('post_link', $this->m('post_link'), 10, 2);
+		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
 		add_filter('wp_list_pages', $this->m('post_section_highlight'));
 		
 		//Item retrieval
@@ -535,12 +535,18 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function admin_add_scripts() {
+		//Page Groups
 		if (strpos($_SERVER['QUERY_STRING'], 'page=page-groups') !== false) {
 			wp_enqueue_script('jquery-ui-sortable');
 			wp_enqueue_script('jquery-ui-draggable');
 			wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
 			wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
 			wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
+		}
+		//Edit Posts
+		if ( 'edit.php' == basename($_SERVER['REQUEST_URI']) ) {
+			wp_enqueue_script( $this->_prefix . 'inline-edit-post', $this->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
+			echo '<script type="text/javascript">postData = {};</script>';
 		}
 		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
 	}
@@ -697,7 +703,11 @@ class Cornerstone extends CNR_Base {
 	 * @param object $post Post Object
 	 */
 	function admin_post_sidebar_section($post) {
-		wp_dropdown_pages(array('exclude_tree' => $post->ID, 'selected' => $post->post_parent, 'name' => 'parent_id', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
+		wp_dropdown_pages(array('exclude_tree' => $post->ID,
+								'selected' => $post->post_parent,
+								'name' => 'parent_id',
+								'show_option_none' => __('- No Section -'),
+								'sort_column'=> 'menu_order, post_title'));
 	}
 	
 	/**
@@ -720,9 +730,10 @@ class Cornerstone extends CNR_Base {
 		$section = null;
 		if ($section_id > 0) 
 			$section = get_post($section_id);
-		if (!empty($section))
+		if (!empty($section)) {
 			echo $section->post_title;
-		else
+			echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section_id . '};</script>'; 
+		} else
 			echo 'None';
 	}
 	
@@ -740,7 +751,11 @@ class Cornerstone extends CNR_Base {
 				<div class="inline-edit-group">
 					<label><span class="title">Section</span></label>
 					<?php
-					wp_dropdown_pages(array('exclude_tree' => $post->ID, 'name' => 'post_parent', 'show_option_none' => __('No Section'), 'sort_column'=> 'menu_order, post_title'));
+					$options = array('exclude_tree'				=> $post->ID, 
+									 'name'						=> 'post_parent',
+									 'show_option_none'			=> __('- No Section -'),
+									 'sort_column'				=> 'menu_order, post_title');
+					wp_dropdown_pages($options);
 					?>
 				</div>
 			</div>
@@ -810,7 +825,7 @@ class Cornerstone extends CNR_Base {
 
 		//Check if no pages are marked as 'current' yet
 		//Also make sure current page is not home page (no links should be marked as current)
-		if (!is_home() && $post && stripos($output, $class_current) === false) {
+		if (is_singular() && $post && stripos($output, $class_current) === false) {
 			//Get all parents of current post
 			$parents = $this->post_get_parents($post);
 			
@@ -1057,7 +1072,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function page_title_get($args = '') {
 		$defaults = array(
-							'sep'	=>	' | ',
+							'sep'	=>	' &lsaquo; ',
 							'base'	=>	get_bloginfo('title')
 							);
 		$args =  wp_parse_args($args, $defaults);
@@ -1066,26 +1081,48 @@ class Cornerstone extends CNR_Base {
 		//Add Site Title
 		$title_parts[] = $args['base'];
 		
-		//Add additional parts to title based on current page/post
-		if (!is_home()) {
-			if (is_page() || is_single()) {
-				//Get section title
+		$body_rule = '';
+		$secondary = 'secondary';
+		if (!is_home()) { //Evaluate all non-home page content
+			if (is_page() || is_single()) { //Section page or Post
 				global $post;
-				if ($post->post_parent != 0) {
-					$parent = get_post($post->post_parent);
-					if ($parent)
-						$title_parts[] = $parent->post_title;
+				if ($post->post_parent != 0 && ($parent = get_the_title($post->post_parent)) && !!$parent) {
+					$title_parts[] = $parent;
 				}
-				
-				//Get current post title
-				$title_parts[] = $post->post_title;
-			} elseif (is_404()) {
+				$title_parts[] = get_the_title();
+			} elseif (is_archive()) { //Archive Pages
+				if (is_date()) {
+					$format = 'F Y'; //Month Format (Default)
+					$prep = 'in';
+					if (is_day()) { //Day archive
+						$format = 'F j, Y';
+						$prep = 'on';
+					} elseif (is_year()) { //Year archive
+						$format = 'Y';
+					}
+					$title_parts[] = 'Content published ' . $prep . ' ' . get_the_time($format);
+				} elseif (is_tag()) { //Tag Archive
+					$title_parts[] = single_tag_title('', false);
+				} elseif (is_category()) { //Category Archive
+					$title_parts[] = single_cat_title('', false);
+				}
+			} elseif (is_search()) { //Search Results
+				$title_parts[] = 'Search Results for: ' . esc_attr(get_search_query());
+			} elseif (is_404()) { //404 Page
 				$title_parts[] = 'Page Not Found';
 			}
+		} elseif (is_paged()) { //Default title for archive pages
+			$title_parts[] = 'All Content';
 		}
 		
 		//Build title based on parts
 		$title_parts = array_reverse($title_parts);
+		
+		//Add Page Number to Title
+		if (is_paged() && !empty($title_parts[0])) {
+			$title_parts[0] .= ' (Page ' . get_query_var('paged') . ')';
+		}
+		
 		for ($x = 0; $x < count($title_parts); $x++) {
 			$page_title .= $title_parts[$x];
 			if ($x < (count($title_parts) - 1))
@@ -1153,7 +1190,12 @@ class Cornerstone extends CNR_Base {
 	 */
 	function post_get_section($type = 'ID') {
 		global $post;
-		return $post->post_parent;
+		$retval = $post->post_parent;
+		
+		if ('title' == $type) {
+			$retval = get_post_field('post_title', $post->post_parent);
+		}
+		return $retval;
 	}
 	
 	/**
@@ -1808,7 +1850,7 @@ class Cornerstone extends CNR_Base {
 		
 		//Check if any featured posts on current page were retrieved
 		//If featured posts are found, make sure there are more featured posts 
-		if ($this->posts_featured_count > 0 && $this->posts_featured_current < $this->posts_featured_count) {
+		if ($this->posts_featured_count > 0 && $this->posts_featured_current < $this->posts_featured_count - 1) {
 			return true;
 		}
 		
@@ -1834,7 +1876,6 @@ class Cornerstone extends CNR_Base {
 		if ($this->posts_featured_has()) {
 			//Increment featured post position
 			$this->posts_featured_current++;
-			
 			//Load featured post into global post variable
 			$post = $this->posts_featured[$this->posts_featured_current];
 			
@@ -1938,13 +1979,24 @@ class Cornerstone extends CNR_Base {
 	 * @param string $permalink Current permalink url for post
 	 * @param object $post Post object
 	 */
-	function post_link($permalink, $post) {
-		global $wp_rewrite;
+	function post_link($permalink, $post = '') {
+		global $wp_rewrite, $wp_query;
 
 		if ($wp_rewrite->using_permalinks()) {
             
 			//Get base URL
 			$base = get_bloginfo('url');
+			
+			//Canonical redirection usage
+			if (is_string($post)) {
+				//Only process single posts
+				if (is_single()) {
+					$post = $wp_query->get_queried_object();
+				} else {
+					//Stop processing for all other content (return control to redirect_canonical
+					return false;
+				}
+			}
 			
 			//Get post path
 			$path = $this->post_get_path($post);
@@ -2113,25 +2165,10 @@ class Cornerstone extends CNR_Base {
 	 */
 	function rewrite_rules_array($rewrite_rules_array) {
 		global $wp_rewrite;
-		$rules_extra = array();
 		//Posts/Pages
 		//$rules_extra['([\/\w-]+)/([A-Za-z0-9-]+)$'] = $wp_rewrite->index . "?name=\$matches[2]";
-		$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
-		//Pages
-		//$rules_extra['^([/\w-]+)$'] = $wp_rewrite->index . "?pagename=\$matches[1]";
+		//$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
 		
-		//$wp_rewrite = new WP_Rewrite();
-		//global $utw_prefix; //DEBUG
-		//$url=get_bloginfo('url');
-		//$section_prefix = '';
-		//$post_extension = '';
-		//$option=cms_get_options();
-		//DEBUG - NOT USED - $secton_prefix = (strlen($option['permastruct_section'])>0)?$option['permastruct_section']."\/":"";
-		//DEBUG - NOT USED - $post_prefix = (strlen($option['permastruct_post'])>0)?$option['permastruct_post']."\/":"";
-		//$post_extension = (strlen($option['permastruct_extension']) > 0)?'\.'.$option['permastruct_extension']:'';
-		//$category_prefix = (strlen($wp_rewrite->category_base) > 0) ? $wp_rewrite->category_base : "/category";
-		//ULTIMATE TAG WARRIOR PREFIX
-		//$utw_prefix = str_replace("/", "", get_option("utw_base_url"));
 		 //RSS FEEDS FOR TAGS IN SECTIONS
 		//$cms_rules[$section_prefix.'([\w-]+)/'.$utw_prefix.'/([\w-\/\s]+)/feed/?$'] = "$wp_rewrite->index?pagename=\$matches[1]&feed=feed&tags=\$matches[2]";
 		 //TAGS IN SECTIONS
@@ -2142,18 +2179,7 @@ class Cornerstone extends CNR_Base {
 		//$cms_rules['([\w-]+)'.$category_prefix.'/([\w-\/\s]+)/?$']= $wp_rewrite->index."?pagename=\$matches[1]&cat=\$matches[2]";
 		//REWRITE RULES FOR MULTIPAGE POSTS
 		//$cms_rules_2['([\w-]+/?)([\w-]+)'.$post_extension.'/([0-9]+)/?$'] = $wp_rewrite->index."?name=\$matches[2]&page=\$matches[3]";
-		//RSS FEEDS FOR POSTS
-		//$cms_rules_2['([\/\w-]+)/([A-Za-z0-9-]+)'.$post_extension.'/feed/?$'] = $wp_rewrite->index."?name=\$matches[2]&feed=feed";
 
-		//add_rewrite_rule('([\/\w-]+)/([A-Za-z0-9-]+)$', $wp_rewrite->index . "?name=\$matches[2]");
-		//RSS FEEDS FOR POSTS
-		//$cms_rules_2['([\/\w-]+)/([A-Za-z0-9-]+)'.$post_extension.'/feed/?$'] = $wp_rewrite->index."?name=\$matches[2]&feed=feed";
-		//$rules['feed/(feed|rdf|rss|rss2|atom)/?$'] = "http://feeds.feedburner.com/archetyped";
-		//REWRITE RULES FOR SECTIONS (PAGES)
-		//DEBUG - DO NOT USE $cms_rules[$section_prefix.'(.*)/?$']=$wp_rewrite->index."?pagename=\$matches[1]";
-		//$cms_rules['(feed)/?$'] = "$wp_rewrite->index?feed=feed";
-		//return ($cms_rules + $rewrite_rules_array + $cms_rules_2);
-		//$rewrite_rules_array = $rewrite_rules_array + $rules_extra;
 		//Return rules with new rules added
 		return $rewrite_rules_array;
 	}
