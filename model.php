@@ -142,13 +142,15 @@ class Cornerstone extends CNR_Base {
 	
 	/* Constructor */
 	
-	function Cornerstone($caller) {
+	function Cornerstone($caller)  {
 		$this->__construct($caller);
 	}
 							
 	function __construct($caller) {
 		//Parent Constructor
 		parent::__construct();
+		
+		//$GLOBALS['cnr'] =& $this;
 		
 		//Set Properties
 		$this->_caller = $caller;
@@ -164,7 +166,7 @@ class Cornerstone extends CNR_Base {
 		$this->ct = new CNR_Content_Types();
 
 		register_activation_hook($this->_caller, $this->m('activate'));
-		
+
 		//Add Actions
 		//Admin
 			//Initialization
@@ -219,7 +221,7 @@ class Cornerstone extends CNR_Base {
 		//Item retrieval
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
 		//add_filter('posts_request', $this->m('posts_request'));
-		
+
 		//Activate Shortcodes
 		$this->sc_activate();
 		
@@ -1666,10 +1668,14 @@ class Cornerstone extends CNR_Base {
 			return $ret;
 		
 		//Check if post parts have already been fetched and added to post object
-		if (property_exists($post, $this->_post_parts_var) && is_array($post->{$this->_post_parts_var}))
+		if (function_exists('property_exists'))
+			if (!property_exists($post, $this->_post_parts_var))
+				$ret = true;
+		elseif (!array_key_exists($this->_post_parts_var, $post))
 			$ret = true;
+		if ($ret && !is_array($post->{$this->_post_parts_var}))
+			$ret = false;
 		return $ret;
-		
 	}
 	
 	function post_the_parts() {
@@ -1742,7 +1748,7 @@ class Cornerstone extends CNR_Base {
 		$featured = get_posts($args);
 		
 		//Check to make sure the correct number of posts are returned
-		if ($limit && count($featured) < $limit) {
+		if ($limit && (count($featured) < $limit)) {
 			//Set arguments to fetch additional (non-feature) posts to meet limit
 			
 			//Remove category argument
@@ -1761,7 +1767,6 @@ class Cornerstone extends CNR_Base {
 
 		//Load retrieved posts into wp_query variable
 		$this->posts_featured_load($featured);
-		
 		//Return retrieved posts so that array may be manipulated further if desired
 		return $this->posts_featured;
 	}
@@ -1815,7 +1820,7 @@ class Cornerstone extends CNR_Base {
 		//Reset featured posts variables to default values
 		$this->posts_featured_init();
 		
-		if (!!$posts) {
+		if (!empty($posts)) {
 			//Save retrieved featured posts in newly created variables in global wp_query object
 			$this->posts_featured = $posts;
 			$this->posts_featured_has = true;
@@ -2124,7 +2129,10 @@ class Cornerstone extends CNR_Base {
 			$query_obj =& $GLOBALS['wp_query'];
 		}
 		
-		if (!property_exists($query_obj, 'query_vars'))
+		if (function_exists('property_exists'))
+			if (!property_exists($query_obj, 'query_vars'))
+				return false;
+		elseif (!array_key_exists('query_vars', $query_obj))
 			return false;
 		
 		//Query vars shorthand

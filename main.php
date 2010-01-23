@@ -12,7 +12,7 @@ Author URI: http://archetyped.com
  * @package Cornerstone 
  */
 require_once('model.php');
-$cnr = new Cornerstone(__FILE__);
+$cnr =& new Cornerstone(__FILE__);
 
 /* Page Level */
 

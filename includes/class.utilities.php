@@ -23,10 +23,10 @@ class CNR_Utilities {
 	 * @param string $method Name of method
 	 * @return array Callback array
 	 */
-	function m($obj = null, $method = '') {
+	function &m(&$obj, $method = '') {
 		if ($obj == null)
-			$obj = $this;
-		return array($obj, $method);
+			$obj =& $this;
+		return array(&$obj, $method);
 	}
 	
 	/* Helper Functions */

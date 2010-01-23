@@ -35,10 +35,10 @@ class CNR_Base {
 	
 	/**
 	 * Returns callback to instance method
-	 * @param string $method
+	 * @param string $method Method name
 	 * @return array Callback array
 	 */
-	function m($method) {
+	function &m($method) {
 		return $this->util->m($this, $method);
 	}
 }
