@@ -263,6 +263,11 @@ function cnr_list_page_group($group, $wrap_list = true) {
 	$group->list_pages($wrap_list);
 }
 
+function cnr_the_feed_links() {
+	global $cnr;
+	$cnr->feed_the_links();
+}
+
 /*-** Debug functions **-*/
 
 function add_line($text = '') {
@@ -278,7 +283,5 @@ function pre_dump($title = '', $obj = '') {
 	var_dump($obj);
 	echo '</pre>';
 }
-
-
 
 ?>

@@ -41,13 +41,10 @@ class Cornerstone extends CNR_Base {
 	var $file_content_types = 'content-types';
 	
 	/**
-	 * @var object Debug object
+	 * @var string Path to plugin
 	 */
-	//var $debug;
-	
 	var $path = __FILE__;
 	
-	var $url_base = '';
 	
 	/* State Variables */
 	
@@ -166,8 +163,9 @@ class Cornerstone extends CNR_Base {
 		$this->ct = new CNR_Content_Types();
 
 		register_activation_hook($this->_caller, $this->m('activate'));
-
-		//Add Actions
+		
+		/* Register Hooks */
+		
 		//Admin
 			//Initialization
 		add_action('admin_init', $this->m('admin_init'));
@@ -200,7 +198,11 @@ class Cornerstone extends CNR_Base {
 		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
 		add_action('admin_print_scripts', $this->m('admin_post_quicktags'));
 		
-		//Add Filters
+		//Feeds
+		add_action('template_redirect', $this->m('feed_redirect'));
+		add_filter('get_wp_title_rss', $this->m('feed_title'));
+		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
+		
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
@@ -943,9 +945,11 @@ class Cornerstone extends CNR_Base {
 	 * @return array $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
 	 */
-	function post_children_get($posts) {
+	function post_children_get($posts = '') {
 		//Global variables
 		global $wp_query, $wpdb;
+		if ( empty($posts) )
+			$posts = $wp_query->posts;
 		
 		//Stop here if post is not a page
 		if (!is_page() || $posts != $wp_query->posts) {
@@ -958,11 +962,11 @@ class Cornerstone extends CNR_Base {
 		//Get children posts of page
 		if ($wp_query->posts) {
 			$page = $wp_query->posts[0];
-			
+			$limit = (is_feed()) ? get_option('posts_per_rss') : -1;
 			//Set arguments to retrieve children posts of current page
 			$c_args = array(
 							'post_parent'	=>	$page->ID,
-							'numberposts'	=>	-1					
+							'numberposts'	=>	$limit
 							);
 			//Set State
 			$this->request_children_start();
@@ -1001,8 +1005,8 @@ class Cornerstone extends CNR_Base {
 		
 		//If no children were found (or the last child has been previously loaded),
 		//load parent post back into global post variable
-		if ($wp_query->current_post >= 0) {
-			$post = $wp_query->posts[$wp_query->current_post];
+		if ( !empty($wp_query->post) ) {
+			$post = $wp_query->post;
 			setup_postdata($post);
 		}
 		return false;
@@ -2052,6 +2056,50 @@ class Cornerstone extends CNR_Base {
 		return $path;
 	}
 	
+	/**
+	 * Generates feed links based on current page
+	 * @return string Feed links
+	 */
+	function feed_get_links() {
+		$text = array();
+		$links = array();
+		$link_template = '<a class="link_feed" rel="alternate" href="%1$s" title="%3$s">%2$s</a>';
+		//Page specific feeds
+		if ( is_page() || is_single() ) {
+			global $post;
+			$href = get_post_comments_feed_link($post->ID);
+			if ( is_page() )
+				$title = 'Subscribe to this Section';
+			else
+				$title = 'Subscribe to Comments';
+			$links[$href] = $title;
+		} elseif ( is_search() ) {
+			$links[get_search_feed_link()] = 'Subscribe to this Search';
+		} elseif ( is_tag() ) {
+			$links[get_tag_feed_link( get_query_var('tag_id') )] = 'Subscribe to this Tag';	
+		} elseif ( is_category() ) {
+			$links[get_category_feed_link( get_query_var('cat') )] = 'Subscribe to this Topic';
+		}
+		
+		//Sitewide feed
+		$title = ( !empty($links) ) ? 'Subscribe to All updates' : 'Subscribe to Updates';
+		$links[get_feed_link()] = $title;
+		foreach ($links as $href => $title) {
+			$text[] = sprintf($link_template, $href, $title, esc_attr($title));
+		}
+		$text = implode(' or ', $text);
+		return $text; //'<a class="link_feed" rel="alternate" href="' . get_feed_link() . '">Subscribe to All Updates</a>';
+	}
+	
+	/**
+	 * Outputs feed links based on current page
+	 * @see feed_get_links()
+	 * @return void
+	 */
+	function feed_the_links() {
+		echo $this->feed_get_links();
+	}
+	
 	/*-** Query **-*/
 	
 	/**
@@ -2093,8 +2141,10 @@ class Cornerstone extends CNR_Base {
 	function pre_get_posts_excluded(&$query_obj) {
 		//Featured posts
 		//Only get featured posts during initial (on home page) or child requests
-		if (((is_home()) && $this->state_init)		/* Initial Query on Home Page */
-			|| (is_page() && $this->state_children)				/* Children Query on Section Page */
+		if (!is_feed() 
+			&& (((is_home()) && $this->state_init)		/* Initial Query on Home Page */
+				|| (is_page() && $this->state_children)				/* Children Query on Section Page */
+			)
 		) {
 			//Toggle states (to avoid issues with queries)
 			$this->toggle_state($this->state_init);
@@ -2173,6 +2223,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function rewrite_rules_array($rewrite_rules_array) {
 		global $wp_rewrite;
+		$this->debug->print_message('Rewrite Rules', $rewrite_rules_array);
 		//Posts/Pages
 		//$rules_extra['([\/\w-]+)/([A-Za-z0-9-]+)$'] = $wp_rewrite->index . "?name=\$matches[2]";
 		//$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
@@ -2190,6 +2241,59 @@ class Cornerstone extends CNR_Base {
 
 		//Return rules with new rules added
 		return $rewrite_rules_array;
+	}
+	
+	/*-** Feeds **-*/
+	
+	/**
+	 * Customizes feed to use for certain requests
+	 * Example: Pages (Sections) should load the normal feed template (instead of the comments feed template)
+	 */
+	function feed_redirect() {
+		if (is_page() && is_feed()) {
+			//Turn off comments feed for sections
+			global $wp_query;
+			$wp_query->is_comment_feed = false;
+			//Enable child content retrieval for section feeds
+			$m = $this->m('feed_section');
+			$feed = get_query_var('feed');
+			if ('feed' == $feed)
+				$feed = get_default_feed();
+			$hook = ('rdf' == $feed) ? 'rdf_header' : $feed . "_head"; 
+			add_action($hook, $m);
+		}
+	}
+	
+	/**
+	 * Retrieves a section's child content for output in a feed 
+	 */
+	function feed_section() {
+		if (is_page() && is_feed()) {
+			global $wp_query;
+			$this->post_children_get();
+			
+			//Set retrieved posts to global $wp_query object
+			$wp_query->posts = $this->post_children;
+			$wp_query->current_post = $this->post_children_current;
+			$wp_query->post_count = $this->post_children_count;
+		}
+	}
+	
+	function feed_title($title) {
+		$sep = '&#8250;';
+		remove_filter('get_wp_title_rss', $this->m('feed_title'));
+		$title = get_wp_title_rss($sep);
+		add_filter('get_wp_title_rss', $this->m('feed_title'));
+		return $title;
+	}
+	
+	function feed_description($description, $show) {
+		global $post;
+		if (is_page() && 'description' == $show && '' != $post->post_content) {
+			//Get section's own description (if exists)
+			$description = convert_chars($post->post_content);
+		}
+		return $description;
 	}
 }
 

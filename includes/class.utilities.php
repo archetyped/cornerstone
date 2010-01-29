@@ -216,6 +216,22 @@ class CNR_Debug {
 		}
 	}
 	
+	function print_feed_item($msg) {
+		$args = func_get_args();
+		if (count($args)) {
+			echo '<item><title>Debug message</title>';
+			echo '<description><![CDATA[';
+			foreach ($args as $msg) {
+				if (is_scalar($msg))
+					echo "$msg<br />";
+				else
+					var_dump($msg);	
+			}
+			echo ']]></description>';
+			echo '</item>';
+		}
+	}
+	
 	function microtime_float() {
 		list($usec, $sec) = explode(' ', microtime());
 		return (float)$usec + (float)$sec;
