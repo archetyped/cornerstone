@@ -119,9 +119,14 @@ class Cornerstone extends CNR_Base {
 	var $post_children_current = -1;
 	
 	/**
-	 * @var int Total number of children posts
+	 * @var int Total number of children posts (in current request)
 	 */
 	var $post_children_count = 0;
+	
+	/**
+	 * @var int Total number of children posts in database
+	 */
+	var $post_children_found = 0;
 	
 	/* Instance Variables */
 	
@@ -814,10 +819,12 @@ class Cornerstone extends CNR_Base {
 	function request_children_start() {
 		$this->state_children = true;
 		$this->request_init_end();
+		add_filter('found_posts', $this->m('post_children_set_found'));
 	}
 	
 	function request_children_end() {
 		$this->state_children = false;
+		remove_filter('found_posts', $this->m('post_children_set_found'));
 	}
 	
 	function post_section_highlight($output) {
@@ -924,6 +931,7 @@ class Cornerstone extends CNR_Base {
 		$this->post_children_has = false;
 		$this->post_children_current = -1;
 		$this->post_children_count = 0;
+		$this->post_children_total = 0;
 	}
 	
 	/**
@@ -932,11 +940,21 @@ class Cornerstone extends CNR_Base {
 	 * @param array $children Children posts
 	 */
 	function post_children_save($children) {
-		if (!!$children) {
+		if ( !empty($children) ) {
 			$this->post_children = $children;
 			$this->post_children_has = true;
 			$this->post_children_count = count($children);
 		}
+	}
+	
+	/**
+	 * Sets total number of children
+	 * Hooks into 'found_posts' filter
+	 * @param int $children_total Total number of children
+	 */
+	function post_children_set_found($children_found) {
+		$this->post_children_found = $children_found;
+		return $children_found;
 	}
 	
 	/**
@@ -955,23 +973,24 @@ class Cornerstone extends CNR_Base {
 		if (!is_page() || $posts != $wp_query->posts) {
 			return $posts;
 		}
-		
 		//Reset children post variables
 		$this->post_children_init();
 		
 		//Get children posts of page
 		if ($wp_query->posts) {
 			$page = $wp_query->posts[0];
-			$limit = (is_feed()) ? get_option('posts_per_rss') : -1;
+			$limit = (is_feed()) ? get_option('posts_per_rss') : get_option('posts_per_page');
+			$offset = (is_paged()) ? ( (get_query_var('paged') - 1) * $limit ) : 0;
 			//Set arguments to retrieve children posts of current page
 			$c_args = array(
-							'post_parent'	=>	$page->ID,
-							'numberposts'	=>	$limit
+							'post_parent'	=> $page->ID,
+							'numberposts'	=> $limit,
+							'offset'		=> $offset
 							);
 			//Set State
 			$this->request_children_start();
 			//Get children posts
-			$children = get_posts($c_args);
+			$children =& get_posts($c_args);
 			//Save any children posts in new variables in global wp_query object
 			$this->post_children_save($children);
 			//Set State;
@@ -1013,11 +1032,23 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * Returns the total number of children posts
+	 * Returns the total number of children posts in current request
 	 * @return int Number of children posts
 	 */
 	function post_children_count() {
 		return $this->post_children_count;
+	}
+	
+	/**
+	 * Returns total total number of children posts in DB
+	 * @return int Number of children posts in DB
+	 */
+	function post_children_found() {
+		return $this->post_children_found;
+	}
+	
+	function post_children_max_num_pages() {
+		return ceil( $this->post_children_found / get_option('posts_per_page') );
 	}
 	
 	/**

@@ -52,6 +52,16 @@ function cnr_children_count() {
 	return $cnr->post_children_count();	
 }
 
+function cnr_children_found() {
+	global $cnr;
+	return $cnr->post_children_found();
+}
+
+function cnr_children_max_num_pages() {
+	global $cnr;
+	return $cnr->post_children_max_num_pages();
+}
+
 function cnr_is_first_child() {
 	global $cnr;
 	return $cnr->post_children_is_first();
