@@ -82,33 +82,33 @@ function cnr_is_last_child() {
  */
 function cnr_get_featured($limit = 0, $parent = null) {
 	global $cnr;
-	return $cnr->posts_featured_get($limit, $parent);
+	return $cnr->posts_featured->get($limit, $parent);
 }
 
 function cnr_has_featured() {
 	global $cnr;
-	return $cnr->posts_featured_has();
+	return $cnr->posts_featured->has();
 }
 
 function cnr_next_featured() {
 	global $cnr;
-	return $cnr->posts_featured_next();
+	return $cnr->posts_featured->next();
 	
 }
 
 function cnr_current_featured() {
 	global $cnr;
-	return $cnr->posts_featured_current();
+	return $cnr->posts_featured->current();
 }
 
 function cnr_is_first_featured() {
 	global $cnr;
-	return $cnr->posts_featured_is_first();
+	return $cnr->posts_featured->is_first();
 }
 
 function cnr_featured_count() {
 	global $cnr;
-	return $cnr->posts_featured_count;
+	return $cnr->posts_featured->count;
 }
 
 /**

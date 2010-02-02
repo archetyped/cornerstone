@@ -154,6 +154,21 @@ class CNR_Utilities {
 		}
 		return $fmtd;
 	}
+	
+	/**
+	 * Checks if a property exists in a class or object
+	 * (Compatibility method for PHP 4
+	 * @param mixed $class Class or object to check 
+	 * @param string $property Name of property to look for in $class
+	 */
+	function property_exists($class, $property) {
+		if (function_exists('property_exists'))
+			if (!property_exists($class, $property))
+				return false;
+		elseif (!array_key_exists($property, $class))
+			return false;
+		return true;
+	}
 }
 
 /**
@@ -213,22 +228,6 @@ class CNR_Debug {
 				var_dump($msg);
 			}
 			echo '</pre>';
-		}
-	}
-	
-	function print_feed_item($msg) {
-		$args = func_get_args();
-		if (count($args)) {
-			echo '<item><title>Debug message</title>';
-			echo '<description><![CDATA[';
-			foreach ($args as $msg) {
-				if (is_scalar($msg))
-					echo "$msg<br />";
-				else
-					var_dump($msg);	
-			}
-			echo ']]></description>';
-			echo '</item>';
 		}
 	}
 	

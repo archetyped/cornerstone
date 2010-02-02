@@ -2,6 +2,7 @@
 
 require_once 'includes/class.base.php';
 require_once 'includes/class.content-types.php';
+require_once 'includes/class.posts.php';
 
 /**
  * @package Cornerstone
@@ -74,7 +75,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * @var array Stores featured posts
 	 */
-	var $posts_featured = array();
+	//var $posts_featured = array();
 	
 	/**
 	 * @var bool Whether or not there are any featured posts
@@ -90,6 +91,11 @@ class Cornerstone extends CNR_Base {
 	 * @var int Total number of featured posts
 	 */
 	var $posts_featured_count = 0;
+	
+	/**
+	 * @var CNR_Posts Featured posts container
+	 */
+	var $posts_featured = null;
 	
 	/**
 	 * @var string Key used to store post subtitle
@@ -161,7 +167,8 @@ class Cornerstone extends CNR_Base {
 		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
-
+		$this->posts_featured = new CNR_Posts( array( 'category' => $this->posts_featured_get_cat_id() ) );
+		
 		//Initialization
 		
 		//Initialize instance variables
@@ -216,7 +223,7 @@ class Cornerstone extends CNR_Base {
 		
 		//Initial request
 		add_action('parse_request', $this->m('request_init_start'));
-		add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
+		//add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
 		add_action('wp', $this->m('request_init_end'));
 		
 		//Posts
@@ -1497,20 +1504,6 @@ class Cornerstone extends CNR_Base {
 		$ret = array();
 		if (!$this->check_post($post))
 			return $ret;
-		/*
-		$prop = $this->post_get_image_property($image_type);
-		if ($this->post_has_image($post, $image_type, true))
-			$ret = $post->{$prop};
-		else {
-			$img = $this->post_get_images($post, $image_type);
-			if (!empty($img)) {
-				//Get image metadata
-				$ret = wp_get_attachment_image_src($img[0]->ID, '');
-				//Save to post object
-				$post->{$prop} = $ret;
-			}
-		}
-		*/
 			
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
@@ -1700,16 +1693,11 @@ class Cornerstone extends CNR_Base {
 		if (is_null($post) && isset($GLOBALS['post']))
 			$post =& $GLOBALS['post'];
 		else
-			return $ret;
+			return false;
 		
 		//Check if post parts have already been fetched and added to post object
-		if (function_exists('property_exists'))
-			if (!property_exists($post, $this->_post_parts_var))
-				$ret = true;
-		elseif (!array_key_exists($this->_post_parts_var, $post))
-			$ret = true;
-		if ($ret && !is_array($post->{$this->_post_parts_var}))
-			$ret = false;
+		$ret = ($this->util->property_exists($post, $this->_post_parts_var) && !is_array($post->{$this->_post_parts_var})) ? false : true;
+		
 		return $ret;
 	}
 	
@@ -1749,6 +1737,7 @@ class Cornerstone extends CNR_Base {
 	 * @param int $limit[optional] Maximum number of featured posts to retrieve (Default: -1 = All Featured Posts)
 	 * @param int|bool $parent[optional] Section to get featured posts of (Defaults to current section).
 	 * 	FALSE if latest featured posts should be retrieved regardless of section
+	 * @todo Integrate into CNR_Posts
 	 */
 	function posts_featured_get($limit = -1, $parent = null) {
 		//Global variables
@@ -1759,7 +1748,7 @@ class Cornerstone extends CNR_Base {
 			if (count($wp_query->posts) == 1) {
 				$parent = $wp_query->posts[0]->ID;
 			}
-			elseif ($wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && property_exists($GLOBALS['post'], 'ID')) {
+			elseif ($wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID')) {
 				$parent = $GLOBALS['post']->ID;
 			}
 		}
@@ -1801,14 +1790,16 @@ class Cornerstone extends CNR_Base {
 		}
 
 		//Load retrieved posts into wp_query variable
-		$this->posts_featured_load($featured);
+		//$this->posts_featured_load($featured);
+		$this->posts_featured->load($featured);
 		//Return retrieved posts so that array may be manipulated further if desired
-		return $this->posts_featured;
+		return $this->posts_featured->posts;
 	}
 	
 	/**
 	 * Retrieves featured post category object
 	 * @return object Featured post category object
+	 * @todo integrate into CNR_Posts
 	 */
 	function posts_featured_get_cat() {
 		static $cat = null;
@@ -1827,11 +1818,14 @@ class Cornerstone extends CNR_Base {
 		return $cat;
 	}
 	
+	/**
+	 * @todo integrate into CNR_Posts
+	 */
 	function posts_featured_get_cat_id() {
 		static $id = '';
 		if ($id == '') {
 			$cat = $this->posts_featured_get_cat();
-			if (!is_null($cat) && is_object($cat) && property_exists($cat, 'cat_ID'))
+			if (!is_null($cat) && is_object($cat) && $this->util->property_exists($cat, 'cat_ID'))
 				$id = $cat->cat_ID;
 		}
 		return $id;
@@ -1849,6 +1843,7 @@ class Cornerstone extends CNR_Base {
 	 * 
 	 * @return void 
 	 * @param array $posts Featured posts
+	 * @deprecated
 	 */
 	function posts_featured_load($posts) {
 		
@@ -1866,6 +1861,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Resets featured post variables to default values
 	 * @return void
+	 * @deprecated
 	 */
 	function posts_featured_init() {
 		$this->posts_featured = array();
@@ -1884,6 +1880,7 @@ class Cornerstone extends CNR_Base {
 	 * @see get_children()
 	 * @return boolean TRUE if section contains children, FALSE otherwise
 	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
+	 * @deprecated
 	 */
 	function posts_featured_has() {
 		global $wp_query, $post;
@@ -1909,6 +1906,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Loads next featured post into global post variable for use in the loop
 	 * @return void
+	 * @deprecated
 	 */
 	function posts_featured_next() {
 		global $post;
@@ -1927,6 +1925,7 @@ class Cornerstone extends CNR_Base {
 	 * Resets position of current featured post
 	 * Allows for multiple loops over featured posts
 	 * @return void
+	 * @deprecated
 	 */
 	function posts_featured_rewind() {
 		$this->posts_featured_current = -1;
@@ -1935,6 +1934,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Gets index of current featured post
 	 * @return int Index position of current featured post
+	 * @deprecated
 	 */
 	function posts_featured_current() {
 		return $this->posts_featured_current;
@@ -1943,6 +1943,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Checks if current featured post is the first featured post
 	 * @return bool TRUE if current post is the first featured post, FALSE otherwise
+	 * @deprecated
 	 */
 	function posts_featured_is_first() {
 		return ($this->posts_featured_current() == 0) ? true : false;
@@ -1953,6 +1954,7 @@ class Cornerstone extends CNR_Base {
 	 * 
 	 * @return bool TRUE if post is classified as a "feature", FALSE otherwise 
 	 * @param int $post_id[optional] ID of the post.  Defaults to current post
+	 * @todo Fix this
 	 */
 	function post_is_featured($_post = null) {
 		$ret = false;
@@ -1988,7 +1990,7 @@ class Cornerstone extends CNR_Base {
 		if (is_int($post))
 			$p_id = $post;
 		else {
-			if (!is_object($post) || !property_exists($post, 'ID'))
+			if (!is_object($post) || !$this->util->property_exists($post, 'ID'))
 				$post =& $GLOBALS['post'];
 			$p_id = $post->ID;
 		}
@@ -2168,11 +2170,12 @@ class Cornerstone extends CNR_Base {
 	 * Excludes retrieved posts from actual post query
 	 * @return void
 	 * @param object $query_obj WP_Query object reference to <tt>$wp_query</tt> variable
+	 * @deprecated
 	 */
 	function pre_get_posts_excluded(&$query_obj) {
 		//Featured posts
 		//Only get featured posts during initial (on home page) or child requests
-		if (!is_feed() 
+		if (!is_feed() && !is_paged() 
 			&& (((is_home()) && $this->state_init)		/* Initial Query on Home Page */
 				|| (is_page() && $this->state_children)				/* Children Query on Section Page */
 			)
@@ -2209,11 +2212,8 @@ class Cornerstone extends CNR_Base {
 				return false;
 			$query_obj =& $GLOBALS['wp_query'];
 		}
-		
-		if (function_exists('property_exists'))
-			if (!property_exists($query_obj, 'query_vars'))
-				return false;
-		elseif (!array_key_exists('query_vars', $query_obj))
+
+		if (!$this->util->property_exists($query_obj, 'query_vars'))
 			return false;
 		
 		//Query vars shorthand
@@ -2608,7 +2608,7 @@ class CNR_Page_Group {
 		global $wpdb;
 		$this->pages = null;
 		//Check if $pages is DB resultset
-		if (is_object($pages) && property_exists($pages, 'group_pages'))
+		if (is_object($pages) && $this->util->property_exists($pages, 'group_pages'))
 			$pages = $pages->group_pages;
 			
 		//If $pages is an array, set it to $arr_pages
