@@ -1086,30 +1086,6 @@ class Cornerstone extends CNR_Base {
 	/*-** Template **-*/
 	
 	/**
-	 * Checks if $post is a valid Post object
-	 * If $post is not valid, assigns global post object to $post (if available)
-	 * @return bool TRUE if $post is valid object by end of function processing
-	 * @param object $post Post object to evaluate
-	 */
-	function check_post(&$post) {
-		if (empty($post)) {
-			if (isset($GLOBALS['post'])) {
-				$post = $GLOBALS['post'];
-				$GLOBALS['post'] =& $post;
-			}
-			else
-				return false;
-		}
-		if (is_array($post))
-			$post = (object) $post;
-		if (is_int($post))
-			$post = get_post($post);
-		if (!is_object($post))
-			return false;
-		return true;
-	}
-	
-	/**
 	 * Builds Page title for current Page/Content
 	 * @return string Page title 
 	 * @param array|string $args[optional] Parameters for customizing Page title
@@ -1363,7 +1339,7 @@ class Cornerstone extends CNR_Base {
 	 * @return array|bool Array of post attachments
 	 */
 	function post_get_attachments($post = null, $args = '') {
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return false;
 		global $wpdb;
 		
@@ -1403,7 +1379,7 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function post_get_attachment_path($post = null) {
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return '';
 		//Get Attachment URL
 		$url = wp_get_attachment_url($post->ID);
@@ -1414,7 +1390,7 @@ class Cornerstone extends CNR_Base {
 	
 	function post_get_attachment_filesize($post = null, $formatted = true) {
 		$size = 0;
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return $size;
 		//Get path to attachment
 		$path = $this->post_get_attachment_path($post);
@@ -1502,7 +1478,7 @@ class Cornerstone extends CNR_Base {
 		
 		//Default return value: Empty Array
 		$ret = array();
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return $ret;
 			
 		//Get image name to retrieve
@@ -1533,7 +1509,7 @@ class Cornerstone extends CNR_Base {
 	 * @return bool TRUE if post has specified image, FALSE otherwise
 	 */
 	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return false;
 			
 		//Get image name to retrieve
@@ -1553,7 +1529,7 @@ class Cornerstone extends CNR_Base {
 	function post_the_image($post = null, $image_type = 'header') {
 		$img = $this->post_get_image($post, $image_type);
 		$ret = '';
-		if (!empty($img) && $this->check_post($post)) {
+		if (!empty($img) && $this->util->check_post($post)) {
 			$attributes = array(
 								'alt'	=> $post->post_title,
 								'class' => 'image_' . $image_type
@@ -1978,7 +1954,7 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function post_has_content($post = null) {
-		if (!$this->check_post($post))
+		if (!$this->util->check_post($post))
 			return false;
 		if (isset($post->post_content) && trim($post->post_content) != '')
 			return true;

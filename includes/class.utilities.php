@@ -32,6 +32,30 @@ class CNR_Utilities {
 	/* Helper Functions */
 	
 	/**
+	 * Checks if $post is a valid Post object
+	 * If $post is not valid, assigns global post object to $post (if available)
+	 * @return bool TRUE if $post is valid object by end of function processing
+	 * @param object $post Post object to evaluate
+	 */
+	function check_post(&$post) {
+		if (empty($post)) {
+			if (isset($GLOBALS['post'])) {
+				$post = $GLOBALS['post'];
+				$GLOBALS['post'] =& $post;
+			}
+			else
+				return false;
+		}
+		if (is_array($post))
+			$post = (object) $post;
+		elseif (is_numeric($post))
+			$post = get_post($post);
+		if (!is_object($post))
+			return false;
+		return true;
+	}
+	
+	/**
 	 * Merges 1 or more arrays together
 	 * Methodology
 	 * - Set first parameter as base array

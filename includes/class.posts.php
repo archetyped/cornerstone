@@ -17,6 +17,11 @@ class CNR_Posts extends CNR_Base {
 	var $posts;
 	
 	/**
+	 * @var array IDs of posts in $posts
+	 */
+	var $post_ids;
+	
+	/**
 	 * @var bool whether or not object contains posts
 	 */
 	var $has;
@@ -63,6 +68,7 @@ class CNR_Posts extends CNR_Base {
 	 */
 	function init() {
 		$this->posts = array();
+		$this->post_ids = array();
 		$this->has = false;
 		$this->current = -1;
 		$this->count = 0;
@@ -88,6 +94,9 @@ class CNR_Posts extends CNR_Base {
 	function get( $limit = -1, $args = null ) {
 		//Global variables
 		global $wp_query;
+		
+		//Clear previously retrieved post data
+		$this->unload();
 		
 		//Determine section
 		//TODO abstract parent selection code
@@ -119,26 +128,6 @@ class CNR_Posts extends CNR_Base {
 		//Retrieve featured posts
 		$_posts =& get_posts($this->args);
 		
-		//Check to make sure the correct number of posts are returned
-		/*
-		if ( $limit && ( count($_posts) < $limit ) ) {
-			//Set arguments to fetch additional (non-feature) posts to meet limit
-			
-			//Remove category argument
-			unset($args['category']);
-			
-			//Adjust Limit
-			$args['numberposts'] = $limit - count($featured);
-			
-			//Exclude posts already fetched
-			$args['post__not_in'] = $this->posts_get_ids($featured);
-			
-			//Get more posts
-			$_additional =& get_posts($args);
-			$_posts = array_merge($_posts, $_additional);
-		}
-		*/
-		
 		//Save retrieved posts to array
 		$this->load($_posts);
 		$this->fetched = true;
@@ -152,24 +141,36 @@ class CNR_Posts extends CNR_Base {
 	 * @param array $posts Array of post objects
 	 * @return void
 	 */
-	function load($posts = null) {
+	function load( $posts = null ) {
 		if ( !empty($posts) ) {
 			$this->posts = $posts;
 			$this->has = true;
 			$this->count = count($this->posts);
 			$this->fetched = true;
-		} else {
-			$_args = $this->args;
-			$this->init();
-			$this->args = $_args;
 		}
+	}
+	
+	/**
+	 * Resets object properties to allow for new data to be saved
+	 * @return void
+	 */
+	function unload() {
+		//Temporarily save properties that should persist
+		$_args = $this->args;
+		
+		//Initialize object properties
+		$this->init();
+		
+		//Restore persistent properties
+		$this->args = $_args;
 	}
 	
 	/**
 	 * Checks whether posts related to this object are available in the current context
 	 * 
-	 * If no accessible featured posts are found, current post (section) is set as global post variable
+	 * If no accessible posts are found, current post (section) is set as global post variable
 	 * 
+	 * @param bool $fetch Whether posts should be fetched if they have not yet been retrieved
 	 * @see 'the_posts' filter
 	 * @see get_children()
 	 * @return boolean TRUE if section contains children, FALSE otherwise
@@ -179,7 +180,7 @@ class CNR_Posts extends CNR_Base {
 		global $wp_query, $post;
 		
 		//Get posts if not yet fetched
-		if (!$this->fetched)
+		if ($fetch && !$this->fetched)
 			$this->get(4);
 		
 		//Check if any posts on current page were retrieved
@@ -242,6 +243,30 @@ class CNR_Posts extends CNR_Base {
 	 */
 	function is_first() {
 		return ( 0 == $this->current() );
+	}
+	
+	/**
+	 * @param int $post[optional] ID of post to check for existence in the object's posts array (uses global $post object if no value passed)
+	 * @return bool TRUE if post is in posts array
+	 */
+	function contains( $post = null ) {
+		//TODO Validate $post_id
+		if ( !$this->util->check_post($post) ) {
+			return false;
+		}
+		
+		return in_array($post->ID, $this->get_post_ids());
+	}
+	
+	function get_post_ids() {
+		if ( $this->has && empty($this->post_ids) ) {
+			//Build array of post ids in array
+			foreach ($this->posts as $post) {
+				$this->post_ids[] = $post->ID;
+			}
+		}
+		
+		return $this->post_ids;
 	}
 }
 

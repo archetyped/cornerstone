@@ -85,6 +85,11 @@ function cnr_get_featured($limit = 0, $parent = null) {
 	return $cnr->posts_featured->get($limit, $parent);
 }
 
+function cnr_in_featured($post_id = null) {
+	global $cnr;
+	return $cnr->posts_featured->contains($post_id);
+}
+
 function cnr_has_featured() {
 	global $cnr;
 	return $cnr->posts_featured->has();
