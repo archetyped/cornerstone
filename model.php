@@ -2230,7 +2230,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function rewrite_rules_array($rewrite_rules_array) {
 		global $wp_rewrite;
-		$this->debug->print_message('Rewrite Rules', $rewrite_rules_array);
+		//$this->debug->print_message('Rewrite Rules', $rewrite_rules_array);
 		//Posts/Pages
 		//$rules_extra['([\/\w-]+)/([A-Za-z0-9-]+)$'] = $wp_rewrite->index . "?name=\$matches[2]";
 		//$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
