@@ -199,6 +199,8 @@ class Cornerstone extends CNR_Base {
 		add_action('save_post', $this->m('post_save'), 10, 2);
 		
 			//Management
+		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
+		add_action('request', $this->m('admin_manage_posts_filter_section'));
 		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
 		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
 		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
@@ -724,6 +726,44 @@ class Cornerstone extends CNR_Base {
 								'name' => 'parent_id',
 								'show_option_none' => __('- No Section -'),
 								'sort_column'=> 'menu_order, post_title'));
+	}
+	
+	/**
+	 * Adds additional options to filter posts
+	 */
+	function admin_restrict_manage_posts() {
+		//Add to post edit only
+		$section_param = 'cnr_section';
+		if ( is_admin() && $this->util->is_file('edit.php') ) {
+			$selected = ( isset($_GET[$section_param]) && is_numeric($_GET[$section_param]) ) ? $_GET[$section_param] : 0;
+			//Add post statuses
+			$options = array('exclude_tree'		=> $post->ID, 
+							 'name'				=> $section_param,
+							 'selected'			=> $selected,
+							 'show_option_none'	=> __( 'View all sections' ),
+							 'sort_column'		=> 'menu_order, post_title');
+			wp_dropdown_pages($options);
+		}
+	}
+	
+	/**
+	 * Filters posts by specified section on the Manage Posts admin page
+	 * Hooks into 'request' filter
+	 * @see WP::parse_request()
+	 * @param array $query_vars Parsed query variables
+	 * @return array Modified query variables
+	 */
+	function admin_manage_posts_filter_section($query_vars) {
+		//Determine if request is coming from manage posts admin page
+		if ( is_admin() 
+			&& $this->util->is_file('edit.php')
+			&& isset($_GET['cnr_section'])
+			&& is_numeric($_GET['cnr_section']) 
+			) {
+				$query_vars['post_parent'] = intval($_GET['cnr_section']);
+		}
+	
+		return $query_vars;
 	}
 	
 	/**

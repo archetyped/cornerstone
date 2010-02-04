@@ -56,6 +56,14 @@ class CNR_Utilities {
 	}
 	
 	/**
+	 * Checks $_SERVER['SCRIPT_NAME'] to see if file base name matches specified file name
+	 * @param string $filename Filename to check for
+	 */
+	function is_file( $filename ) {
+		return ( $filename == basename( $_SERVER['SCRIPT_NAME'] ) );
+	}
+	
+	/**
 	 * Merges 1 or more arrays together
 	 * Methodology
 	 * - Set first parameter as base array
