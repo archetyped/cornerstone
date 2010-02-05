@@ -216,6 +216,7 @@ class Cornerstone extends CNR_Base {
 		add_action('template_redirect', $this->m('feed_redirect'));
 		add_filter('get_wp_title_rss', $this->m('feed_title'));
 		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
+		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
 		
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
@@ -2326,6 +2327,11 @@ class Cornerstone extends CNR_Base {
 		}
 	}
 	
+	/**
+	 * Sets feed title for sections
+	 * @param string $title Title passed from 'get_wp_title_rss' hook
+	 * @return string Updated title
+	 */
 	function feed_title($title) {
 		$sep = '&#8250;';
 		remove_filter('get_wp_title_rss', $this->m('feed_title'));
@@ -2334,6 +2340,15 @@ class Cornerstone extends CNR_Base {
 		return $title;
 	}
 	
+	/**
+	 * Adds description to feed
+	 * Specifically, adds feed descriptions for sections
+	 * 
+	 * @param string $description Description passed from 'get_bloginfo_rss' hook
+	 * @param string $show Specifies data to retrieve
+	 * @see get_bloginfo() For the list of possible values to display.
+	 * @return string Modified feed description
+	 */
 	function feed_description($description, $show) {
 		global $post;
 		if (is_page() && 'description' == $show && '' != $post->post_content) {
@@ -2341,6 +2356,23 @@ class Cornerstone extends CNR_Base {
 			$description = convert_chars($post->post_content);
 		}
 		return $description;
+	}
+	
+	/**
+	 * Sets title for feed items
+	 * Specifies what section an item is in if the feed is not specifically for that section
+	 * 
+	 * @param string $title Post title passed from 'the_title_rss' hook
+	 * @return string Updated post title
+	 */
+	function feed_item_title($title) {
+		if ( is_feed() && !is_page() ) {
+			//Get item's section
+			$section = $this->post_get_section('title');
+			//$title = "$section &#8250; $title";
+			$title .= " [$section]";
+		}
+		return $title;
 	}
 }
 
