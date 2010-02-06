@@ -217,8 +217,7 @@ class Cornerstone extends CNR_Base {
 		add_filter('get_wp_title_rss', $this->m('feed_title'));
 		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
 		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
-		add_filter('the_content', $this->m('feed_item_source'));
-		add_filter('the_excerpt_rss', $this->m('feed_item_source'));
+		add_filter('the_content', $this->m('feed_item_description'));
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
@@ -666,7 +665,7 @@ class Cornerstone extends CNR_Base {
 		foreach ($this->post_images as $img) {
 			$img_id = 'cnr-image-' . $img;
 			if (!isset($_POST[$img_id]))
-				return false;
+				continue;
 			//Set Image ID as meta data for post
 			$img_data = intval($_POST[$img_id]);
 			//Remove meta data from post if no image is set
@@ -1318,7 +1317,8 @@ class Cornerstone extends CNR_Base {
 	function media_upload_url($url, $path) {
 		if (strpos($path, 'media-upload.php') === 0) {
 			//Get query vars
-			$qs = parse_url($url, PHP_URL_QUERY);
+			$qs = parse_url($url);
+			$qs = ( isset($qs['query']) ) ? $qs['query'] : '';
 			$q = array();
 			parse_str($qs, $q);
 			//Check for tab variable
@@ -2004,16 +2004,8 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function post_get_subtitle($post = null) {
-		$p_id = null;
-		if (is_int($post))
-			$p_id = $post;
-		else {
-			if (!is_object($post) || !$this->util->property_exists($post, 'ID'))
-				$post =& $GLOBALS['post'];
-			$p_id = $post->ID;
-		}
 		$subtitle = '';
-		if (!((int)$p_id))
+		if ( !($this->util->check_post($post)) )
 			return $subtitle;
 		
 		//Get post subtitle data
@@ -2350,7 +2342,7 @@ class Cornerstone extends CNR_Base {
 	 * @see get_bloginfo() For the list of possible values to display.
 	 * @return string Modified feed description
 	 */
-	function feed_description($description, $show) {
+	function feed_description($description, $show = '') {
 		global $post;
 		if ( is_feed() && is_page() && 'description' == $show && strlen($post->post_content) > 0 ) {
 			//Get section's own description (if exists)
@@ -2376,6 +2368,40 @@ class Cornerstone extends CNR_Base {
 		return $title;
 	}
 	
+	/**
+	 * Inserts post subtitle into description field for feed items
+	 * @param string $content Post content
+	 * @return string Updated post content
+	 */
+	function feed_item_subtitle($content = '') {
+		if ( is_feed() && in_the_loop() && ($subtitle = $this->post_get_subtitle()) && strlen($subtitle) > 0 ) {
+			$subtitle_format = '<p><em>%s</em></p>';
+			$subtitle = sprintf($subtitle_format, $subtitle);
+			$content = $subtitle . $content;
+		}
+		
+		return $content;	
+	}
+	
+	/**
+	 * Inserts post image into description field for feed items
+	 * @param string $content Post content
+	 * @return string Updated post content
+	 */
+	function feed_item_image($content = '') {
+		if ( is_feed() && in_the_loop() && ( $image = $this->post_get_image() ) && is_array($image) && !empty($image) && ( $image = $this->post_get_image_element($image) ) ) {
+			$image = '<p>' . $image . '</p>';
+			$content = $image . $content;
+		}
+		return $content;
+	}
+	
+	/**
+	 * Adds site source text for feed items
+	 * Helpful in directing readers to original content source when feeds are scraped
+	 * @param string $content Post content
+	 * @return string Updated post content
+	 */
 	function feed_item_source($content) {
 		if ( is_feed() && in_the_loop() ) {
 			$source = '<p><a href="' . get_permalink() . '"> ' . get_the_title() . '</a> was originally published on <a href="' . get_bloginfo('url') . '">' . get_bloginfo() . '</a> on ' . get_the_time('F j, Y h:ia') . '</p>';
@@ -2383,6 +2409,19 @@ class Cornerstone extends CNR_Base {
 		}
 		return $content;
 	}
+	
+	/**
+	 * Modifies post content for feed items
+	 * @param string $content Post content
+	 * @return string Updated post content
+	 */
+	function feed_item_description($content = '') {
+		$content = $this->feed_item_image($content);
+		$content = $this->feed_item_subtitle($content);
+		$content = $this->feed_item_source($content);
+		return $content;	
+	}
+	
 }
 
 class CNR_Page_Groups {
