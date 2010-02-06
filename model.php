@@ -217,7 +217,8 @@ class Cornerstone extends CNR_Base {
 		add_filter('get_wp_title_rss', $this->m('feed_title'));
 		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
 		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
-		
+		add_filter('the_content', $this->m('feed_item_source'));
+		add_filter('the_excerpt_rss', $this->m('feed_item_source'));
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
@@ -2351,7 +2352,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function feed_description($description, $show) {
 		global $post;
-		if (is_page() && 'description' == $show && '' != $post->post_content) {
+		if ( is_feed() && is_page() && 'description' == $show && strlen($post->post_content) > 0 ) {
 			//Get section's own description (if exists)
 			$description = convert_chars($post->post_content);
 		}
@@ -2373,6 +2374,14 @@ class Cornerstone extends CNR_Base {
 			$title .= " [$section]";
 		}
 		return $title;
+	}
+	
+	function feed_item_source($content) {
+		if ( is_feed() && in_the_loop() ) {
+			$source = '<p><a href="' . get_permalink() . '"> ' . get_the_title() . '</a> was originally published on <a href="' . get_bloginfo('url') . '">' . get_bloginfo() . '</a> on ' . get_the_time('F j, Y h:ia') . '</p>';
+			$content .= $source;
+		}
+		return $content;
 	}
 }
 
