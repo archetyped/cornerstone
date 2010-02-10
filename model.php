@@ -218,6 +218,7 @@ class Cornerstone extends CNR_Base {
 		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
 		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
 		add_filter('the_content', $this->m('feed_item_description'));
+		add_filter('get_the_excerpt', $this->m('feed_item_description'));
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
@@ -1278,7 +1279,9 @@ class Cornerstone extends CNR_Base {
 			$ret = true;
 		else {
 			$qs = array();
-			parse_str(parse_url($_SERVER['HTTP_REFERER'], PHP_URL_QUERY), $qs);
+			$ref = parse_url($_SERVER['HTTP_REFERER']);
+			if ( isset($ref['query']) )
+				parse_str($ref['query'], $qs);
 			if (array_key_exists($action, $qs))
 				$ret = true;
 		}
@@ -2362,8 +2365,8 @@ class Cornerstone extends CNR_Base {
 		if ( is_feed() && !is_page() ) {
 			//Get item's section
 			$section = $this->post_get_section('title');
-			//$title = "$section &#8250; $title";
-			$title .= " [$section]";
+			$title = "$section &#8250; $title"; //Section precedes post title
+			//$title .= " [$section]"; //Section follows post title
 		}
 		return $title;
 	}
@@ -2374,7 +2377,7 @@ class Cornerstone extends CNR_Base {
 	 * @return string Updated post content
 	 */
 	function feed_item_subtitle($content = '') {
-		if ( is_feed() && in_the_loop() && ($subtitle = $this->post_get_subtitle()) && strlen($subtitle) > 0 ) {
+		if ( is_feed() && in_the_loop() && ( $subtitle = $this->post_get_subtitle() ) && strlen($subtitle) > 0 ) {
 			$subtitle_format = '<p><em>%s</em></p>';
 			$subtitle = sprintf($subtitle_format, $subtitle);
 			$content = $subtitle . $content;
@@ -2403,7 +2406,12 @@ class Cornerstone extends CNR_Base {
 	 * @return string Updated post content
 	 */
 	function feed_item_source($content) {
-		if ( is_feed() && in_the_loop() ) {
+		/* Conditions
+		 * > Request for feed
+		 * > Looping through posts
+		 * > Retrieving content (not excerpt)
+		 */
+		if ( is_feed() && in_the_loop() && ( 'get_the_excerpt' != current_filter() ) ) {
 			$source = '<p><a href="' . get_permalink() . '"> ' . get_the_title() . '</a> was originally published on <a href="' . get_bloginfo('url') . '">' . get_bloginfo() . '</a> on ' . get_the_time('F j, Y h:ia') . '</p>';
 			$content .= $source;
 		}
@@ -2411,14 +2419,25 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * Modifies post content for feed items
+	 * Modifies post content/excerpt for feed items
 	 * @param string $content Post content
 	 * @return string Updated post content
 	 */
 	function feed_item_description($content = '') {
+		global $post;
+		
+		//Skip processing in the following conditions
+		// > Request is not feed
+		// > Current post requires a password
+		// > Current filter is 'get_the_excerpt' but current post has no excerpt data (will be handled by 'the_content' filter instead)
+		if ( !is_feed() || post_password_required() || ( 'get_the_excerpt' == current_filter() && strlen($post->post_excerpt) == 0 ) )
+			return $content;
+
+		//Process post content
 		$content = $this->feed_item_image($content);
 		$content = $this->feed_item_subtitle($content);
 		$content = $this->feed_item_source($content);
+		
 		return $content;	
 	}
 	
