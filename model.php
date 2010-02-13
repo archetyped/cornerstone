@@ -218,7 +218,7 @@ class Cornerstone extends CNR_Base {
 		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
 		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
 		add_filter('the_content', $this->m('feed_item_description'));
-		add_filter('get_the_excerpt', $this->m('feed_item_description'));
+		add_filter('the_excerpt_rss', $this->m('feed_item_description'));
 		//Rewrite Rules
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
@@ -2377,8 +2377,8 @@ class Cornerstone extends CNR_Base {
 	 * @return string Updated post content
 	 */
 	function feed_item_subtitle($content = '') {
+		$subtitle_format = '<p><em>%s</em></p>';
 		if ( is_feed() && in_the_loop() && ( $subtitle = $this->post_get_subtitle() ) && strlen($subtitle) > 0 ) {
-			$subtitle_format = '<p><em>%s</em></p>';
 			$subtitle = sprintf($subtitle_format, $subtitle);
 			$content = $subtitle . $content;
 		}
@@ -2392,10 +2392,12 @@ class Cornerstone extends CNR_Base {
 	 * @return string Updated post content
 	 */
 	function feed_item_image($content = '') {
+		$img_format = '<p>%s</p>';
 		if ( is_feed() && in_the_loop() && ( $image = $this->post_get_image() ) && is_array($image) && !empty($image) && ( $image = $this->post_get_image_element($image) ) ) {
-			$image = '<p>' . $image . '</p>';
+			$image = sprintf($img_format, $image);
 			$content = $image . $content;
 		}
+		
 		return $content;
 	}
 	
@@ -2424,19 +2426,20 @@ class Cornerstone extends CNR_Base {
 	 * @return string Updated post content
 	 */
 	function feed_item_description($content = '') {
-		global $post;
+		global $post, $wp_current_filter;
 		
 		//Skip processing in the following conditions
 		// > Request is not feed
 		// > Current post requires a password
-		// > Current filter is 'get_the_excerpt' but current post has no excerpt data (will be handled by 'the_content' filter instead)
-		if ( !is_feed() || post_password_required() || ( 'get_the_excerpt' == current_filter() && strlen($post->post_excerpt) == 0 ) )
+		// > Current filter is retrieving data for the excerpt and post has no actual excerpt (i.e. generating excerpt from post content)
+		if ( !is_feed() || post_password_required() || ( isset($wp_current_filter['get_the_excerpt']) && strlen($post->excerpt) == '' ) )
 			return $content;
 
 		//Process post content
 		$content = $this->feed_item_image($content);
 		$content = $this->feed_item_subtitle($content);
-		$content = $this->feed_item_source($content);
+		if ( 'the_content' == current_filter() )
+			$content = $this->feed_item_source($content);
 		
 		return $content;	
 	}
