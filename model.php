@@ -204,6 +204,7 @@ class Cornerstone extends CNR_Base {
 		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
 		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
 		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
+		add_action('bulk_edit_custom_box', $this->m('admin_bulk_edit_custom_box'), 10, 2);
 
 			//TinyMCE
 		//add_action('init', $this->m('admin_mce_register'));
@@ -478,7 +479,7 @@ class Cornerstone extends CNR_Base {
 		<div class="wrap edit-pages">
 			<?php screen_icon(); ?>
 			<h2>Edit Pages</h2>
-			<ul class="site-pages">
+			<ul class="site-pages"><li>
 				<?php wp_list_pages('title_li='); ?>
 				<div class="actions actions-commit">
 					<input type="button" value="Save" class="action save button-primary" />  <input type="button" value="Cancel" class="action reset button-secondary" />
@@ -564,11 +565,12 @@ class Cornerstone extends CNR_Base {
 			wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
 		}
 		//Edit Posts
-		if ( 'edit.php' == basename($_SERVER['REQUEST_URI']) ) {
+		if ( 'edit.php' == basename($_SERVER['SCRIPT_NAME']) ) {
 			wp_enqueue_script( $this->_prefix . 'inline-edit-post', $this->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
 			echo '<script type="text/javascript">postData = {};</script>';
 		}
-		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'));
+		//Default admin scripts
+		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'), array('jquery'));
 	}
 	
 	/**
@@ -800,7 +802,7 @@ class Cornerstone extends CNR_Base {
 	 * @param string $column_name Name of custom column 
 	 * @param string $type Type of current item (post, page, etc.)
 	 */
-	function admin_quick_edit_custom_box($column_name, $type) {
+	function admin_quick_edit_custom_box($column_name, $type, $bulk = false) {
 		global $post;
 		if ($column_name == 'section' && $type == 'post') :
 		?>
@@ -812,6 +814,8 @@ class Cornerstone extends CNR_Base {
 					$options = array('exclude_tree'				=> $post->ID, 
 									 'name'						=> 'post_parent',
 									 'show_option_none'			=> __('- No Section -'),
+									 'option_none_value'		=> 0,
+									 'show_option_no_change'	=> ($bulk) ? __('- No Change -') : '',
 									 'sort_column'				=> 'menu_order, post_title');
 					wp_dropdown_pages($options);
 					?>
@@ -819,6 +823,10 @@ class Cornerstone extends CNR_Base {
 			</div>
 		</fieldset>
 		<?php endif;
+	}
+	
+	function admin_bulk_edit_custom_box($column_name, $type) {
+		$this->admin_quick_edit_custom_box($column_name, $type, true);
 	}
 	
 	function admin_mce_before_init($initArray) {
