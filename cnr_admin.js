@@ -1413,7 +1413,7 @@ function setPostImage(img_id, img_url, img_type) {
 	var container = jQuery('#cnr_image_' + img_type + ' .container');
 	//console.log('Selected Element: %o', container);
 	var img;
-	var imgElName = 'cnr-image-' + img_type;
+	var imgElName = '_cnr_image_' + img_type;
 	//Set ID of image
 	var imgId = jQuery(container).find("#" + imgElName);
 	if (imgId.length == 0) {

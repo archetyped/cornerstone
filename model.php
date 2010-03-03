@@ -611,10 +611,10 @@ class Cornerstone extends CNR_Base {
 		$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
 		$media_upload_iframe_src = "media-upload.php?post_id=$uploading_iframe_ID";
 		$image_upload_iframe_src = apply_filters('image_upload_iframe_src', "$media_upload_iframe_src&amp;type=post_image&amp;cnr_action=post_image&amp;cnr_image_type=$img");
-		$image_name = "cnr-image-$img";
+		$image_name = $this->post_meta_get_key('image', $img);
 		$image_title = __('Set Post ' . ucwords(strtolower($img)));
 		
-		$post_image = get_post_meta($post_ID, $image_name, TRUE);
+		$post_image = $this->post_meta_get($post_ID, $image_name, TRUE);
 		//Get Attachment Image URL
 		$post_image_src = ( ((int) $post_image) > 0 ) ? wp_get_attachment_image_src($post_image, '') : FALSE;
 		if (!$post_image_src)
@@ -666,18 +666,56 @@ class Cornerstone extends CNR_Base {
 	function post_save_image($post_id, $post) {
 		//Check for existence of post variable ('cnr_post_image_id')
 		foreach ($this->post_images as $img) {
-			$img_id = 'cnr-image-' . $img;
-			if (!isset($_POST[$img_id]))
+			$img_id = $this->post_meta_get_key('image', $img);
+			if ( !isset($_POST[$img_id]) )
 				continue;
 			//Set Image ID as meta data for post
 			$img_data = intval($_POST[$img_id]);
 			//Remove meta data from post if no image is set
-			if ($img_data <= 0) {
+			if ($img_data <= 0)
 				delete_post_meta($post_id, $img_id);
-			}
 			else
-				update_post_meta($post_id, $img_id, $img_data);
+				$this->post_meta_update($post_id, $img_id, $img_data);
 		}
+	}
+	
+	function post_meta_get($post_id, $key, $single = false) {
+		$meta_value = get_post_meta($post_id, $this->post_meta_get_key($key), $single);
+		if (is_array($meta_value) && count($meta_value) == 1)
+			$meta_value = $meta_value[0];
+		return $meta_value;
+	}
+	
+	function post_meta_prepare_value($meta_value) {
+		return array($meta_value);
+	}
+	
+	function post_meta_add($post_id, $meta_key, $meta_value, $unique = false) {
+		$meta_value = $this->post_meta_value_prepare($meta_value);
+		return add_post_meta($post_id, $meta_key, $meta_value, $unique);
+	}
+	
+	function post_meta_update($post_id, $meta_key, $meta_value, $prev_value = '') {
+		$meta_value = $this->post_meta_prepare_value($meta_value);
+		return update_post_meta($post_id, $meta_key, $meta_value, $prev_value);
+	}
+	
+	/**
+	 * Builds postmeta key for custom data set by plugin
+	 * @param string $key Base key name 
+	 * @return string Formatted postmeta key
+	 */
+	function post_meta_get_key($key) {
+		$sep = '_';
+		if ( strpos($key, $sep . $this->prefix) !== 0 ) {
+			$key_base = func_get_args();
+			if ( !empty($key_base) ) {
+				$key = array_merge((array)$this->prefix, $key_base);
+				return $sep . implode($sep, $key);
+			}
+		}
+		
+		return $key;
 	}
 	
 	/**
