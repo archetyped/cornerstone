@@ -165,18 +165,23 @@ class CNR_Utilities {
 				$attribute = array($attribute);
 			}
 			//Format attribute
-			switch (strtolower($format)) {
+			$format = strtolower($format);
+			switch ($format) {
 				case 'id':
 					$fmtd = array_shift($attribute) . '[' . implode('][', $attribute) . ']';
 					break;
+				case 'metadata':
 				case 'attribute':
 					//Join segments
 					$delim = '_';
 					$fmtd = implode($delim, $attribute);
-					//Replace white space and repeating delimiter
+					//Replace white space and repeating delimiters
 					$fmtd = str_replace(' ', $delim, $fmtd);
 					while (strpos($fmtd, $delim.$delim) !== false)
 						$fmtd = str_replace($delim.$delim, $delim, $fmtd);
+					//Prefix formatted value with delimeter for metadata keys
+					if ('metadata' == $format)
+						$fmtd = $delim . $fmtd;
 					break;
 				case 'path':
 				case 'post':

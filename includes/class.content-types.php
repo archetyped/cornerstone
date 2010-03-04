@@ -69,7 +69,8 @@ class CNR_Content_Types extends CNR_Base {
 	 */
 	function __construct() {
 		parent::__construct();
-
+		
+		//Add prefix to attribute base array
 		array_unshift($this->attribute_basename, $this->prefix);
 
 		$this->field_ph_attr_reserved['ref_base'] = "ref_base";
@@ -278,15 +279,15 @@ class CNR_Content_Types extends CNR_Base {
 		$this->content_types = array(
 			'post'		=> array(
 				'attributes'	=> array(
-					'tagline'	=> array(
-						'id'			=> 'tagline',
+					'coordinates'	=> array(
+						'id'			=> 'coordinates',
 						'label'			=> 'Location',
 						'elements'		=> array(
-							'first'			=> array(
+							'home'			=> array(
 								'field'			=> 'location',
 								'properties'	=> array (
 									'id'			=> array (
-										'value'			=> 'first'
+										'value'			=> 'home'
 									)
 								)
 							)
@@ -295,9 +296,9 @@ class CNR_Content_Types extends CNR_Base {
 				),
 				'groups'	=> array(
 					'main'	=> array(
-						'label'			=> 'Main',
+						'label'			=> 'Geographic Details',
 						'attributes'	=>	array(
-							'tagline'
+							'coordinates'
 						)
 					)
 				)
@@ -903,7 +904,7 @@ class CNR_Content_Types extends CNR_Base {
 			//Define ID
 			//$id = $this->get_attribute_name($attribute['id']);
 			//Get previously saved attribute data
-			$attr_data = unserialize(get_post_meta($GLOBALS['post']->ID, $this->get_attribute_name($attribute['id'], 'attribute'), true));
+			$attr_data = $this->post_meta_get($GLOBALS['post']->ID, $this->get_attribute_name($attribute['id'], 'metadata'), true);
 
 			$out = array($wrap['start'], $wrap['label_start'], $attribute['label'], $wrap['label_end'], $wrap['field_start']);
 			foreach ($attribute['elements'] as $field) {
@@ -938,10 +939,11 @@ class CNR_Content_Types extends CNR_Base {
 		//Add attribute to name segments array
 		if (!empty($attribute)) {
 			if (is_array($attribute))
-			$arr_bs = array_merge($arr_bs, $attribute);
+				$arr_bs = array_merge($arr_bs, $attribute);
 			else
-			$arr_bs[] = $attribute;
+				$arr_bs[] = $attribute;
 		}
+		
 		//Format attribute name
 		$bs = $this->util->get_array_path($arr_bs, $format);
 		return $bs;
@@ -956,11 +958,11 @@ class CNR_Content_Types extends CNR_Base {
 		$bs = $this->get_attribute_basename('post');
 		$post_vars = '$_POST' . $bs;
 		if (eval("return isset($post_vars);")) {
-			$attributes = eval("return $post_vars;");
+			$attributes = eval("return $post_vars;") ;
 			//Save serialized data for each attribute as item meta data
 			foreach ($attributes as $attr => $data) {
-				$meta_key = $this->get_attribute_name($attr, 'attribute');
-				$ret = update_post_meta($post_id, $meta_key, serialize($data));
+				$meta_key = $this->get_attribute_name($attr, 'metadata');
+				$ret = $this->post_meta_update($post_id, $meta_key, $data);
 			}
 		}
 	}

@@ -100,7 +100,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * @var string Key used to store post subtitle
 	 */
-	var $post_subtitle_field = "subtitle";
+	var $post_subtitle_field = "_cnr_subtitle";
 	
 	/* Children Content Variables */
 	
@@ -677,45 +677,6 @@ class Cornerstone extends CNR_Base {
 			else
 				$this->post_meta_update($post_id, $img_id, $img_data);
 		}
-	}
-	
-	function post_meta_get($post_id, $key, $single = false) {
-		$meta_value = get_post_meta($post_id, $this->post_meta_get_key($key), $single);
-		if (is_array($meta_value) && count($meta_value) == 1)
-			$meta_value = $meta_value[0];
-		return $meta_value;
-	}
-	
-	function post_meta_prepare_value($meta_value) {
-		return array($meta_value);
-	}
-	
-	function post_meta_add($post_id, $meta_key, $meta_value, $unique = false) {
-		$meta_value = $this->post_meta_value_prepare($meta_value);
-		return add_post_meta($post_id, $meta_key, $meta_value, $unique);
-	}
-	
-	function post_meta_update($post_id, $meta_key, $meta_value, $prev_value = '') {
-		$meta_value = $this->post_meta_prepare_value($meta_value);
-		return update_post_meta($post_id, $meta_key, $meta_value, $prev_value);
-	}
-	
-	/**
-	 * Builds postmeta key for custom data set by plugin
-	 * @param string $key Base key name 
-	 * @return string Formatted postmeta key
-	 */
-	function post_meta_get_key($key) {
-		$sep = '_';
-		if ( strpos($key, $sep . $this->prefix) !== 0 ) {
-			$key_base = func_get_args();
-			if ( !empty($key_base) ) {
-				$key = array_merge((array)$this->prefix, $key_base);
-				return $sep . implode($sep, $key);
-			}
-		}
-		
-		return $key;
 	}
 	
 	/**
@@ -1556,7 +1517,7 @@ class Cornerstone extends CNR_Base {
 	 * @return string Property name
 	 */
 	function post_get_image_property($image_type = 'header') {
-		return $this->prefix . '-image-' . $image_type;
+		return $this->post_meta_get_key('image', $image_type);
 	}
 	
 	/**
@@ -1575,7 +1536,7 @@ class Cornerstone extends CNR_Base {
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
 		//Check for post meta info
-		$val = get_post_meta($post->ID, $prop, true);
+		$val = $this->post_meta_get($post->ID, $prop, true);
 		//Get attachment with matching ID
 		$img = wp_get_attachment_image_src($val, '');
 		//Add properties to image data array
@@ -1602,11 +1563,11 @@ class Cornerstone extends CNR_Base {
 	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
 		if (!$this->util->check_post($post))
 			return false;
-			
+		
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
 		//Check for post meta info
-		$val = get_post_meta($post->ID, $prop, true);
+		$val = $this->post_meta_get($post->ID, $prop, true);
 		//Make sure attachment still exists
 		$val = (!empty($val) && is_numeric($val)) ? get_post($val) : null;
 		return (empty($val)) ? false : true;
@@ -2058,7 +2019,7 @@ class Cornerstone extends CNR_Base {
 			return $subtitle;
 		
 		//Get post subtitle data
-		$subtitle = get_post_meta($post->ID, $this->post_subtitle_field, true);
+		$subtitle = $this->post_meta_get($post->ID, $this->post_subtitle_field, true);
 		return $subtitle;
 	}
 	
@@ -2082,7 +2043,11 @@ class Cornerstone extends CNR_Base {
 	 */
 	function post_link($permalink, $post = '') {
 		global $wp_rewrite, $wp_query;
-
+		
+		//Do not process further if $post has no name (e.g. drafts)
+		if ( is_object($post) && ( !$this->util->property_exists($post, 'post_name') || empty($post->post_name) ) )
+			return $permalink;
+		
 		if ($wp_rewrite->using_permalinks()) {
             
 			//Get base URL
