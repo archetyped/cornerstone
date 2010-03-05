@@ -898,7 +898,6 @@ class Cornerstone extends CNR_Base {
 			
 			//Add current post to array
 			$parents[] = $post->ID;
-			
 			//Reverse array so we start with the current post first
 			$parents = array_reverse($parents);
 			
@@ -2082,7 +2081,7 @@ class Cornerstone extends CNR_Base {
 	 * @param $depth Unused
 	 * @return array of Post Objects/Properties
 	 */
-	function post_get_parents(&$post, $prop = '', $depth = '') {
+	function post_get_parents($post, $prop = '', $depth = '') {
 		$post =& get_post($post, OBJECT, '');
 		$parents = get_post_ancestors($post);
 		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
@@ -2108,7 +2107,6 @@ class Cornerstone extends CNR_Base {
 				$parents = $temp_parents;
 		}
 		//Reverse Array (to put top level parent at beginning of array)
-		$parents = array_reverse($parents);
 		return $parents;
 	}
 	
