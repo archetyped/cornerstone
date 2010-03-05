@@ -894,17 +894,17 @@ class Cornerstone extends CNR_Base {
 		//Also make sure current page is not home page (no links should be marked as current)
 		if (is_singular() && $post && stripos($output, $class_current) === false) {
 			//Get all parents of current post
-			$parents = $this->post_get_parents($post);
+			$parents = $this->post_get_parents($post, 'id');
 			
 			//Add current post to array
-			$parents[] = $post;
+			$parents[] = $post->ID;
 			
 			//Reverse array so we start with the current post first
 			$parents = array_reverse($parents);
 			
 			//Iterate through current posts's parents to highlight all parents found
 			foreach ($parents as $page) {
-				$class_item = $class_item_pre . $page->ID;
+				$class_item = $class_item_pre . $page;
 				$class_replace = $class_item . ' ' . $class_current;
 				$output = str_replace($class_item, $class_replace, $output);
 			}
@@ -2077,22 +2077,38 @@ class Cornerstone extends CNR_Base {
 	 * Gets entire parent tree of post as an array
 	 * 
 	 * Array order is from top level to immediate post parent
-	 * @return array of Post Objects
 	 * @param object $post Post to get path for
+	 * @param string $prop Property to retrieve from parents.  If specified, array will contain only this property from parents
+	 * @param $depth Unused
+	 * @return array of Post Objects/Properties
 	 */
-	function post_get_parents($post, $depth = '') {
-		$parents = array();
-		if ( is_object($post) ) {
-			$post_parent = $post;
-			//Iterate through post parents until top level parent is reached
-			while ($post_parent->post_parent > 0)
-			{
-				$post_parent = get_post($post_parent->post_parent);
-				$parents[] = $post_parent;
+	function post_get_parents(&$post, $prop = '', $depth = '') {
+		$post =& get_post($post, OBJECT, '');
+		$parents = get_post_ancestors($post);
+		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
+			//Retrieve post data for parents if full data or property other than post ID is required
+			$args = array(
+						'include'	=> implode(',', $parents),
+						'post_type'	=> 'any'
+						);
+			$ancestors = get_posts($args);
+			
+			//Sort array in ancestor order
+			$temp_parents = array();
+			foreach ($ancestors as $ancestor) {
+				//Get index of ancestor
+				$i = array_search($ancestor->ID, $parents);
+				if ( false === $i )
+					continue;
+				//Insert post at index
+				$temp_parents[$i] = $ancestor;
 			}
-			//Reverse Array (to put top level parent at beginning of array)
-			$parents = array_reverse($parents);
+			
+			if ( !empty($temp_parents) )
+				$parents = $temp_parents;
 		}
+		//Reverse Array (to put top level parent at beginning of array)
+		$parents = array_reverse($parents);
 		return $parents;
 	}
 	
