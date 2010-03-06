@@ -2082,13 +2082,12 @@ class Cornerstone extends CNR_Base {
 	 * @return array of Post Objects/Properties
 	 */
 	function post_get_parents($post, $prop = '', $depth = '') {
-		$post =& get_post($post, OBJECT, '');
-		$parents = get_post_ancestors($post);
+		$parents = get_post_ancestors($post = get_post($post, OBJECT, ''));
 		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
 			//Retrieve post data for parents if full data or property other than post ID is required
 			$args = array(
-						'include'	=> implode(',', $parents),
-						'post_type'	=> 'any'
+						'include'		=> implode(',', $parents),
+						'post_type'		=> 'any',
 						);
 			$ancestors = get_posts($args);
 			
@@ -2107,6 +2106,7 @@ class Cornerstone extends CNR_Base {
 				$parents = $temp_parents;
 		}
 		//Reverse Array (to put top level parent at beginning of array)
+		$parents = array_reverse($parents);
 		return $parents;
 	}
 	

@@ -1,19 +1,23 @@
 (function($) {
-	inlineEditPost.addEvents = function(r) {
-		r.each(function() {
-			var row = $(this);
-			$('a.editinline', row).click(function() { cnrInlineEditPost.preEdit(this); inlineEditPost.edit(this); cnrInlineEditPost.postEdit(this); return false; });
-		});
-	};
+	//Move init method to guarantee execution order
+	inlineEditPost.initSaved = inlineEditPost.init;
+	inlineEditPost.init = function() {};
 	
 	//Extend inlineEditPost object
 	cnrInlineEditPost = jQuery.extend({}, inlineEditPost);
 	
 	cnrInlineEditPost.init = function() {
-		var qeRow = $('#inline-edit')
+		//Execute default init method
+		inlineEditPost.initSaved();
+		//Unbind quick edit click events
+		$('a.editinline').die('click');
+		//Bind new quick edit click handler
+		$('a.editinline').live('click', function() { cnrInlineEditPost.editHandler(this); return false; });
+		var qeRow = $('#inline-edit');
 		$('a.save', qeRow).click(function() { return cnrInlineEditPost.save(this); });
 		$('td', qeRow).keydown(function(e) { if (e.which == 13) { return cnrInlineEditPost.save(this); } });
-		
+		//Restore original init method for future use
+		inlineEditPost.init = inlineEditPost.initSaved;
 	};
 	
 	cnrInlineEditPost.save = function(id) {
@@ -38,6 +42,12 @@
 		}
 		return true;
 	};
+	
+	cnrInlineEditPost.editHandler = function(id) {
+		this.preEdit(id);
+		inlineEditPost.edit(id);
+		this.postEdit(id);
+	}
 	
 	cnrInlineEditPost.preEdit = function(id) {
 		var t = this, post_id, section_select, parent_id;
