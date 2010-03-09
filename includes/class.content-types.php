@@ -1,11 +1,13 @@
 <?php
 
 require_once 'class.base.php';
+require_once 'class.field-type.php';
 
 /**
  * Content Types Class
  *
  * @package Cornerstone
+ * @subpackage Content Types
  * @author SM
  */
 class CNR_Content_Types extends CNR_Base {
@@ -155,7 +157,7 @@ class CNR_Content_Types extends CNR_Base {
 						'value'		=> '15'
 					),
 					'label'			=> array (
-						'value'			=> 'Text Input'
+						'value'			=> ''
 					)
 				),
 				'layout'			=> array (
@@ -292,6 +294,23 @@ class CNR_Content_Types extends CNR_Base {
 								)
 							)
 						)
+					),
+					'subtitle'		=> array(
+						'id'			=> 'subtitle',
+						'label'			=> 'Subtitle',
+						'elements'		=> array(
+							'subtitle'		=> array(
+								'field'			=> 'text',
+								'properties'	=> array (
+									'id'			=> array (
+										'value'			=> 'subtitle',
+									),
+									'size'			=> array (
+										'value'			=> '50'
+									)
+								)
+							)
+						)
 					)
 				),
 				'groups'	=> array(
@@ -299,6 +318,12 @@ class CNR_Content_Types extends CNR_Base {
 						'label'			=> 'Geographic Details',
 						'attributes'	=>	array(
 							'coordinates'
+						)
+					),
+					'subtitle'	=> array(
+						'label'			=> 'Subtitle',
+						'attributes'	=> array(
+							'subtitle'
 						)
 					)
 				)
