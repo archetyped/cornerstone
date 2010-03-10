@@ -259,7 +259,7 @@ class CNR_Debug {
 	function print_message($msg) {
 		foreach (func_get_args() as $msg) {
 			echo '<pre>';
-			if (is_scalar($msg))
+			if (is_scalar($msg) && !is_bool($msg))
 				echo "$msg<br />";
 			else {
 				var_dump($msg);
