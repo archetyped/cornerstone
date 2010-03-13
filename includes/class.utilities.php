@@ -193,6 +193,35 @@ class CNR_Utilities {
 	}
 	
 	/**
+	 * Builds array of path elements based on arguments
+	 * Each item in path array represents a deeper level in structure path is for (object, array, filesystem, etc.)
+	 * @param array|string Value to add to the path
+	 * @return array 1-dimensional array of path elements
+	 */
+	function build_path() {
+		$path = array();
+		$args = func_get_args();
+		
+		//Iterate through parameters and build path
+		foreach ( $args as $arg ) {
+			if ( empty($arg) )
+				continue;
+				
+			if (is_array($arg)) {
+				//Recurse through array items to pull out any more arrays
+				foreach ($arg as $key => $val) {
+					$path = array_merge($path, $this->build_path($val));
+				}
+				//$path = array_merge($path, array_values($arg));
+			} elseif ( is_scalar($arg) ) {
+				$path[] = $arg;
+			}
+		}
+		
+		return $path;
+	}
+	
+	/**
 	 * Checks if a property exists in a class or object
 	 * (Compatibility method for PHP 4
 	 * @param mixed $class Class or object to check 
@@ -259,9 +288,9 @@ class CNR_Debug {
 	function print_message($msg) {
 		foreach (func_get_args() as $msg) {
 			echo '<pre>';
-			if (is_scalar($msg) && !is_bool($msg))
-				echo "$msg<br />";
-			else {
+			if (is_scalar($msg) && !is_bool($msg)) {
+				echo htmlspecialchars($msg) . "<br />";
+			} else {
 				var_dump($msg);
 			}
 			echo '</pre>';

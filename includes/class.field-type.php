@@ -54,6 +54,11 @@ class CNR_Field_Type extends CNR_Base {
 	var $parent = null;
 	
 	/**
+	 * @var mixed Data for field
+	 */
+	var $data = null;
+	
+	/**
 	 * Legacy Constructor
 	 */
 	function CNR_Field_Type($id = '', $parent = null) {
@@ -73,23 +78,84 @@ class CNR_Field_Type extends CNR_Base {
 	/* Getters/Setters */
 	
 	/**
+	 * Checks if the specified path exists in the object
+	 * @param array $path Path to check for
+	 * @return bool TRUE if path exists in object, FALSE otherwise
+	 */
+	function path_isset($path = '') {
+		//Stop execution if no path is supplied
+		if ( empty($path) )
+			return false;
+
+		$item = (array) $this;
+		//Iterate over path and check if each level exists before moving on to the next
+		for ($x = 0; $x < count($path); $x++) {
+			if ( $this->util->property_exists($item, $path[$x]) ) {
+				//Set item as reference to next level in path so that same variable can be used for each iteration
+				$item =& $item[ $path[$x] ];
+			} else {
+				return false;
+			}
+		}
+		return true; 
+	}
+	
+	/**
+	 * Retrieves a value from object using a specified path
+	 * Checks to make sure path exists in object before retrieving value
+	 * @param array $path Path to retrieve value from. Each item in array is a deeper dimension
+	 * @return mixed Value at specified path
+	 */
+	function &get_path_value($path = '') {
+		$ret = '';
+		$path = $this->util->build_path(func_get_args());
+		if ( $this->path_isset($path) ) {
+			$ret =& $this;
+			for ($x = 0; $x < count($path); $x++) {
+				if ( 0 == $x )
+					$ret =& $ret->{ $path[$x] };
+				else
+					$ret =& $ret[ $path[$x] ];
+			}
+		}
+		return $ret;
+	}
+	
+	/**
 	 * Retrieves specified member value
 	 * Handles inherited values
 	 * Merging corresponding parents if value is an array (e.g. for property groups)
-	 * @param string $member Member to search
+	 * @param string|array $member Member to search.  May also contain a path to the desired member
 	 * @param string $name Value to retrieve from member
 	 * @param mixed $default Default value if no value found (Default: empty string)
 	 * @return mixed Specified member value
 	 */
-	function get_member_value($member, $name, $default = '') {
+	function get_member_value($member, $name = '', $default = '') {
+		//Check if path to member is supplied
+		$path = array();
+		if ( is_array($member) && isset($member['tag']) ) {
+			if ( isset($member['attributes']['ref_base']) ) {
+				if ( 'root' != $member['attributes']['ref_base'] )
+					$path[] = $member['attributes']['ref_base'];
+			} else {
+				$path[] = 'properties';
+			}
+			
+			$path[] = $member['tag'];
+		} else {
+			$path = $member;
+		}
+		
+		$path = $this->util->build_path($path, $name);
+
+		//Set defaults and prepare data
 		$val = $default;
-		$member = trim($member);
-		$name = trim($name);
 		$inherit = false;
 		$inherit_tag = '{inherit}';
 		
-		if ( !isset($this->{$member}[$name]) /* Value is not set */
-			|| ( ($val = $this->{$member}[$name]) /* Assigns variable */
+		//Process path to value
+		if ( !$this->path_isset($path) /* Value does not exist in current object */
+			|| ( ($val = $this->get_path_value($path)) /* Assigns variable */
 				&& ( ($inherit = strpos($val, $inherit_tag)) !== false /* Checks for inheritance */
 					|| is_array($val) /* Is Array */
 					)
@@ -128,6 +194,26 @@ class CNR_Field_Type extends CNR_Base {
 		if ( is_object($parent) )		
 			$ret = $parent->get_member_value($member, $name, $default);
 		return $ret;
+	}
+	
+	/**
+	 * Retrieve value from data member
+	 * @param string|array $name Name of value to retrieve (Can also be path to value)
+	 * @return mixed Value at specified path
+	 */
+	function get_data($path = '') {
+		return $this->get_member_value('data', $name, '');
+	}
+	
+	/**
+	 * Sets value in data member
+	 * Sets value to data member itself by default
+	 * @param mixed $value Value to set
+	 * @param string|array $name Name of value to set (Can also be path to value)
+	 */
+	function set_data($value, $name = '') {
+		$ref =& $this->get_path_value('data', $name);
+		$ref = $value;
 	}
 	
 	/**
@@ -277,9 +363,258 @@ class CNR_Field_Type extends CNR_Base {
 		return $this->get_member_value('layout', $name);
 	}
 	
+	/**
+	 * Parse field layout with a regular expression
+	 * @param string $layout Layout data
+	 * @param string $search Regular expression pattern to search layout for
+	 * @return array Associative array with containing all of the regular expression matches in the layout data
+	 * 	Array Structure:
+	 *		root => placeholder tags
+	 *				=> Tag instances (array)
+	 *					'tag'			=> (string) tag name
+	 *					'match' 		=> (string) placeholder match
+	 *					'attributes' 	=> (array) attributes
+	 */
+	function parse_layout($layout, $search) {
+		$ph_xml = '';
+		$parse_match;
+		$ph_root_tag = 'ph_root_element';
+		$ph_start_xml = '<';
+		$ph_end_xml = ' />';
+		$ph_wrap_start = '<' . $ph_root_tag . '>';
+		$ph_wrap_end = '</' . $ph_root_tag . '>';
+		$parse_result = false;
+
+		//Find all nested layouts in layout
+		$match_value = preg_match_all($search, $layout, $parse_match, PREG_PATTERN_ORDER);
+
+		if ($match_value !== false && $match_value > 0) {
+			$parse_result = array();
+			//Get all matched elements
+			$parse_match = $parse_match[1];
+
+			//Build XML string from placeholders
+			foreach ($parse_match as $ph) {
+				$ph_xml .= $ph_start_xml . $ph . $ph_end_xml . ' ';
+			}
+			$ph_xml = $ph_wrap_start . $ph_xml . $ph_wrap_end;
+			//Parse XML data
+			$ph_prs = xml_parser_create();
+			xml_parser_set_option($ph_prs, XML_OPTION_SKIP_WHITE, 1);
+			xml_parser_set_option($ph_prs, XML_OPTION_CASE_FOLDING, 0);
+			$ret = xml_parse_into_struct($ph_prs, $ph_xml, $parse_result['values'], $parse_result['index']);
+			xml_parser_free($ph_prs);
+				
+			//Build structured array with all parsed data
+				
+			unset($parse_result['index'][$ph_root_tag]);
+				
+			//Build structured array
+			$result = array();
+			foreach ($parse_result['index'] as $tag => $instances) {
+				$result[$tag] = array();
+				//Instances
+				foreach ($instances as $instance) {
+					if (!isset($parse_result['values'][$instance]))
+					continue;
+					$inst_data = array();
+						
+					//Add Tag to array
+					$inst_data['tag'] = $parse_result['values'][$instance]['tag'];
+						
+					//Add instance data to array
+					$inst_data['attributes'] = (isset($parse_result['values'][$instance]['attributes'])) ? $inst_data['attributes'] = $parse_result['values'][$instance]['attributes'] : '';
+						
+					//Add match to array
+					$inst_data['match'] = $parse_match[$instance - 1];
+						
+					//Add to result array
+					$result[$tag][] = $inst_data;
+				}
+			}
+			$parse_result = $result;
+		}
+
+		return $parse_result;
+	}
 	
+	/**
+	 * Builds HTML for a field based on its properties
+	 * @param array $field Field properties (id, field, etc.)
+	 * @param string|array $field_path Base ID for field
+	 * @param array $attr_data Data for current field (Passed by reference)
+	 * @param bool $parent_match TRUE if $attr_data contains a reference to the current field's parent FALSE if not (to avoid searching data for current item if parent is not in data)
+	 */
+	function build_layout($layout = 'form', $field_path = array()/*, &$attr_data, $parent_matched = true*/) {
+		$args = func_get_args();
+		$out = '';
+		/*
+		$field_definition = $this->get_field($field, $field_path, $attr_data);
+		//Stop processing & return empty string if field is not valid
+		if (empty($field_definition)
+		|| !isset($field_definition['properties'])
+		|| (empty($field_definition['properties']) && !isset($field_definition['elements']))
+		|| !isset($field_definition['layout']['form'])
+		)
+		return $out;
+		*/
+		/* Layout */
+		
+		//Get base layout
+		$out = $this->get_layout($layout);
+		
+		//Parse Layout
+		$ph = new stdClass();
+		$ph->start = '{';
+		$ph->end = '}';
+		$ph->reserved = array('ref' => 'ref_base');
+		$ph->pattern_general = '/' . $ph->start . '([a-zA-Z0-9_].*?)' . $ph->end . '/i';
+		$ph->pattern_layout = '/' . $ph->start . '([a-zA-Z0-9].*?\s+' . $ph->reserved['ref'] . '="layout.*?".*?)' . $ph->end . '/i';
+		
+		$re_ph = '/' . $ph_start . '([a-zA-Z0-9_].*?)' . $ph_end . '/i';
+		$re_ph_layout = '/' . $ph_start . '([a-zA-Z0-9].*?\s+' . $this->field_ph_attr_reserved['ref_base'] . '="layout.*?".*?)' . $ph_end . '/i';
+
+		//Find all nested layouts in current layout
+		while ($ph->match = $this->parse_layout($out, $ph->pattern_layout)) {
+			//Iterate through the different types of layout placeholders
+			foreach ($ph->match as $tag => $instances) {
+				//Iterate through instances of a specific type of layout placeholder
+				foreach ($instances as $instance) {
+					//Get nested layout
+					$nested_layout = $this->get_member_value($instance);
+
+					//Replace layout placeholder with retrieved item data
+					if ( !empty($nested_layout) )
+						$out = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $out);
+				}
+			}
+		}
+		
+		//Search layout for placeholders
+		if ($ph->match = $this->parse_layout($out, $ph->pattern_general)) {
+			//Iterate through placeholders (tag, id, etc.)
+			foreach ($ph->match as $tag => $instances) {
+				//Iterate through instances of current placeholder
+				foreach ($instances as $instance) {
+					//Build path to replacement data
+					$target_property = $this->get_member_value($instance);
+					//Check if value is group (properties, etc.)
+					//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
+				
+					if (is_array($target_property) && isset($target_property['value']) && is_scalar($target_property['value'])) { 
+						/* Targeted property is an array but has a value key */
+						/* We use the value of this key */ 
+						$target_property = $target_property['value'];
+					} elseif (is_array($target_property)
+						&& !empty($instance['attributes'])
+						&& is_array($instance['attributes'])
+						&& $attribs = array_diff(array_keys($instance['attributes']), array_values($ph->reserved))
+					) {
+						/* Targeted property is an array, but the placeholder contains additional options on how property is to be used */
+						
+						//Find items matching criteria in $target_property
+						//Check for group criteria
+						//TODO: Implement more robust/flexible criteria handling (2010-03-11: Currently only processes property groups)
+						if ( 'properties' == $instance['tag'] && ($prop_group = $this->get_group($instance['attributes']['group'])) && !empty($prop_group) ) {
+							/* Process group */
+							$group_out = array();
+							//Iterate through properties in group and build string
+							foreach ( $prop_group as $prop_key => $prop_val ) {
+								$group_out[] = $prop_key . '="' . $this->get_property($prop_key) . '"'; 
+							}
+							$target_property = implode(' ', $group_out);
+						}
+					} elseif ( is_object($target_property) && is_a($target_property, get_class($this)) ) {
+						/* Targeted property is actually a nested field */
+						$target_property = $target_property->build_layout($layout, $field_path);
+					} elseif (!is_scalar($target_property)) {
+						/* Default: Clear value if no data not usable */
+						$target_property = '';
+					}
+					
+					//Replace layout placeholder with retrieved item data
+					$out = str_replace($ph->start . $instance['match'] . $ph->end, $target_property, $out);
+				}
+			}
+		}
+		
+		//Remove any unprocessed placeholders from layout
+		if ($ph->match = $this->parse_layout($out, $ph->pattern_general)) {
+			$out = preg_replace($ph->pattern_general, '', $out);
+		}
+		
+		/* Return generated value */
+		
+		return $out;
+	}
 	
 }
+
+class CNR_Field extends CNR_Field_Type {
+	
+}
+
+class CNR_Content_Type {
+	var $id = '';
+	
+	var $description = '';
+	
+	var $fields = array();
+	
+	var $groups = array();
+	
+	var $data = null;
+	
+	/**
+	 * Sets description for content type
+	 * @param string $description Description text
+	 */
+	function set_description($description = '') {
+	
+	}
+	
+	/**
+	 * Adds group to content type
+	 * Groups are used to display related fields in the UI 
+	 * @param string $id Unique name for group
+	 * @param string $description Short description of group
+	 * @param string $location Where group will be displayed on post edit form (Default: main)
+	 */
+	function add_group($id, $description, $location = 'main') {
+		
+	}
+	
+	/**
+	 * Adds field to content type
+	 * @param string $id Unique name for field
+	 * @param CNR_Field_Type $parent Field type that this field is based on
+	 * @param array $properties Field properties
+	 * @param string $group Group to add field to
+	 * @return CNR_Field Reference to new field
+	 */
+	function &add_field($id, &$parent, $properties, $group = null) {
+		
+	}
+	
+	/**
+	 * Adds field to a group in the content type
+	 * Group is created if it does not already exist
+	 * @param string $group ID of group to add field to
+	 * @param CNR_Field $field Field to add to group
+	 */
+	function add_to_group($group, &$field) {
+		
+	}
+}
+
+/* Sample Content Type creation */
+$ct = new CNR_Content_Type('post');
+$ct->set_description('Standard Post');
+$ct->add_group('location', 'Geographic Details');
+$field =& $ct->add_field('coordinates', $location, array('label' => 'Location'), 'location');
+$field =& $ct->add_field('subtitle', $text, array('size' => '50'));
+$ct->add_to_group('location', $field);
+/* END Sample Content Type creation */
 
 $base = new CNR_Field_Type('base');
 $base->set_description('Default Element');
