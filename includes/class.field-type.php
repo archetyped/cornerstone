@@ -221,20 +221,30 @@ class CNR_Field_Type extends CNR_Base {
 	 * @param CNR_Field_Type $parent Parent field type
 	 */
 	function set_parent(&$parent) {
+		global $ct_debug;
 		//Validate parent object
 		if ( is_array($parent) && !empty($parent) )
 			$parent =& $parent[0];
 		//Set reference to parent field type
-		if ( !empty($parent) && get_class($parent) == get_class($this)  )
+		if ( !empty($parent) && ( is_a($parent, get_class($this)) || is_a($this, get_class($parent)) )  ) {
 			$this->parent =& $parent;
+		}
 	}
 	
-	function set_description($description = '') {
-		$this->description = attribute_escape( trim($description) );
-	}
-	
+	/**
+	 * Retrieve field type parent
+	 * @return CNR_Field_Type Reference to parent field
+	 */
 	function &get_parent() {
 		return $this->parent;
+	}
+	
+	/**
+	 * Set field type description
+	 * @param string $description Description for field typ
+	 */
+	function set_description($description = '') {
+		$this->description = attribute_escape( trim($description) );
 	}
 	
 	/**
@@ -551,37 +561,107 @@ class CNR_Field_Type extends CNR_Base {
 }
 
 class CNR_Field extends CNR_Field_Type {
-	
+	/* Constructor */
 }
 
-class CNR_Content_Type {
+class CNR_Content_Type extends CNR_Base {
+	
+	/**
+	 * Unique name for content type
+	 * @var string
+	 */
 	var $id = '';
 	
+	/**
+	 * Description
+	 * @var string
+	 */
 	var $description = '';
 	
+	/**
+	 * Indexed array of fields in content type
+	 * @var array
+	 */
 	var $fields = array();
 	
+	/**
+	 * Associative array of groups in conten type
+	 * Key: Group name
+	 * Value: Array of field references
+	 * @var array
+	 */
 	var $groups = array();
 	
+	/**
+	 * Data for content type
+	 * @var array
+	 */
 	var $data = null;
+	
+	/* Constructors */
+	
+	/**
+	 * Legacy constructor
+	 * @param string $id Used for content type ID
+	 */
+	function CNR_Content_Type($id) {
+		$this->__construct($id);
+	}
+	
+	function __construct($id) {
+		parent::__construct();
+		$id = trim($id);
+		$this->id = $id;
+	}
+	
+	/* Getters/Setters */
 	
 	/**
 	 * Sets description for content type
 	 * @param string $description Description text
 	 */
 	function set_description($description = '') {
-	
+		if ( empty($description) )
+			$description = '';
+		$this->description = $description;
 	}
 	
 	/**
 	 * Adds group to content type
 	 * Groups are used to display related fields in the UI 
 	 * @param string $id Unique name for group
-	 * @param string $description Short description of group
+	 * @param string $description Short description of group's purpose
 	 * @param string $location Where group will be displayed on post edit form (Default: main)
 	 */
-	function add_group($id, $description, $location = 'main') {
-		
+	function add_group($id, $description = '', $location = 'main') {
+		//Create new group and set properties
+		$id = trim($id);
+		$this->groups[$id] =& $this->create_group($description, $location);
+	}
+	
+	/**
+	 * Standardized method to create a new field group
+	 * @param string $description Short description of group's purpose
+	 * @param string $location Where group will be displayed on post edit form (Default: main)
+	 * @return object Group object
+	 */
+	function &create_group($description = '', $location = 'main') {
+		$group = new stdClass();
+		$group->description = trim($description);
+		$group->location = trim($location);
+		$group->fields = array();
+		return $group;
+	}
+	
+	/**
+	 * Checks if group exists
+	 * @param string $id Group name
+	 * @return bool TRUE if group exists, FALSE otherwise
+	 */
+	function group_exists($id) {
+		$id = trim($id);
+		//Check if group exists in content type
+		return ( array_key_exists($id, $this->groups) );
 	}
 	
 	/**
@@ -593,7 +673,19 @@ class CNR_Content_Type {
 	 * @return CNR_Field Reference to new field
 	 */
 	function &add_field($id, &$parent, $properties, $group = null) {
-		
+		//Create new field
+		global $ct_debug;
+		$ct_debug = true;
+		$field = new CNR_Field($id);
+		$field->set_parent($parent);
+		$field->set_properties($properties);
+	
+		//Add field to content type
+		$this->fields[] =& $field;
+		//Add field to group
+		$this->add_to_group($group, $field);
+		$ct_debug = false;
+		return $field;
 	}
 	
 	/**
@@ -603,18 +695,17 @@ class CNR_Content_Type {
 	 * @param CNR_Field $field Field to add to group
 	 */
 	function add_to_group($group, &$field) {
-		
+		//Validate parameters
+		$group = trim($group);
+		if ( empty($group) || empty($field) || !is_a($field, 'CNR_Field_Type') )
+			return false;
+		//Create group if it doesn't exist
+		if ( !$this->group_exists($group) )
+			$this->add_group($group);
+		//Add reference to field in group
+		$this->groups[$group]->fields[] =& $field;
 	}
 }
-
-/* Sample Content Type creation */
-$ct = new CNR_Content_Type('post');
-$ct->set_description('Standard Post');
-$ct->add_group('location', 'Geographic Details');
-$field =& $ct->add_field('coordinates', $location, array('label' => 'Location'), 'location');
-$field =& $ct->add_field('subtitle', $text, array('size' => '50'));
-$ct->add_to_group('location', $field);
-/* END Sample Content Type creation */
 
 $base = new CNR_Field_Type('base');
 $base->set_description('Default Element');
@@ -672,4 +763,14 @@ $span->set_description('Inline wrapper');
 $span->set_parent($base_closed);
 $span->set_property('tag', 'span');
 $span->set_property('value', 'Hello there!');
+
+/* Sample Content Type creation */
+$ct = new CNR_Content_Type('post');
+$ct->set_description('Standard Post');
+$ct->add_group('location', 'Geographic Details');
+$field =& $ct->add_field('coordinates', $location, array('label' => 'Location'), 'location');
+$field =& $ct->add_field('subtitle', $text, array('size' => '50'));
+$ct->add_to_group('location', $field);
+/* END Sample Content Type creation */
+
 ?>
