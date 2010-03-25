@@ -26,7 +26,8 @@ class CNR_Utilities {
 	function &m(&$obj, $method = '') {
 		if ($obj == null)
 			$obj =& $this;
-		return array(&$obj, $method);
+		$arr = array(&$obj, $method);
+		return $arr;
 	}
 	
 	/* Helper Functions */
@@ -228,12 +229,21 @@ class CNR_Utilities {
 	 * @param string $property Name of property to look for in $class
 	 */
 	function property_exists($class, $property) {
-		if (function_exists('property_exists'))
+		if (function_exists('property_exists')) {
 			if (!property_exists($class, $property))
 				return false;
-		elseif (!array_key_exists($property, $class))
+		} elseif (!array_key_exists($property, $class)) {
 			return false;
+		}
 		return true;
+	}
+	
+	function &get_property(&$obj, $property) {
+		$property = trim($property);
+		if ( is_object($obj) )
+			return $obj->{$property};
+		if ( is_array($obj) )
+			return $obj[$property];
 	}
 }
 
