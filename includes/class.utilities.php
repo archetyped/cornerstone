@@ -24,7 +24,7 @@ class CNR_Utilities {
 	 * @return array Callback array
 	 */
 	function &m(&$obj, $method = '') {
-		if ($obj == null)
+		if ( $obj == null && isset($this) )
 			$obj =& $this;
 		$arr = array(&$obj, $method);
 		return $arr;
@@ -229,6 +229,8 @@ class CNR_Utilities {
 	 * @param string $property Name of property to look for in $class
 	 */
 	function property_exists($class, $property) {
+		if ( !is_object($class) && !is_array($class) )
+			return false;
 		if (function_exists('property_exists')) {
 			if (!property_exists($class, $property))
 				return false;

@@ -99,3 +99,14 @@ ul.empty {
 .confirmation-default {
 	visibility: hidden;
 }
+
+/* Content Types */
+
+.cnr_group_wrap {
+	overflow: hidden;
+}
+
+.cnr_attribute_wrap {
+	margin: 1em;
+	display: block;
+}

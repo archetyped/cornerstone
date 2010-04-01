@@ -136,11 +136,6 @@ class Cornerstone extends CNR_Base {
 	
 	/* Instance Variables */
 	
-	/**
-	 * @var CNR_Content_Types Content Types instance
-	 */
-	var $ct;
-	
 	/* Content Types */
 	
 	var $post_images = array(
@@ -171,9 +166,6 @@ class Cornerstone extends CNR_Base {
 		
 		//Initialization
 		
-		//Initialize instance variables
-		$this->ct = new CNR_Content_Types();
-
 		register_activation_hook($this->_caller, $this->m('activate'));
 		
 		/* Register Hooks */
@@ -740,8 +732,7 @@ class Cornerstone extends CNR_Base {
 		if ( is_admin() && $this->util->is_file('edit.php') ) {
 			$selected = ( isset($_GET[$section_param]) && is_numeric($_GET[$section_param]) ) ? $_GET[$section_param] : 0;
 			//Add post statuses
-			$options = array('exclude_tree'		=> $post->ID, 
-							 'name'				=> $section_param,
+			$options = array('name'				=> $section_param,
 							 'selected'			=> $selected,
 							 'show_option_none'	=> __( 'View all sections' ),
 							 'sort_column'		=> 'menu_order, post_title');
@@ -2013,19 +2004,21 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function post_get_subtitle($post = null) {
-		$subtitle = '';
-		if ( !($this->util->check_post($post)) )
-			return $subtitle;
-		
+		global $cnr_content_utilities;
+		$field = 'subtitle';
 		//Get post subtitle data
-		$subtitle = $this->post_meta_get($post->ID, $this->post_subtitle_field, true);
-		return $subtitle;
+		return $cnr_content_utilities->get_item_data($post, $field, '');
 	}
 	
 	function post_has_subtitle($post = null) {
+		/*
 		if (trim($this->post_get_subtitle($post)) != '')
 			return true;
 		return false;
+		*/
+		global $cnr_content_utilities;
+		$field = 'subtitle';
+		return $cnr_content_utilities->has_item_data($post, $field);
 	}
 	
 	function post_the_subtitle($post = null) {

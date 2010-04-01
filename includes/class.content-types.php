@@ -1,550 +1,675 @@
 <?php
 
 require_once 'class.base.php';
-require_once 'class.field-type.php';
 
+/* Variables */
+
+if ( !isset($cnr_content_types) )
+	$cnr_content_types = array();
+if ( !isset($cnr_field_types) )
+	$cnr_field_types = array();
+
+/* Init */
+$cnr_content_utilities = new CNR_Content_Utilities();
+$cnr_content_utilities->init();
+	
+/* Functions */
+
+function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10) {
+	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
+}
+
+function cnr_get_post_data($field, $post = null) {
+	$c = new CNR_Content_Utilities();
+	return $c->get_item_data($post, $field);
+}
+
+function cnr_the_post_data($field, $post = null) {
+	echo cnr_get_post_data($field, $post);
+}
+
+/* Hooks */
+cnr_register_placeholder_handler('all', array('CNR_Field_Type', 'process_placeholder_default'), 11);
+cnr_register_placeholder_handler('field_id', array('CNR_Field_Type', 'process_placeholder_id'));
+cnr_register_placeholder_handler('data', array('CNR_Field_Type', 'process_placeholder_data'));
+	
 /**
- * Content Types Class
- *
+ * Content Types - Base Class
+ * Core properties/methods for Content Type derivative classes
  * @package Cornerstone
  * @subpackage Content Types
  * @author SM
  */
-class CNR_Content_Types extends CNR_Base {
-
-	/* Variables */
+class CNR_Content_Base extends CNR_Base {
 	
 	/**
-	 * @var string Base name for Content Type Admin Menus
+	 * Base class name
+	 * @var string
 	 */
-	var $file_content_types = 'content-types';
-
+	var $base_class = 'cnr_content_base';
+	
 	/**
-	 * @var array Content Types
+	 * @var string Unique name
 	 */
-	var $types = array();
-
+	var $id = '';
+	
 	/**
-	 * @var array Field Type Definitions
+	 * @var string Short description
 	 */
-	var $field_types = array();
-
+	var $description = '';
+	
 	/**
-	 * @var string Field reference delimeter
+	 * @var array Object Properties
 	 */
-	var $field_path_delim = '.';
-
+	var $properties = array();
+	
 	/**
-	 * @var string Property that is set when field is populated
+	 * Data for object
+	 * May also contain data for nested objects
+	 * @var mixed
 	 */
-	var $field_populated = 'populated';
-
+	var $data = null;
+	
 	/**
-	 * @var array Reserved attribute names for Field placeholders (Layouts)
+	 * Legacy Constructor
 	 */
-	var $field_ph_attr_reserved = array();
-
-	/**
-	 * @var string Base path for references in placeholders
-	 */
-	var $field_ph_base_default = "properties";
-
-	/**
-	 * @var array Content Type Definitions
-	 */
-	var $content_types = array();
-
-	/**
-	 * @var string base name for all content type metadata
-	 */
-	var $attribute_basename = array('attributes');
-
-	/**
-	 * Legacy contructor
-	 */
-	function CNR_Content_Types() {
-		$this->__construct();
+	function CNR_Content_Base($id = '') {
+		$this->__construct($id);
 	}
-
+	
 	/**
 	 * Constructor
 	 */
-	function __construct() {
+	function __construct($id = '') {
 		parent::__construct();
-		
-		//Add prefix to attribute base array
-		array_unshift($this->attribute_basename, $this->prefix);
-
-		$this->field_ph_attr_reserved['ref_base'] = "ref_base";
-
-		$this->register_hooks();
-		$this->set_fields();
-		$this->set_types();
+		$id = trim($id);
+		$this->id = $id;
 	}
-
-	/* Methods */
-
-	/* Initialization */
-
+	
+	/* Getters/Setters */
+	
 	/**
-	 * Sets up hooks for class
+	 * Checks if the specified path exists in the object
+	 * @param array $path Path to check for
+	 * @return bool TRUE if path exists in object, FALSE otherwise
 	 */
-	function register_hooks() {
-		//Create admin menus for Content Types
-		add_action('admin_menu', $this->m('admin_menu'));
-
-		//Add attributes to post edit form
-		add_action('do_meta_boxes', $this->m('item_edit_form'), 10, 3);
-
-		//Save item attributes when item is saved
-		add_action('save_post', $this->m('save_item_attributes'), 10, 2);
-	}
-
-	/**
-	 * Initialize fields
-	 */
-	function set_fields() {
-		$this->field_types = array (
-			'base'			=> array (
-				'description'	=> 'Default Element',
-				'properties'	=> array (
-					'tag'			=> 'span',
-					'class'			=> array (
-						'group'			=> 'attr',
-						'value'			=> ''
-					),
-					'id'			=> array (
-						'group'			=> 'attr',
-						'value'			=> ''
-					)
-				),
-				'layout'		=> array (
-					'form'			=> '<{tag} name="{id}" {properties ref_base="root" group="attr"} />'
-				)
-			),
-			'base_closed'	=> array (
-				'description'	=> 'Default Element (Closed Tag)',
-				'parent'		=> 'base',
-				'properties'	=> array (
-					'value'			=> ''
-				),
-				'layout'		=> array (
-					'form'			=> '<{tag} {properties ref_base="root" group="attr"}>{value}</{tag}>'
-					)
-			),
-			'input'			=> array (
-				'description'	=> 'Default Input Element',
-				'parent'		=> 'base',
-				'properties'	=> array (
-						'tag'		=> 'input',
-						'type'		=> array (
-							'group' 	=> 'attr',
-							'value'		=> 'text'
-						),
-						'value'		=> array(
-							'group'		=> 'attr',
-							'value'		=> '',
-							'uses_data'	=> true	
-						)
-				)
-			),
-			'text'			=> array (
-				'description'	=> 'Text Box',
-				'parent'		=> 'input',
-				'properties'	=> array (
-					'size'			=> array (
-						'group' 	=> 'attr',
-						'value'		=> '15'
-					),
-					'label'			=> array (
-						'value'			=> ''
-					)
-				),
-				'layout'			=> array (
-					'form'				=> '{label ref_base="layout"} {inherit}',
-					'label'				=> '<label for="{id}">{label}</label>'
-				)
-			),
-			'location'		=> array(
-				'description'	=> 'Geographic Coordinates',
-				'properties'	=> array(),
-				'elements'		=> array(
-					'latitude'		=> array(
-						'field'			=> 'text',
-						'properties'	=> array (
-							'id'			=> array (
-								'value'			=> 'latitude'
-							),
-							'size'			=> array (
-								'value'			=> '3'
-							),
-							'label'			=> array (
-								'value'			=> 'Latitude'
-							)
-						)
-					),
-					'longitude'		=> array(
-						'field'			=> 'text',
-						'properties'	=> array(
-							'id'			=> array (
-								'value'			=> 'longitude'
-							),
-							'size'			=> array (
-								'value'			=> '3'
-							),
-							'label'			=> array (
-								'value'			=> 'Longitude'
-							)
-						)
-					)
-				),
-				'layout'		=> array (
-					'form'		=> '<span>{latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>'
-				)
-			),
-			'phone'			=> array(
-				'description'	=> 'Phone Number',
-				'elements'		=> array(
-					'area'			=> array(
-						'field'			=> 'text',
-						'properties'	=> array(
-							'id'			=> array (
-								'value'			=> 'area'
-							),
-							'size'			=> array (
-								'value'			=> '3'
-							)
-						)
-					),
-					'prefix'		=> array(
-						'field'			=> 'text',
-						'properties'	=> array(
-							'id'			=> array (
-								'value'			=> 'prefix'
-							),
-							'size'			=> array (
-								'value'			=> '3'
-							)
-						)
-					),
-					'suffix'		=> array(
-						'field'			=> 'text',
-						'properties'	=> array(
-							'id'			=> array (
-								'value'			=> 'suffix'
-							),
-							'size'			=> array (
-								'value'			=> '4'
-							)
-						)
-					)
-				),
-				'layout'		=> array (
-					'form'			=> '({area ref_base="elements"}) {prefix ref_base="elements"} - {suffix ref_base="elements"}'
-				)
-			),
-			'hidden'		=> array(
-				'description'	=> 'Hidden Field',
-				'parent'		=> 'input',
-				'properties'	=> array (
-					'type'			=> array (
-						'value'			=> 'hidden'
-					)
-				)
-			),
-			'image'			=> array(
-				'description'	=> 'Image',
-				'parent'		=> 'base',
-				'properties'	=> array (
-					'tag'			=> 'img',
-					'src'			=> array (
-						'group'			=> 'attr',
-						'value'			=> '/wp-admin/images/wp-logo.gif'
-					),
-				)
-			),
-			'span'			=> array(
-				'description'	=> 'Inline wrapper',
-				'parent'		=> 'base_closed',
-				'properties'	=> array (
-					'tag'			=> 'span',
-					'value'			=> 'Hello there!'
-				)
-			)
-		);
-	}
-
-	/**
-	 * Initialize content types
-	 */
-	function set_types() {
-		$this->content_types = array(
-			'post'		=> array(
-				'attributes'	=> array(
-					'coordinates'	=> array(
-						'id'			=> 'coordinates',
-						'label'			=> 'Location',
-						'elements'		=> array(
-							'home'			=> array(
-								'field'			=> 'location',
-								'properties'	=> array (
-									'id'			=> array (
-										'value'			=> 'home'
-									)
-								)
-							)
-						)
-					),
-					'subtitle'		=> array(
-						'id'			=> 'subtitle',
-						'label'			=> 'Subtitle',
-						'elements'		=> array(
-							'subtitle'		=> array(
-								'field'			=> 'text',
-								'properties'	=> array (
-									'id'			=> array (
-										'value'			=> 'subtitle',
-									),
-									'size'			=> array (
-										'value'			=> '50'
-									)
-								)
-							)
-						)
-					)
-				),
-				'groups'	=> array(
-					'main'	=> array(
-						'label'			=> 'Geographic Details',
-						'attributes'	=>	array(
-							'coordinates'
-						)
-					),
-					'subtitle'	=> array(
-						'label'			=> 'Subtitle',
-						'attributes'	=> array(
-							'subtitle'
-						)
-					)
-				)
-			)
-		);
-	}
-
-	/* Admin */
-
-	/**
-	 * Sets up Admin menus
-	 * @return void
-	 */
-	function admin_menu() {
-		global $menu, $submenu;
-		//Content Types
-		add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_main'));
-	}
-
-	/**
-	 * Displays Content Types Admin Menu
-	 * @return void
-	 */
-	function menu_main() {
-		echo '<div class="wrap"><h2>Content Types</h2></div>';
-		$this->the_field('text');
-	}
-
-	/**
-	 * Adds fields to edit form based on content type of current item
-	 * @param string $base_type Type of content being loaded (post or page)
-	 * @param string $form_type Part of the form to do meta boxes for (normal, advanced, side)
-	 * @param object $post Post object
-	 * @return void
-	 */
-	function item_edit_form($base_type, $form_type, $post) {
-		if ($form_type != 'normal' || empty($post->post_type) || !$this->is_type($post->post_type))
-		return false;
-			
-		//Setup meta boxes for content type
-		foreach ($this->content_types[$post->post_type]['groups'] as $group => $props) {
-			add_meta_box("{$this->prefix}_meta_group_{$group}", $props['label'], $this->m('item_edit_form_set_box'), 'post', 'normal', 'high', array('group' => $group));
-		}
-	}
-
-	/**
-	 * Callback function to populate meta box on edit form with custom attributes based on content type
-	 * @param object $object Post object
-	 * @param array $box Meta box properties
-	 */
-	function item_edit_form_set_box($object, $box) {
-		//Get attributes for group
-		$args = &$box['args'];
-		$group = $args['group'];
-
-		//Build UI for attributes
-		$type = $this->get_type();
-
-		$output = '';
-
-		if (!$type || !isset($type['groups'][$group]['attributes']))
-		return false;
-
-		//Iterate through attributes in group
-		$attr;
-		foreach ($type['groups'][$group]['attributes'] as $attribute) {
-			//Get attribute definition
-			$attr = $this->get_attribute($type, $attribute);
-			if (!$attr)
-			continue;
-			//Build attribute UI
-				
-			$output .= $this->build_attribute_form($attr);
-		}
-
-		//Display UI
-		echo $output;
-	}
-
-	/* Fields */
-
-	/**
-	 * Checks if field is valid
-	 * @param string $field Field identifier
-	 * @return boolean TRUE if field is valid
-	 */
-	function is_field($field) {
-		return (isset($this->field_types[$field]) && is_array($this->field_types[$field]));
-	}
-
-	function is_field_populated($field = '') {
-		return (is_array($field) && !empty($field[$this->field_populated])) ? true : false;
-	}
-
-	/**
-	 * Retrieves specified field definition
-	 * @param string|array $field Field name or Field definition array
-	 * @param array $field_path Field ancestors
-	 * @param array $field_data Data for field
-	 * @param bool $full Fully retrieve field properties (for child fields) (Default: TRUE)
-	 * @return mixed Field definition or FALSE if field does not exist
-	 */
-	function get_field($field, $field_path = array(), $field_data = array(), $full = true) {
-		/* Get Valid Field */
-		$args = func_get_args();
-		if ($this->is_field_populated($field)) {
-			return $field;
-		}
-		$props = array();
-		//Separate field specifier and field properties for later use
-		if (is_array($field) && isset($field['field'])) {
-			if (isset($field['properties']))
-				$props = $field['properties'];
-			$field = $field['field'];
-		}
-		//Get base definition for specified field (if exists)
-		$field = ($this->is_field($field)) ? $this->field_types[$field] : false;
-		if (!$field)
+	function path_isset($path = '') {
+		//Stop execution if no path is supplied
+		if ( empty($path) )
 			return false;
-		
-		/* Setup field properties */
-
-		$props_default = array (
-								'properties'	=> array(),
-								'path'			=> $field_path,
-								'data'			=> null
-								);
-		$field = array_merge($props_default, $field);
-		
-		//Field path processing
-		if (!is_array($field['path'])) {
-			if (!empty($field['path']))
-				$field['path'] = array(strval($field['path']));
-			else
-				$field['path'] = array();
-		}
-		
-		//Parse properties for field
-		if ($full) {
-			$field = $this->get_field_properties($field, $props);
-			$field[$this->field_populated] = true;
-		}
-		
-		/* Data Processing */
-		
-		//Build path to current field
-		if (!empty($field_data) && count($field['path']) > 1) {
-			//Get path (all path elements except first element)
-			$attr_path = array_slice($field['path'], -1, 1);
-			//Check if data for field exists
-			if (!empty($attr_path) && $this->util->array_item_isset($field_data, $attr_path)) {
-				//Get data for field
-				$field['data'] = $this->util->get_array_item($field_data, $attr_path);
-			}
-		} else {
-			//Add full field data to master field
-			$field['data'] = $field_data;
-		}
-		
-		return $field;
-	}
-
-	/**
-	 * Retrieves properties for a field
-	 *
-	 * Returns array of properties defined with field as well as all properties from parent fields
-	 * @param array|string $field Field definition (array) or field identifier (string)
-	 * @param array $props Additional properties to add to field
-	 * @return array Updated field definition
-	 */
-	function get_field_properties($field, $props = null) {
-		$args = func_get_args();
-		/* Get valid field */
-		if (is_string($field)) {
-			if ($this->is_field($field)) {
-				$field = $this->get_field($field);
-				return $field;
+			
+		$item =& $this;
+		//Iterate over path and check if each level exists before moving on to the next
+		for ($x = 0; $x < count($path); $x++) {
+			if ( $this->util->property_exists($item, $path[$x]) ) {
+				//Set $item as reference to next level in path for next iteration
+				$item =& $this->util->get_property($item, $path[$x]);
+				//$item =& $item[ $path[$x] ];
 			} else {
-				$field = false;
+				return false;
 			}
 		}
-
-		if (empty($field) || !is_array($field))
-			return false;
-		
-		/* Setup basic properties */
-			
-		//Merge additional properties with field properties
-		if (is_array($props) && !empty($props)) {
-			$field['properties'] = $this->util->array_merge_recursive_distinct($field['properties'], $props);
-		}
-		//Merge parent properties (if field is a child of another field)
-		$curr_field = $field;
-
-		//Recurse through parents field definitions and get inherited properties
-		while (isset($curr_field['parent'])) {
-			//Get Parent field definition (basic)
-			$curr_field = $this->get_field($curr_field['parent'], false, null, false);
-
-			//Check Child for inhertied values (deep)
-			$field = $this->util->array_replace_recursive('{inherit}', $curr_field, $field);
-				
-			//Merge child with parent (child overwrites)
-			$field = $this->util->array_merge_recursive_distinct($curr_field, $field);
-		}
-		
-		/* Setup field properties specific to current field usage */
-		
-		//Process properties dependent on field path
-		//ID
-		if (isset($field['properties']['id'])) {
-			if (!is_array($field['properties']['id']))
-				$field['properties']['id'] = array('value' => $field['properties']['id']);
-			//Add current field to field path
-			$field['path'][] = $field['properties']['id']['value'];
-			//Get formatted value for field ID
-			$field['properties']['id']['value'] = $this->get_attribute_name($field['path']); 
-		}
-		return $field;
+		return true; 
 	}
+	
+	/**
+	 * Retrieves a value from object using a specified path
+	 * Checks to make sure path exists in object before retrieving value
+	 * @param array $path Path to retrieve value from. Each item in array is a deeper dimension
+	 * @return mixed Value at specified path
+	 */
+	function &get_path_value($path = '') {
+		$ret = '';
+		$path = $this->util->build_path(func_get_args());
+		if ( $this->path_isset($path) ) {
+			$ret =& $this;
+			for ($x = 0; $x < count($path); $x++) {
+				if ( 0 == $x )
+					$ret =& $ret->{ $path[$x] };
+				else
+					$ret =& $ret[ $path[$x] ];
+			}
+		}
+		return $ret;
+	}
+	
+	/**
+	 * Retrieves specified member value
+	 * Handles inherited values
+	 * Merging corresponding parents if value is an array (e.g. for property groups)
+	 * @param string|array $member Member to search.  May also contain a path to the desired member
+	 * @param string $name Value to retrieve from member
+	 * @param mixed $default Default value if no value found (Default: empty string)
+	 * @param string $dir Direction to move through hierarchy to find value
+	 * Possible Values:
+	 *  parent (default) 	- Search through field parents
+	 *  current				- Do not search through connected objects
+	 *  container			- Search through field containers
+	 *  caller				- Search through field callers
+	 * @return mixed Specified member value
+	 */
+	function get_member_value($member, $name = '', $default = '', $dir = 'parent') {
+		//Check if path to member is supplied
+		$path = array();
+		if ( is_array($member) && isset($member['tag']) ) {
+			if ( isset($member['attributes']['ref_base']) ) {
+				if ( 'root' != $member['attributes']['ref_base'] )
+					$path[] = $member['attributes']['ref_base'];
+			} else {
+				$path[] = 'properties';
+			}
+			
+			$path[] = $member['tag'];
+		} else {
+			$path = $member;
+		}
+		
+		$path = $this->util->build_path($path, $name);
+		//Set defaults and prepare data
+		$val = $default;
+		$inherit = false;
+		$inherit_tag = '{inherit}';
+		
+		/* Determine whether the value must be retrieved from a parent/container object
+		 * Conditions:
+		 * > Path does not exist in current field
+		 * > Path exists and is not an object, but at least one of the following is true:
+		 *   > Value at path is an array (e.g. properties, elements, etc. array)
+		 *     > Parent/container values should be merged with retrieved array
+		 *   > Value at path is a string that inherits from another field
+		 *     > Value from other field will be retrieved and will replace inheritance placeholder in retrieved value
+		 */ 
+		if ( ( !$this->path_isset($path) /* Value does not exist in current object */
+				|| ( ($val = $this->get_path_value($path)) /* Assigns variable */
+					&& !is_object($val)
+					&& ( is_array($val) /* Retrieved value is an array */
+						|| ($inherit = strpos($val, $inherit_tag)) !== false /* Retrieved val inherits a value from another  */
+						)
+					)
+				)
+				&& 'current' != $dir
+			) {
+				//Get Parent value (recursive)
+				$ex_val = ( 'parent' != $dir ) ? $this->get_container_value($member, $name, $default) : $this->get_parent_value($member, $name, $default);
+				
+				//Handle inheritance
+				if ( is_array($val) ) {
+					//Combine Arrays
+					if ( is_array($ex_val) )
+						$val = array_merge($ex_val, $val);
+				} elseif ( $inherit !== false ) {
+					//Replace placeholder with inherited string
+					$val = str_replace($inherit_tag, $ex_val, $val);
+				} else {
+					//Default: Set parent value as value
+					$val = $ex_val;
+				}
+		}
+		
+		return $val;
+	}
+	
+	/**
+	 * Search for specified member value in an object
+	 * @param object $object Reference to object to retrieve value from
+	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
+	 * @param string $name (optional) Value to retrieve from member
+	 * @param mixed $default (optional) Default value to use if no value found (Default: empty string)
+	 * @param string $dir Direction to move through hierarchy to find value @see CNR_Field_Type::get_member_value() for possible values
+	 * @return mixed Member value if found (Default: $default)
+	 */
+	function get_object_value(&$object, $member, $name = '', $default = '', $dir = 'parent') {
+		$ret = $default;
+		if ( is_object($object) && method_exists($object, 'get_member_value') )
+			$ret = $object->get_member_value($member, $name, $default, $dir);
+		return $ret;
+	}
+	
+	/**
+	 * Retrieve value from data member
+	 * @param bool $top (optional) Whether to traverse through the field hierarchy to get data for field (Default: TRUE)
+	 * @return mixed Value at specified path
+	 */
+	function get_data($top = true) {
+		$top = !!$top;
+		$obj = $this;
+		$obj_path = array($this);
+		$path = array();
+		//Iterate through hiearchy to get top-most object
+		while ( !empty($obj) ) {
+			$new = null;
+			//Try to get caller first
+			if ( method_exists($obj, 'get_caller') ) {
+				$checked = true;
+				$new = $obj->get_caller();
+			}
+			//Try to get container if no caller found
+			if ( empty($new) && method_exists($obj, 'get_container') ) {
+				$checked = true;
+				$new = $obj->get_container();
+			}
+			
+			$obj = $new;
+			
+			//Stop iteration
+			if ( !empty($obj) ) {
+				//Add object to path if it is valid
+				$obj_path[] = $obj;
+			}
+		}
+		
+		//Check each object (starting with top-most) for matching data for current field
+		
+		//Reverse array
+		$obj_path = array_reverse($obj_path);
+		//Build path for data location
+		foreach ( $obj_path as $obj ) {
+			if ( $this->util->property_exists($obj, 'id') )
+				$path[] = $obj->id;
+		}
+		
+		
+		//Iterate through objects
+		while ( !empty($obj_path) ) {
+			//Get next object
+			$obj = array_shift($obj_path);
+			//Shorten path
+			array_shift($path);
+			//Check for value in object and stop iteration if matching data found
+			if ( ($val = $this->get_object_value($obj, 'data', $path, null, 'current')) && !is_null($val) ) {
+				break;
+			}
+		}
+		
+		return $val;
+	}
+	
+	/**
+	 * Sets value in data member
+	 * Sets value to data member itself by default
+	 * @param mixed $value Value to set
+	 * @param string|array $name Name of value to set (Can also be path to value)
+	 */
+	function set_data($value, $name = '') {
+		$ref =& $this->get_path_value('data', $name);
+		$ref = $value;
+	}
+	
+	/**
+	 * Retrieves field ID
+	 * @param string|CNR_Field $field (optional) Field object or ID of field
+	 * @return string|bool Field ID, FALSE if $field is invalid
+	 */
+	function get_id($field = null) {
+		$ret = false;
+		if ( !empty($field) ) {
+			if ( is_a($field, 'cnr_field_type') )
+				$field = $field->id;
+		} elseif ( isset($this) ) {
+			$field = $this->id;
+		}
 
+		if ( is_string($field) )
+			$ret = trim($field);
+		
+		return $ret;
+	}
+	
+	/**
+	 * Set field type description
+	 * @param string $description Description for field typ
+	 */
+	function set_description($description = '') {
+		$this->description = attribute_escape( trim($description) );
+	}
+	
+	function get_description() {
+		return $this->get_member_value('description', '','','current');
+	}
+}
+
+/**
+ * Content Type - Field Types
+ * Stores properties for a specific field
+ * @package Cornerstone
+ * @subpackage Content Types
+ * @author SM
+ */
+class CNR_Field_Type extends CNR_Content_Base {
+	/* Properties */
+	
+	/**
+	 * Base class name
+	 * @var string
+	 */
+	var $base_class = 'cnr_field_type';
+	
+	/**
+	 * @var array Array of Field types that make up current Field type
+	 */
+	var $elements = array();
+		
+	/**
+	 * Structure: Property names stored as keys in group
+	 * Root
+	 *  -> Group Name
+	 *    -> Property Name => Null
+	 * Reason: Faster searching over large arrays
+	 * @var array Groupings of Properties
+	 */
+	var $property_groups = array();
+	
+	/**
+	 * @var array Field type layouts
+	 */
+	var $layout = array();
+	
+	/**
+	 * @var CNR_Field_Type Parent field type (reference)
+	 */
+	var $parent = null;
+	
+	/**
+	 * Object that field is in
+	 * @var CNR_Field|CNR_Field_Type|CNR_Content_Type
+	 */
+	var $container = null;
+	
+	/**
+	 * Object that called field
+	 * Used to determine field hierarchy/nesting
+	 * @var CNR_Field|CNR_Field_Type|CNR_Content_Type
+	 */
+	var $caller = null;
+	
+	/**
+	 * Legacy Constructor
+	 */
+	function CNR_Field_Type($id = '', $parent = null) {
+		$this->__construct($id, $parent);
+	}
+	
+	/**
+	 * Constructor
+	 */
+	function __construct($id = '', $parent = null) {
+		parent::__construct($id);
+		
+		$this->id = $id;
+		$this->set_parent($parent);
+	}
+	
+	/* Getters/Setters */
+	
+	/**
+	 * Search for specified member value in field type ancestors
+	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
+	 * @param string $name Value to retrieve from member
+	 * @return mixed Member value if found (Default: empty string)
+	 */
+	function get_parent_value($member, $name = '', $default = '') {
+		$parent =& $this->get_parent();
+		return $this->get_object_value($parent, $member, $name, $default, 'parent');
+	}
+	
+	/**
+	 * Search for specified member value in field's container object (if exists)
+	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
+	 * @param string $name Value to retrieve from member
+	 * @return mixed Member value if found (Default: empty string)
+	 */
+	function get_container_value($member, $name = '', $default = '') {
+		$container =& $this->get_container();
+		return $this->get_object_value($container, $member, $name, $default, 'container');
+	}
+	
+	/**
+	 * Search for specified member value in field's container object (if exists)
+	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
+	 * @param string $name Value to retrieve from member
+	 * @return mixed Member value if found (Default: empty string)
+	 */
+	function get_caller_value($member, $name = '', $default = '') {
+		$caller =& $this->get_caller();
+		return $this->get_object_value($caller, $member, $name, $default, 'caller');
+	}
+	
+	/**
+	 * Sets reference to parent field type
+	 * @param CNR_Field_Type $parent Parent field type
+	 */
+	function set_parent($parent) {
+		//Validate parent object
+		if ( is_array($parent) && !empty($parent) )
+			$parent =& $parent[0];
+			
+		//Check if only ID of parent field was supplied
+		if ( is_string($parent) ) {
+			global $cnr_field_types;
+			if ( isset($cnr_field_types[$parent]) )
+				$parent =& $cnr_field_types[$parent];
+			else
+				$parent =& new CNR_Field_Type($parent);
+		}
+		//Set reference to parent field type
+		if ( !empty($parent) && is_a($parent, $this->base_class) ) {
+			$this->parent =& $parent;
+		}
+	}
+	
+	/**
+	 * Retrieve field type parent
+	 * @return CNR_Field_Type Reference to parent field
+	 */
+	function &get_parent() {
+		return $this->parent;
+	}
+	
+	/**
+	 * Sets reference to container object of current field
+	 * Reference is cleared if no valid object is passed to method
+	 * @param object $container
+	 */
+	function set_container(&$container) {
+		if ( !empty($container) && is_object($container) ) {
+			//Set as param as container for current field
+			$this->container =& $container;
+		} else {
+			//Clear container member if argument is invalid
+			$this->clear_container();
+		}
+	}
+	
+	/**
+	 * Clears reference to container object of current field
+	 */
+	function clear_container() {
+		$this->container = null;
+	}
+	
+	/**
+	 * Retrieves reference to container object of current field
+	 * @return object Reference to container object
+	 */
+	function &get_container() {
+		$ret = null;
+		if ( $this->has_container() )
+			$ret =& $this->container;
+		return $ret;
+	}
+	
+	/**
+	 * Checks if field has a container reference
+	 * @return bool TRUE if field is contained, FALSE otherwise
+	 */
+	function has_container() {
+		return !empty($this->container);
+	}
+	
+	/**
+	 * Sets reference to calling object of current field
+	 * Any existing reference is cleared if no valid object is passed to method
+	 * @param object $caller Calling object
+	 */
+	function set_caller(&$caller) {
+		if ( !empty($caller) && is_object($caller) )
+			$this->caller =& $caller;
+		else
+			$this->clear_caller();
+	}
+	
+	/**
+	 * Clears reference to calling object of current field
+	 */
+	function clear_caller() {
+		$this->caller = null;
+	}
+	
+	/**
+	 * Retrieves reference to caller object of current field
+	 * @return object Reference to caller object
+	 */
+	function &get_caller() {
+		$ret = null;
+		if ( $this->has_caller() )
+			$ret =& $this->caller;
+		return $ret;
+	}
+	
+	
+	
+	/**
+	 * Checks if field has a caller reference
+	 * @return bool TRUE if field is called by another field, FALSE otherwise
+	 */
+	function has_caller() {
+		return !empty($this->caller);
+	}
+	
+	/**
+	 * Add/Set a property on the field definition
+	 * @param string $name Name of property
+	 * @param mixed $value Default value for property
+	 * @param string|array $group Group(s) property belongs to
+	 * @param boolean $uses_data Whether or not property uses data from the content item
+	 * @return boolean TRUE if property is successfully added to field type, FALSE otherwise
+	 */
+	function set_property($name, $value = '', $group = null) {
+		//Do not add if property name is not a string
+		if ( !is_string($name) )
+			return false;
+		//Create property array
+		$prop_arr = array();
+		$prop_arr['value'] = $value;
+		//Add to properties array
+		$this->properties[$name] = $prop_arr;
+		//Add property to specified groups
+		if ( !empty($group) ) {
+			$this->set_group_property($group, $name);
+		}
+		return true;
+	}
+	
+	/**
+	 * Sets multiple properties on field type at once
+	 * @param array $properties Properties. Each element is an array containing the arguments to set a new property
+	 * @return boolean TRUE if successful, FALSE otherwise 
+	 */
+	function set_properties($properties) {
+		if ( !is_array($properties) )
+			return false;
+		foreach ( $properties as $name => $val) {
+			$this->set_property($name, $val);
+		}
+	}
+	
+	/**
+	 * Retreives property from field type
+	 * @param string $name Name of property to retrieve
+	 * @return mixed Specified Property if exists (Default: Empty string)
+	 */
+	function get_property($name) {
+		$val = $this->get_member_value('properties', $name);
+		if ( isset($val['value']) )
+			$val = $val['value'];
+		return $val;
+	}
+	
+	/**
+	 * Adds Specified Property to a Group
+	 * @param string|array $group Group(s) to add property to
+	 * @param string $property Property to add to group
+	 */
+	function set_group_property($group, $property) {
+		if ( is_string($group) && isset($this->property_groups[$group][$property]) )
+			return;
+		if ( !is_array($group) ) {
+			$group = array($group);
+		}
+		
+		foreach ($group as $g) {
+			$g = trim($g);
+			//Initialize group if it doesn't already exist
+			if ( !isset($this->property_groups[$g]) )
+				$this->property_groups[$g] = array();
+			
+			//Add property to group
+			$this->property_groups[$g][$property] = null;
+		}
+	}
+	
+	/**
+	 * Retrieve property group
+	 * @param string $group Group to retrieve
+	 * @return array Array of properties in specified group
+	 */
+	function get_group($group) {
+		return $this->get_member_value('property_groups', $group, array());
+	}
+	
+	/**
+	 * Sets an element for the field type
+	 * @param string $name Name of element
+	 * @param CNR_Field_Type $type Reference of field type to use for element
+	 * @param array $properties Properties for element (passed as keyed associative array)
+	 * @param string $id_prop Name of property to set $name to (e.g. ID, etc.)
+	 */
+	function set_element($name, $type, $properties = array(), $id_prop = 'id') {
+		$name = trim(strval($name));
+		if ( empty($name) )
+			return false;
+		//Create new field for element
+		$el = new CNR_Field($name, $type);
+		//Set container to current field instance
+		$el->set_container($this);
+		//Add properties to element
+		$el->set_properties($properties);
+		//Save element to current instance
+		$this->elements[$name] =& $el;
+	}
+	
+	/**
+	 * Add a layout to the field
+	 * @param string $name Name of layout
+	 * @param string $value Layout text
+	 */
+	function set_layout($name, $value = '') {
+		if ( !is_string($name) )
+			return false;
+		$name = trim($name);
+		$this->layout[$name] = $value;
+		return true;
+	}
+	
+	/**
+	 * Retrieve specified layout
+	 * @param string $name Layout name
+	 * @return string Specified layout text
+	 */
+	function get_layout($name = 'form') {
+		return $this->get_member_value('layout', $name);
+	}
+	
 	/**
 	 * Parse field layout with a regular expression
 	 * @param string $layout Layout data
@@ -557,16 +682,16 @@ class CNR_Content_Types extends CNR_Base {
 	 *					'match' 		=> (string) placeholder match
 	 *					'attributes' 	=> (array) attributes
 	 */
-	function parse_field_layout($layout, $search) {
+	function parse_layout($layout, $search) {
 		$ph_xml = '';
-		$parse_match;
+		$parse_match = '';
 		$ph_root_tag = 'ph_root_element';
 		$ph_start_xml = '<';
 		$ph_end_xml = ' />';
 		$ph_wrap_start = '<' . $ph_root_tag . '>';
 		$ph_wrap_end = '</' . $ph_root_tag . '>';
 		$parse_result = false;
-
+		
 		//Find all nested layouts in layout
 		$match_value = preg_match_all($search, $layout, $parse_match, PREG_PATTERN_ORDER);
 
@@ -619,101 +744,15 @@ class CNR_Content_Types extends CNR_Base {
 
 		return $parse_result;
 	}
-
-	/**
-	 * Retrieves a property from a field definition
-	 *
-	 * 	$properties Elements
-	 * 	--------
-	 * 	tag (string) Base name of targeted property
-	 * 		- May contain multiple path segments to property using dot notation (e.g. path.segments.to.property)
-	 * 	attributes (array) Key/Value array of attributes to customize the returned property
-	 * 		- ref_base (string) [Optional] Sets base path of property relative to the field's root\
-	 * 			> Uses dot notation to specify multiple path segments (e.g. root.layouts)
-	 * 			> Note: If not set, base path defaults to "properties"
-	 * 		- Any other attributes set in placeholder will be included as well
-	 *  match (string) The layout placeholder to be replaced by the retrieved property
-	 *
-	 * @param array $field Field definition to get property from
-	 * @param array $properties Data used to retrieve targeted property in a field definition
-	 * @return mixed Field property targeted by $properties
-	 */
-	function &get_field_data_from_path(&$field, &$properties) {
-		$field_data = $field['data'];
-		/* Setup path to property */
-		
-		if (!isset($properties['path'])) {
-			//Build path
-			$path = $properties['tag'];
-			
-			//Get base path
-			$ref_base = (isset($properties['attributes'][$this->field_ph_attr_reserved['ref_base']])) ? $properties['attributes'][$this->field_ph_attr_reserved['ref_base']] : '';
-			$path_base = (!empty($ref_base)) ? (('root' != $ref_base) ? $ref_base : '') : $this->field_ph_base_default;
 	
-			//Append item path to base path
-			if (!empty($path_base))
-				$path = $path_base . $this->field_path_delim . $path;
-			//Check if reference exists in field definition
-			$properties['path'] = explode($this->field_path_delim, $path);
-		}
-		
-		//Check if additional path segments have been included
-		$args = func_get_args();
-		$path_segments = $properties['path'];
-		if (2 < ($args_count = count($args))) {
-			for ($s = 2; $s < $args_count; $s++) {
-				if (is_array($args[$s])) {
-					$path_segments = array_merge($path_segments, $args[$s]);
-				} else {
-					$path_segments[] = $args[$s];
-				}
-			}
-		}
-		$el = ('properties' == $path_segments[count($path_segments) - 1] && 'longitude' == $path_segments[count($path_segments) - 2]) ? true : false;
-		
-		/* Get requested data */
-		
-		//Check if path points to a nested field or a property of a nested field property
-		if (1 < count($path_segments) 													//Path is made up of more than 1 segment
-			&& is_array($nested_field =& $this->util->get_array_item($field, array_slice($path_segments, 0, 2)))	//Field property located at first 2 segments is an array
-			&& isset($nested_field['field'])			 								//Field property is a nested field
-		) {
-			if (!$this->is_field_populated($nested_field)) {							//Nested field has not already been populated (e.g. by a previous request for the same field)
-				//Retrieve element
-				$element = $this->get_field($nested_field, $field['path'], $field['data']);
-				//Replace element in field definition with retrieved element
-				if (!empty($element)) {
-					$element['field'] = $nested_field['field'];
-					$nested_field = $element;
-				}
-			}
-			$field_data = $nested_field['data'];
-		}
-		$target_property =& $this->util->get_array_item($field, $path_segments);
-		//Set property data
-		if ($this->uses_field_data($target_property) && !empty($field_data)) {
-			//Wrap property in array
-			$target_property['value'] = $field_data;
-			$target_property['data_retrieved'] = true;
-		}
-		
-		return $target_property;
-	}
-	
-	/**
-	 * Checks if specified property uses field data
-	 * @param array $property Property to check data usage for
-	 * @return boolean TRUE if $property uses field data, FALSE otherwise
-	 */
-	function uses_field_data($property) {
-		if (is_array($property)
-			&& isset($property['uses_data']) 		//Contains 'Uses Data' property
-			&& $property['uses_data']				//Confirmed to use field data
-			&& !isset($property['data_retrieved'])	//Make sure data was not already retrieved for property
-		) {
-			return true;
-		}
-		return false;
+	function get_placeholder_defaults() {
+		$ph = new stdClass();
+		$ph->start = '{';
+		$ph->end = '}';
+		$ph->reserved = array('ref' => 'ref_base');
+		$ph->pattern_general = '/' . $ph->start . '([a-zA-Z0-9_].*?)' . $ph->end . '/i';
+		$ph->pattern_layout = '/' . $ph->start . '([a-zA-Z0-9].*?\s+' . $ph->reserved['ref'] . '="layout.*?".*?)' . $ph->end . '/i';
+		return $ph;
 	}
 	
 	/**
@@ -723,275 +762,725 @@ class CNR_Content_Types extends CNR_Base {
 	 * @param array $attr_data Data for current field (Passed by reference)
 	 * @param bool $parent_match TRUE if $attr_data contains a reference to the current field's parent FALSE if not (to avoid searching data for current item if parent is not in data)
 	 */
-	function build_field($field, $field_path = array(), &$attr_data, $parent_matched = true) {
+	function build_layout($layout = 'form', $field_path = array()/*, &$attr_data, $parent_matched = true*/) {
 		$args = func_get_args();
 		$out = '';
-		$field_definition = $this->get_field($field, $field_path, $attr_data);
-		//Stop processing & return empty string if field is not valid
-		if (empty($field_definition)
-		|| !isset($field_definition['properties'])
-		|| (empty($field_definition['properties']) && !isset($field_definition['elements']))
-		|| !isset($field_definition['layout']['form'])
-		)
-		return $out;
-		
+
 		/* Layout */
 		
+		//Get base layout
+		$out = $this->get_layout($layout);
+		
 		//Parse Layout
-		$out = $field_definition['layout']['form'];
-		$ph_start = '{';
-		$ph_end = '}';
-		$re_ph = '/' . $ph_start . '([a-zA-Z0-9_].*?)' . $ph_end . '/i';
-		$re_ph_layout = '/' . $ph_start . '([a-zA-Z0-9].*?\s+' . $this->field_ph_attr_reserved['ref_base'] . '="layout.*?".*?)' . $ph_end . '/i';
-
-		//Find all nested layouts in layout
-		while ($ph_match = $this->parse_field_layout($out, $re_ph_layout)) {
+		$ph = $this->get_placeholder_defaults();
+		
+		//Find all nested layouts in current layout
+		while ($ph->match = $this->parse_layout($out, $ph->pattern_layout)) {
 			//Iterate through the different types of layout placeholders
-			foreach ($ph_match as $tag => $instances) {
+			foreach ($ph->match as $tag => $instances) {
 				//Iterate through instances of a specific type of layout placeholder
 				foreach ($instances as $instance) {
-					//Build path to item
-					$nested_layout = $this->get_field_data_from_path($field_definition, $instance);
-						
+					//Get nested layout
+					$nested_layout = $this->get_member_value($instance);
+
 					//Replace layout placeholder with retrieved item data
-					$out = str_replace($ph_start . $instance['match'] . $ph_end, $nested_layout, $out);
+					if ( !empty($nested_layout) )
+						$out = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $out);
 				}
 			}
 		}
-
+		
 		//Search layout for placeholders
-		if ($ph_match = $this->parse_field_layout($out, $re_ph)) {
+		while ( $ph->match = $this->parse_layout($out, $ph->pattern_general) ) {
 			//Iterate through placeholders (tag, id, etc.)
-			foreach ($ph_match as $tag => $instances) {
+			foreach ($ph->match as $tag => $instances) {
 				//Iterate through instances of current placeholder
 				foreach ($instances as $instance) {
-					//Build path to replacement data
-					$target_property = $this->get_field_data_from_path($field_definition, $instance);
-					//Check if value is group (properties, etc.)
-					//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
-				
-					if (is_array($target_property) && isset($target_property['value']) && is_scalar($target_property['value'])) { /* Check if item has a value property */
-						$target_property = $target_property['value'];
-					} elseif (is_array($target_property)
-						&& !empty($instance['attributes'])
-						&& is_array($instance['attributes'])
-						&& $attribs = array_diff(array_keys($instance['attributes']), array_keys($this->field_ph_attr_reserved))
-					) {
-						//Find items matching criteria in $target_property
-						$group_val = array();
-						//Iterate through items in group
-						while (list($item_key,) = each($target_property)) {
-							//Set value as reference so that changes will be reflected in field definition
-							$item_val =& $this->get_field_data_from_path($field_definition, $instance, $item_key);
-							if (!is_array($item_val)) {
-								unset($item_val);
-								continue;
-							}
-								
-							$valid_item = false;
-							//Check item for each attribute
-							foreach ($attribs as $attrib) {
-								if (isset($item_val[$attrib]) && $item_val[$attrib] == $instance['attributes'][$attrib])
-									$valid_item = true;
-								else {
-									$valid_item = false;
-									break;
-								}
-							}
-							//Add item to group
-							if ($valid_item) {
-								$group_val[] = $item_key . '="' . ((isset($item_val['value'])) ? $item_val['value'] : '') . '"';
-							}
-							//Unset group item to avoid reference issues
-							unset($item_val);
-						}
-						//Build string from matching items
-						if (!empty($group_val)) {
-							$target_property = implode(' ', $group_val);
-						}
+					//Filter value based on placeholder name
+					$target_property = apply_filters('cnr_process_placeholder_' . $tag, '', $this, $instance, $layout);
+					
+					//Filter value using general filters (if necessary)
+					if ( empty($target_property) ) {
+						$target_property = apply_filters('cnr_process_placeholder', $target_property, $this, $instance, $layout);
 					}
-					elseif (is_array($target_property) && isset($target_property['field'])) { /* Check if item is a nested field */
-						$target_property = $this->build_field($target_property, $field_definition['path'], $field_definition['data'], $parent_matched);
-					}
-					elseif (!is_scalar($target_property)) { /* Set default value for item */
+						
+					
+					//Clear value if value not a string
+					if ( !is_scalar($target_property) ) {
 						$target_property = '';
 					}
 					//Replace layout placeholder with retrieved item data
-					$out = str_replace($ph_start . $instance['match'] . $ph_end, $target_property, $out);
+					$out = str_replace($ph->start . $instance['match'] . $ph->end, $target_property, $out);
 				}
 			}
 		}
-
+		
 		//Remove any unprocessed placeholders from layout
-		if ($ph_match = $this->parse_field_layout($out, $re_ph)) {
-			$out = preg_replace($re_ph, '', $out);
+		if ($ph->match = $this->parse_layout($out, $ph->pattern_general)) {
+			$out = preg_replace($ph->pattern_general, '', $out);
 		}
 		
 		/* Return generated value */
 		
 		return $out;
 	}
-
+	
+	/*-** Static Methods **-*/
+	
 	/**
-	 * Outputs HTML for specified field
-	 * @param string $field Name of field to output
+	 * Returns indacator to use field data (in layouts, property values, etc.)
 	 */
-	function the_field($field, $attribute = null) {
-		echo $this->build_field($field);
+	function uses_data() {
+		return '{data}';
 	}
-
-	/* Types */
-
+	
 	/**
-	 * Retrieves content type definition
-	 * @param string $type Content type to retrieve
-	 * @return mixed Content type definition (array), or FALSE if type does not exist
+	 * Register a function to handle a placeholder
+	 * Multiple handlers may be registered for a single placeholder
+	 * Basically a wrapper function to facilitate adding hooks for placeholder processing
+	 * @uses add_filter()
+	 * @param string $placeholder Name of placeholder to add handler for (Using 'all' will set the function as a handler for all placeholders
+	 * @param callback $handler Function to set as a handler
+	 * @param int $priority (optional) Priority of handler
 	 */
-	function get_type($type = null) {
-		if (empty($type) || !is_string($type)) {
-			$type = $this->get_item_type($type);
-		}
-		if ($this->is_type($type))
-		return $this->content_types[$type];
-		return false;
+	function register_placeholder_handler($placeholder, $handler, $priority = 10) {
+		global $cnr_debug;
+		if ( 'all' == $placeholder )
+			$placeholder = '';
+		else
+			$placeholder = '_' . $placeholder;
+		
+		add_filter('cnr_process_placeholder' . $placeholder, $handler, $priority, 4);
 	}
-
+	
 	/**
-	 * Get content type of item
-	 * @param object $item Post object
-	 * @return string Item content type
+	 * Default placeholder processing
+	 * To be executed when current placeholder has not been handled by another handler
+	 * @param string $target_property Value to be used in place of placeholder
+	 * @param CNR_Field $field Field containing placeholder
+	 * @param array $placeholder Current placeholder
+	 * @see CNR_Field::parse_layout for structure of $placeholder array
+	 * @param string $layout Layout to build
+	 * @return string Value to use in place of current placeholder
 	 */
-	function get_item_type($item) {
-		$type = '';
-		if (empty($item) && isset($GLOBALS['post'])) {
-			$item = $GLOBALS['post'];
-		}
+	function process_placeholder_default($target_property, $field, $placeholder, $layout) {
+		//Validate parameters before processing
+		if ( empty($target_property) && is_a($field, 'CNR_Field_Type') && is_array($placeholder) ) {
+			//Build path to replacement data
+			$target_property = $field->get_member_value($placeholder);
 
-		//Get item content type
-		//TODO: Update to get CNR content type
-		$type = $item->post_type;
-		return $type;
-	}
-
-	/**
-	 * Checks if specified content type is defined
-	 * @param string $type Content type identifier
-	 * @return boolean TRUE if content type is defined
-	 */
-	function is_type($type) {
-		if (isset($this->content_types[$type]))
-		return true;
-		return false;
-	}
-
-	/* Type Attributes */
-
-	/**
-	 * Checks if type has specified attribute
-	 * @param array $type Content type definition
-	 * @param string $attribute Attribute identifier
-	 * @return boolean TRUE if content type has attribute
-	 */
-	function has_attribute($type, $attribute) {
-		return (isset($type['attributes'][$attribute]));
-	}
-
-	/**
-	 * Retrieves attribute from content type definition
-	 * @param array $type Content type definition
-	 * @param string $attribute Attribute identifier
-	 * @return mixed Attribute definition (array), FALSE if does not exist
-	 */
-	function get_attribute($type, $attribute) {
-		if (!$this->has_attribute($type, $attribute))
-		return false;
-		return $type['attributes'][$attribute];
-	}
-
-	/**
-	 * Builds HTML for attribute on edit form
-	 * @param array $attribute Attribute definition
-	 * @return string HTML for attribute form
-	 */
-	function build_attribute_form($attribute) {
-		$id = 'attr_' . $attribute['id'];
-		$out = '';
-
-		//Wrappers
-		$wrap = array(
-			'start'			=> '<div id="' . $id . '_wrap" class="attribute_wrap">',
-			'end'			=> '</div>',
-			'label_start'	=> '<label for="' . $id . '">',
-			'label_end'		=> '</label>',
-			'field_start'	=> '<div id="' . $id . '_fields" class="attribute_fields">',
-			'field_end'		=> '</div>'
-			);
-			//Define ID
-			//$id = $this->get_attribute_name($attribute['id']);
-			//Get previously saved attribute data
-			$attr_data = $this->post_meta_get($GLOBALS['post']->ID, $this->get_attribute_name($attribute['id'], 'metadata'), true);
-
-			$out = array($wrap['start'], $wrap['label_start'], $attribute['label'], $wrap['label_end'], $wrap['field_start']);
-			foreach ($attribute['elements'] as $field) {
-				$out[] = $this->build_field($field, $attribute['id'], $attr_data);
+			//Check if value is group (properties, etc.)
+			//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
+			if (is_array($target_property) 
+				&& isset($target_property['value'])
+				&& is_scalar($target_property['value'])
+			) {
+				/* Targeted property is an array but has a value key */
+				/* We use the value of this key */
+				$target_property = $target_property['value'];
+				
+			} elseif (is_array($target_property)
+				&& !empty($placeholder['attributes'])
+				&& is_array($placeholder['attributes'])
+				&& ($ph = $field->get_placeholder_defaults())
+				&& $attribs = array_diff(array_keys($placeholder['attributes']), array_values($ph->reserved))
+			) {
+				/* Targeted property is an array, but the placeholder contains additional options on how property is to be used */
+				
+				//Find items matching criteria in $target_property
+				//Check for group criteria
+				//TODO: Implement more robust/flexible criteria handling (2010-03-11: Currently only processes property groups)
+				if ( 'properties' == $placeholder['tag'] && ($prop_group = $field->get_group($placeholder['attributes']['group'])) && !empty($prop_group) ) {
+					/* Process group */
+					$group_out = array();
+					//Iterate through properties in group and build string
+					foreach ( $prop_group as $prop_key => $prop_val ) {
+						$group_out[] = $prop_key . '="' . $field->get_property($prop_key) . '"'; 
+					}
+					$target_property = implode(' ', $group_out);
+				}
+			} elseif ( is_object($target_property) && is_a($target_property, $field->base_class) ) {
+				/* Targeted property is actually a nested field */
+				//Set caller to current field
+				$target_property->set_caller($field);
+				//Build layout for nested element
+				$target_property = $target_property->build_layout($layout);
 			}
-			array_push($out, $wrap['field_end'], $wrap['end']);
-
-			//Return output as string
-			return implode($out);
-	}
-
-	/**
-	 * Builds formatted base name for attributes
-	 * @param string $format Defines how base name is formatted
-	 * @see get_attribute_name for formatting options
-	 */
-	function get_attribute_basename($format = 'id') {
-		return $this->get_attribute_name('', $format);
-	}
-
-	/**
-	 * Builds formatted name for specified attribute
-	 * @param string $attribute Attribute name
-	 * @param string $format Defines how name is formatted
-	 * 	Options:
-	 * 		post		- Item in $_POST array
-	 * 		attribute	- Sanitized name (spaces replaced with underscore)
-	 * 		[Default]	- First segment is the prefix while the rest of the segments are formatted as a multi-dimensional array item
-	 */
-	function get_attribute_name($attribute = '', $format = 'id') {
-		$arr_bs = $this->attribute_basename;
-		//Add attribute to name segments array
-		if (!empty($attribute)) {
-			if (is_array($attribute))
-				$arr_bs = array_merge($arr_bs, $attribute);
-			else
-				$arr_bs[] = $attribute;
 		}
 		
-		//Format attribute name
-		$bs = $this->util->get_array_path($arr_bs, $format);
-		return $bs;
+		return $target_property;
 	}
-
+	
 	/**
-	 * Saves content type meta data for post
-	 * @param int $post_id ID of saved post
-	 * @param object $post Saved post object
+	 * Build Field ID attribute
+	 * Uses calling/containing objects in ID value
+	 * @param string $target_property Value to replace placeholder with
+	 * @param CNR_Field $field Field being processed
+	 * @param array $placeholder Placeholder properties
+	 * @param string $layout Current layout being processed
 	 */
-	function save_item_attributes($post_id, $post) {
-		$bs = $this->get_attribute_basename('post');
-		$post_vars = '$_POST' . $bs;
-		if (eval("return isset($post_vars);")) {
-			$attributes = eval("return $post_vars;") ;
-			//Save serialized data for each attribute as item meta data
-			foreach ($attributes as $attr => $data) {
-				$meta_key = $this->get_attribute_name($attr, 'metadata');
-				$ret = $this->post_meta_update($post_id, $meta_key, $data);
-			}
+	function process_placeholder_id($target_property, $field, $placeholder, $layout) {
+		$c = $field;
+		$field_id = array();
+		$wrap = array(
+			'open'	=> '[',
+			'close'	=> ']'	
+		);
+		while ( !!$c ) {
+			//Add ID of current field to array
+			if ( isset($c->id) )
+				$field_id[] = $c->id;
+			$c = $c->get_caller();
 		}
+		
+		//Add prefix to ID value
+		$field_id[] = 'attributes';
+		
+		//Convert array to string
+		return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . $wrap['close'];
 	}
+	
+	/**
+	 * Retrieve data for field
+	 * @param string $target_property Value to replace placeholder with
+	 * @param CNR_Field $field Field being processed
+	 * @param array $placeholder Placeholder properties
+	 * @param string $layout Current layout being processed
+	 */
+	function process_placeholder_data($target_property, $field, $placeholder, $layout) {
+		$val = $field->get_data();
+		if ( !is_null($val) )
+			$target_property = $val;
+		
+		//Return data
+		return $target_property;
+	}
+	
+}
+
+class CNR_Field extends CNR_Field_Type {
 
 }
 
+class CNR_Content_Type extends CNR_Content_Base {
+	
+	/**
+	 * Base class for instance objects
+	 * @var string
+	 */
+	var $base_class = 'cnr_content_type';
+	
+	/**
+	 * Indexed array of fields in content type
+	 * @var array
+	 */
+	var $fields = array();
+	
+	/**
+	 * Associative array of groups in conten type
+	 * Key: Group name
+	 * Value: object of group properties
+	 *  > description string Group description
+	 *  > location string Location of group on edit form
+	 *  > fields array Fields in group
+	 * @var array
+	 */
+	var $groups = array();
+	
+	/* Constructors */
+	
+	/**
+	 * Legacy constructor
+	 * @param string $id Content type ID
+	 */
+	function CNR_Content_Type($id = '') {
+		$this->__construct($id);
+	}
+	
+	/**
+	 * Class constructor
+	 * @param string $id Conten type ID
+	 */
+	function __construct($id = '') {
+		parent::__construct($id);
+	}
+	
+	/* Getters/Setters */
+	
+	/**
+	 * Adds group to content type
+	 * Groups are used to display related fields in the UI 
+	 * @param string $id Unique name for group
+	 * @param string $description Short description of group's purpose
+	 * @param string $location Where group will be displayed on post edit form (Default: main)
+	 */
+	function &add_group($id, $title = '', $description = '', $location = 'normal') {
+		//Create new group and set properties
+		$id = trim($id);
+		$this->groups[$id] =& $this->create_group($title, $description, $location);
+		return $this->groups[$id];
+	}
+	
+	/**
+	 * Remove specified group from content type
+	 * @param string $id Group ID to remove
+	 */
+	function remove_group($id) {
+		$id = trim($id);
+		if ( $this->group_exists($id) ) {
+			unset($this->groups[$id]);
+		}
+	}
+	
+	/**
+	 * Standardized method to create a new field group
+	 * @param string $title Group title (used in meta boxes, etc.)
+	 * @param string $description Short description of group's purpose
+	 * @param string $location Where group will be displayed on post edit form (Default: main)
+	 * @return object Group object
+	 */
+	function &create_group($title = '', $description = '', $location = 'normal') {
+		$group = new stdClass();
+		$group->title = trim($title);
+		$group->description = trim($description);
+		$group->location = trim($location);
+		$group->fields = array();
+		return $group;
+	}
+	
+	/**
+	 * Checks if group exists
+	 * @param string $id Group name
+	 * @return bool TRUE if group exists, FALSE otherwise
+	 */
+	function group_exists($id) {
+		$id = trim($id);
+		//Check if group exists in content type
+		return ( array_key_exists($id, $this->groups) );
+	}
+	
+	/**
+	 * Adds field to content type
+	 * @param string $id Unique name for field
+	 * @param CNR_Field_Type|string $parent Field type that this field is based on
+	 * @param array $properties (optional) Field properties
+	 * @param string $group (optional) Group ID to add field to
+	 * @return CNR_Field Reference to new field
+	 */
+	function &add_field($id, $parent, $properties = array(), $group = null) {
+		//Create new field
+		$id = trim(strval($id));
+		$field = new CNR_Field($id);
+		$field->set_parent($parent);
+		$field->set_container($this);
+		$field->set_properties($properties);
+	
+		//Add field to content type
+		$this->fields[$id] =& $field;
+		//Add field to group
+		$this->add_to_group($group, $field);
+		return $field;
+	}
+	
+	/**
+	 * Removes field from content type
+	 * @param string|CNR_Field $field Object or Field ID to remove 
+	 */
+	function remove_field($field) {
+		$field = CNR_Field_Type::get_id($field);
+		if ( !$field )
+			return false;
+		
+		//Remove from fields array
+		//$this->fields[$field] = null;
+		unset($this->fields[$field]);
+		
+		//Remove field from groups
+		$this->remove_from_group($field);
+	}
+	
+	/**
+	 * Adds field to a group in the content type
+	 * Group is created if it does not already exist
+	 * @param string $group ID of group to add field to
+	 * @param CNR_Field $field Field to add to group
+	 */
+	function add_to_group($group, &$field) {
+		//Validate parameters
+		$group = trim(strval($group));
+		if ( empty($group) || empty($field) || !is_a($field, 'CNR_Field_Type') )
+			return false;
+		//Create group if it doesn't exist
+		if ( !$this->group_exists($group) )
+			$this->add_group($group);
+		//Add reference to field in group
+		$this->groups[$group]->fields[$field->id] =& $field;
+	}
+	
+	/**
+	 * Remove field from a group
+	 * If no group is specified, then field is removed from all groups
+	 * @param string|CNR_Field $field Field object or ID of field to remove from group
+	 * @param string $group (optional) Group ID to remove field from
+	 */
+	function remove_from_group($field, $group = '') {
+		//Get ID of field to remove or stop execution if field invalid
+		$field = CNR_Field_Type::get_id($field);
+		if ( !$field )
+			return false;
+			
+		//Remove field from group
+		if ( !empty($group) ) {
+			//Remove field from single group
+			if ( ($group =& $this->get_group($group)) && isset($group->fields[$field]) ) {
+				unset($group->fields[$field]);
+			}
+		} else {
+			//Remove field from all groups
+			foreach ( array_keys($this->groups) as $group ) {
+				if ( ($group =& $this->get_group($group)) && isset($group->fields[$field]) ) {
+					unset($group->fields[$field]);
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Retrieve specified group
+	 * @param string $group ID of group to retrieve
+	 * @return object Reference to specified group
+	 */
+	function &get_group($group) {
+		$group = trim($group);
+		//Create group if it doesn't already exist
+		if ( !$this->group_exists($group) )
+			$this->add_group($group);
+		
+		return $this->groups[$group];
+	}
+	
+	/**
+	 * Retrieve all groups in content type
+	 * @return array Reference to group objects
+	 */
+	function &get_groups() {
+		return $this->groups;
+	}
+	
+	/**
+	 * Output fields in a group
+	 * @param string $group Group to output
+	 * @return string Group output
+	 */
+	function build_group($group) {
+		$out = array();
+		//Stop execution if group does not exist
+		if ( $this->group_exists($group) && $group =& $this->get_group($group) ) {
+			$out[] = '<div class="cnr_attributes_wrap">'; //Wrap all fields in group
+
+			//Build layout for each field in group
+			foreach ( $group->fields as $field ) {
+				//Start field output
+				$id = 'cnr_field_' . $field->get_id();
+				$out[] = '<div id="' . $id . '_wrap" class="cnr_attribute_wrap">';
+				//Build field layout 
+				$out[] = $field->build_layout();
+				//end field output
+				$out[] = '</div>';
+			}
+			$out[] = '</div>'; //Close fields container
+			//Add description if exists
+			if ( !empty($group->description) )
+				$out[] = '<p class="cnr_group_description">' . $group->description . '</p>';
+		}
+		
+		//Return group output
+		return implode($out);
+	}
+	
+	/**
+	 * Set data for a field
+	 * @param string|CNR_Field $field Reference or ID of Field to set data for
+	 * @param mixed $value Data to set
+	 */
+	function set_data($field, $value = '') {
+		if ( 1 == func_num_args() && is_array($field) )
+			$this->data = $field;
+		else {
+			$field = CNR_Field_Type::get_id($field);
+			if ( empty($field) )
+				return false;
+			$this->data[$field] = $value;
+		}
+	}
+	
+	/*-** Admin **-*/
+	
+	/**
+	 * Adds meta boxes for post's content type
+	 * Each group in content type is a separate meta box
+	 * @param string $type Type of item meta boxes are being build for (post, page, link)
+	 * @param string $context Location of meta box (normal, advanced, side)
+	 * @param object $post Post object
+	 */
+	function admin_do_meta_boxes($type, $context, $post) {
+		//Add post data to content type
+		global $cnr_content_utilities;
+		$this->set_data($cnr_content_utilities->get_item_data($post));
+		
+		//Get Groups
+		$groups = array_keys($this->get_groups());
+		$priority = 'default';
+		//Iterate through groups and add meta box if it fits the context (location)
+		foreach ( $groups as $group_id ) {
+			$group =& $this->get_group($group_id);
+			if ( $context == $group->location && count($group->fields) ) {
+				//Format ID for meta box
+				$meta_box_id = $this->prefix . '_group_' . $group_id;
+				$group_args = array( 'group' => $group_id );
+				add_meta_box($meta_box_id, $group->title, $this->m('admin_build_meta_box'), $type, $context, $priority, $group_args);
+			}
+		}
+	}
+	
+	/**
+	 * Outputs group fields for a meta box 
+	 * @param object $post Post object
+	 * @param array $box Meta box properties
+	 */
+	function admin_build_meta_box($post, $box) {
+		//Stop execution if group not specified
+		if ( !isset($box['args']['group']) )
+			return false;
+			
+		//Get ID of group to output
+		$group_id =& $box['args']['group'];
+		
+		$output = array();
+		$output[] = '<div class="cnr_group_wrap">';
+		$output[] = $this->build_group($group_id);
+		$output[] = '</div>';
+		
+		//Output group content to screen
+		echo implode($output);
+	}
+	
+}
+
+/**
+ * Utilities for Content Type functionality
+ * @package Cornerstone
+ * @subpackage Content Types
+ * @author SM
+ */
+class CNR_Content_Utilities extends CNR_Base {
+
+	/**
+	 * Initialize content type functionality
+	 */
+	function init() {
+		$this->register_hooks();
+	}
+	
+	/**
+	 * Initialize fields and content types
+	 */
+	function register_types() {
+		//Global variables
+		global $cnr_field_types, $cnr_content_types;
+		
+		/* Field Types */
+		$base = new CNR_Field_Type('base');
+		$base->set_description('Default Element');
+		$base->set_property('tag', 'span');
+		$base->set_property('class', '', 'attr');
+		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
+		$cnr_field_types[$base->id] =& $base;
+		
+		$base_closed = new CNR_Field_Type('base_closed');
+		$base_closed->set_parent('base');
+		$base_closed->set_description('Default Element (Closed Tag)');
+		$base_closed->set_property('value');
+		$base_closed->set_layout('form', '<{tag} {properties ref_base="root" group="attr"}>{value}</{tag}>');
+		$cnr_field_types[$base_closed->id] =& $base_closed;
+		
+		$input = new CNR_Field_Type('input');
+		$input->set_parent('base');
+		$input->set_description('Default Input Element');
+		$input->set_property('tag', 'input');
+		$input->set_property('type', 'text', 'attr');
+		$input->set_property('value', CNR_Field::uses_data(), 'attr');
+		$cnr_field_types[$input->id] =& $input;
+		
+		$text = new CNR_Field_Type('text', 'input');
+		$text->set_description('Text Box');
+		$text->set_property('size', 15, 'attr');
+		$text->set_property('label');
+		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
+		$text->set_layout('label', '<label for="{field_id}">{label}</label>');
+		$cnr_field_types[$text->id] =& $text;
+		
+		$location = new CNR_Field_Type('location');
+		$location->set_description('Geographic Coordinates');
+		$location->set_element('latitude', 'text', array( 'size' => 3, 'label' => 'Latitude' ));
+		$location->set_element('longitude', 'text', array( 'size' => 3, 'label' => 'Longitude' ));
+		$location->set_layout('form', '<span>{latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>');
+		$cnr_field_types[$location->id] =& $location;
+		
+		$phone = new CNR_Field_Type('phone');
+		$phone->set_description('Phone Number');
+		$phone->set_element('area', 'text', array( 'size' => 3 ));
+		$phone->set_element('prefix', 'text', array( 'size' => 3 ));
+		$phone->set_element('suffix', 'text', array( 'size' => 4 ));
+		$phone->set_layout('form', '({area ref_base="elements"}) {prefix ref_base="elements"} - {suffix ref_base="elements"}');
+		$cnr_field_types[$phone->id] =& $phone;
+		
+		$hidden = new CNR_Field_Type('hidden');
+		$hidden->set_parent('input');
+		$hidden->set_description('Hidden Field');
+		$hidden->set_property('type', 'hidden');
+		$cnr_field_types[$hidden->id] =& $hidden;
+		
+		$image = new CNR_Field_Type('image');
+		$image->set_parent('base');
+		$image->set_description('Image');
+		$image->set_property('tag', 'img');
+		$image->set_property('src', '/wp-admin/images/wp-logo.gif', 'attr');
+		$cnr_field_types[$image->id] =& $image;
+		
+		$span = new CNR_Field_Type('span');
+		$span->set_description('Inline wrapper');
+		$span->set_parent('base_closed');
+		$span->set_property('tag', 'span');
+		$span->set_property('value', 'Hello there!');
+		$cnr_field_types[$span->id] =& $span;
+		
+		//Enable plugins to modify (add, remove, etc.) field types
+		do_action('cnr_register_field_types');
+		
+		//Content Types
+		
+		$ct = new CNR_Content_Type('post');
+		$ct->set_description('Standard Post');
+		$ct->add_group('subtitle', 'Subtitle');
+		$field =& $ct->add_field('subtitle', $text, array('size' => '50', 'label' => 'Subtitle'));
+		$ct->add_to_group('subtitle', $field);
+		$cnr_content_types[$ct->id] =& $ct;
+		
+		//Enable plugins to modify (add, remove, etc.) content types
+		do_action('cnr_register_content_types');
+	}
+	
+	/**
+	 * Registers hooks for content types
+	 */
+	function register_hooks() {
+		//Register types
+		add_action('init', $this->m('register_types'));
+		
+		//Build UI on post edit form
+		add_action('do_meta_boxes', $this->m('admin_do_meta_boxes'), 10, 3);
+		
+		//Save Field data
+		add_action('save_post', $this->m('save_item_data'), 10, 2);
+	}
+	
+	/**
+	 * Retrieves content type definition for specified content item (post, page, etc.)
+	 * @param string|object $item Post object, or item type (string)
+	 * @return CNR_Content_Type Matching content type, empty content type if no matching type exists
+	 */
+	function &get_type($item) {
+		$type = null;
+		//Get item type from Post object
+		if ( is_object($item) ) {
+			//TODO retrieve content type for content item
+		}
+		global $cnr_content_types;
+		if ( isset($cnr_content_types[$item]) ) {
+			$type =& $cnr_content_types[$item];
+		} else {
+			$type =& new CNR_Content_Type($item);
+		}
+		
+		return $type;
+	}
+	
+	function get_meta_key() {
+		return '_cnr_fields';
+	}
+	
+	/**
+	 * Checks if post contains specified field data
+	 * @param Object $post[optional] Post to check data for
+	 * @param string $field[optional] Field ID to check for
+	 * @return bool TRUE if data exists, FALSE otherwise
+	 */
+	function has_item_data($post = null, $field = null) {
+		$ret = $this->get_item_data($post, $field, null);
+		return ( empty($ret) ) ? false : true;
+	}
+	
+	/**
+	 * Retrieve field data for item
+	 * @param object|int $post Post object or Post ID
+	 * @param string $field ID of field to retrieve data for
+	 * @return mixed Field data array for post, or data for single field if specified
+	 */
+	function get_item_data($post = null, $field = null, $default = array()) {
+		$ret = $default;
+		if ( $this->util->check_post($post) ) {
+			$ret = get_post_meta($post->ID, $this->get_meta_key(), true);
+			if ( is_string($field) && ($field = trim($field)) && !empty($field) ) {
+				$ret = ( isset($ret[$field]) ) ? $ret[$field] : '';
+			}
+		}
+		return $ret; 
+	}
+	
+	/**
+	 * Adds meta boxes for post's content type
+	 * Each group in content type is a separate meta box
+	 * @param string $type Type of item meta boxes are being build for (post, page, link)
+	 * @param string $context Location of meta box (normal, advanced, side)
+	 * @param object $post Post object
+	 */
+	function admin_do_meta_boxes($type, $context, $post) {
+		//Validate $type. Should be 'post' or 'page' for our purposes
+		if ( 'post' != $type && 'page' != $type )
+			return false;
+
+		//TODO Determine content type of post
+		$item_type = 'post';
+		
+		//Get content type definition
+		$ct =& $this->get_type($item_type);
+
+		//Pass processing to content type instance
+		$ct->admin_do_meta_boxes($type, $context, $post);
+	}
+	
+	
+	/**
+	 * Saves field data submitted for current post
+	 * @param int $post_id ID of current post
+	 * @param object $post Post object
+	 */
+	function save_item_data($post_id, $post) {
+		if ( !isset($_POST['cnr']['attributes']) || empty($post_id) || empty($post) )
+			return false;
+		$prev_data = $this->get_item_data($post_id);
+		
+		//Get current field data
+		$curr_data = $_POST['cnr']['attributes'];
+		
+		//Merge arrays together (new data overwrites old data)
+		if ( is_array($prev_data) && is_array($curr_data) ) {
+			$curr_data = array_merge($prev_data, $curr_data);
+		}
+		
+		//Save to database
+		update_post_meta($post_id, $this->get_meta_key(), $curr_data);
+	}
+}
 ?>
