@@ -231,13 +231,11 @@ class CNR_Utilities {
 	function property_exists($class, $property) {
 		if ( !is_object($class) && !is_array($class) )
 			return false;
-		if (function_exists('property_exists')) {
-			if (!property_exists($class, $property))
-				return false;
-		} elseif (!array_key_exists($property, $class)) {
-			return false;
+		if ( function_exists('property_exists') && is_object($class) ) {
+			return property_exists($class, $property);
+		} else {
+			return array_key_exists($property, $class);
 		}
-		return true;
 	}
 	
 	function &get_property(&$obj, $property) {
