@@ -87,8 +87,8 @@ class CNR_Posts extends CNR_Base {
 	/**
 	 * Gets posts matching parameters and stores them in global $wp_query variable
 	 * 
-	 * @param int $limit[optional] Maximum number of posts to retrieve (Default: -1 = All matching posts)
-	 * @param array $args[optional] Additional arguments to use in post query
+	 * @param int $limit (optional) Maximum number of posts to retrieve (Default: -1 = All matching posts)
+	 * @param array $args (optional) Additional arguments to use in post query
 	 * @return array Retrieved posts
 	 */
 	function get( $limit = -1, $args = null ) {
@@ -246,7 +246,7 @@ class CNR_Posts extends CNR_Base {
 	}
 	
 	/**
-	 * @param int $post[optional] ID of post to check for existence in the object's posts array (uses global $post object if no value passed)
+	 * @param int $post (optional) ID of post to check for existence in the object's posts array (uses global $post object if no value passed)
 	 * @return bool TRUE if post is in posts array
 	 */
 	function contains( $post = null ) {

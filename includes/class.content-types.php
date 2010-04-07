@@ -32,6 +32,8 @@ function cnr_the_post_data($field, $post = null) {
 cnr_register_placeholder_handler('all', array('CNR_Field_Type', 'process_placeholder_default'), 11);
 cnr_register_placeholder_handler('field_id', array('CNR_Field_Type', 'process_placeholder_id'));
 cnr_register_placeholder_handler('data', array('CNR_Field_Type', 'process_placeholder_data'));
+cnr_register_placeholder_handler('loop', array('CNR_Field_Type', 'process_placeholder_loop'));
+cnr_register_placeholder_handler('data_ext', array('CNR_Field_Type', 'process_placeholder_data_ext'));
 	
 /**
  * Content Types - Base Class
@@ -97,7 +99,8 @@ class CNR_Content_Base extends CNR_Base {
 		//Stop execution if no path is supplied
 		if ( empty($path) )
 			return false;
-			
+		$args = func_get_args();
+		$path = $this->util->build_path($args);
 		$item =& $this;
 		//Iterate over path and check if each level exists before moving on to the next
 		for ($x = 0; $x < count($path); $x++) {
@@ -664,10 +667,51 @@ class CNR_Field_Type extends CNR_Content_Base {
 	/**
 	 * Retrieve specified layout
 	 * @param string $name Layout name
+	 * @param bool $parse_nested (optional) Whether nested layouts should be expanded in retreived layout or not (Default: TRUE)
 	 * @return string Specified layout text
 	 */
-	function get_layout($name = 'form') {
-		return $this->get_member_value('layout', $name);
+	function get_layout($name = 'form', $parse_nested = true) {
+		//Retrieve specified layout (use $name value if no layout by that name exists)
+		$layout = $this->get_member_value('layout', $name, $name);
+		
+		//Find all nested layouts in current layout
+		if ( !empty($layout) && !!$parse_nested ) {
+			$ph = $this->get_placeholder_defaults();
+		
+			while ($ph->match = $this->parse_layout($out, $ph->pattern_layout)) {
+				//Iterate through the different types of layout placeholders
+				foreach ($ph->match as $tag => $instances) {
+					//Iterate through instances of a specific type of layout placeholder
+					foreach ($instances as $instance) {
+						//Get nested layout
+						$nested_layout = $this->get_member_value($instance);
+	
+						//Replace layout placeholder with retrieved item data
+						if ( !empty($nested_layout) )
+							$out = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $out);
+					}
+				}
+			}
+		}
+		
+		return $layout;
+	}
+	
+	/**
+	 * Checks if specified layout exists
+	 * Finds layout if it exists in current object or any of its parents
+	 * @param string $layout Name of layout to check for
+	 * @return bool TRUE if layout exists, FALSE otherwise
+	 */
+	function has_layout($layout) {
+		$ret = false;
+		if ( is_string($layout) && ($layout = trim($layout)) && !empty($layout) ) {
+			$layout = $this->get_member_value('layout', $layout, false);
+			if ( $layout !== false )
+				$ret = true;
+		}
+		
+		return $ret;
 	}
 	
 	/**
@@ -722,8 +766,17 @@ class CNR_Field_Type extends CNR_Content_Base {
 				$result[$tag] = array();
 				//Instances
 				foreach ($instances as $instance) {
+					//Skip instance if it doesn't exist in parse results
 					if (!isset($parse_result['values'][$instance]))
-					continue;
+						continue;
+						
+					//Stop processing instance if a previously-saved instance with the same options already exists
+					foreach ($result[$tag] as $tag_match) {
+						if ($tag_match['match'] == $parse_match[$instance - 1])
+							continue 2;
+					}
+					
+					//Init instance data array
 					$inst_data = array();
 						
 					//Add Tag to array
@@ -758,12 +811,9 @@ class CNR_Field_Type extends CNR_Content_Base {
 	/**
 	 * Builds HTML for a field based on its properties
 	 * @param array $field Field properties (id, field, etc.)
-	 * @param string|array $field_path Base ID for field
-	 * @param array $attr_data Data for current field (Passed by reference)
-	 * @param bool $parent_match TRUE if $attr_data contains a reference to the current field's parent FALSE if not (to avoid searching data for current item if parent is not in data)
+	 * @param array data Additional data for current field
 	 */
-	function build_layout($layout = 'form', $field_path = array()/*, &$attr_data, $parent_matched = true*/) {
-		$args = func_get_args();
+	function build_layout($layout = 'form', $data = null) {
 		$out = '';
 
 		/* Layout */
@@ -774,22 +824,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 		//Parse Layout
 		$ph = $this->get_placeholder_defaults();
 		
-		//Find all nested layouts in current layout
-		while ($ph->match = $this->parse_layout($out, $ph->pattern_layout)) {
-			//Iterate through the different types of layout placeholders
-			foreach ($ph->match as $tag => $instances) {
-				//Iterate through instances of a specific type of layout placeholder
-				foreach ($instances as $instance) {
-					//Get nested layout
-					$nested_layout = $this->get_member_value($instance);
-
-					//Replace layout placeholder with retrieved item data
-					if ( !empty($nested_layout) )
-						$out = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $out);
-				}
-			}
-		}
-		
 		//Search layout for placeholders
 		while ( $ph->match = $this->parse_layout($out, $ph->pattern_general) ) {
 			//Iterate through placeholders (tag, id, etc.)
@@ -797,13 +831,12 @@ class CNR_Field_Type extends CNR_Content_Base {
 				//Iterate through instances of current placeholder
 				foreach ($instances as $instance) {
 					//Filter value based on placeholder name
-					$target_property = apply_filters('cnr_process_placeholder_' . $tag, '', $this, $instance, $layout);
+					$target_property = apply_filters('cnr_process_placeholder_' . $tag, '', $this, $instance, $layout, $data);
 					
 					//Filter value using general filters (if necessary)
-					if ( empty($target_property) ) {
-						$target_property = apply_filters('cnr_process_placeholder', $target_property, $this, $instance, $layout);
+					if ( '' == $target_property ) {
+						$target_property = apply_filters('cnr_process_placeholder', $target_property, $this, $instance, $layout, $data);
 					}
-						
 					
 					//Clear value if value not a string
 					if ( !is_scalar($target_property) ) {
@@ -813,11 +846,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 					$out = str_replace($ph->start . $instance['match'] . $ph->end, $target_property, $out);
 				}
 			}
-		}
-		
-		//Remove any unprocessed placeholders from layout
-		if ($ph->match = $this->parse_layout($out, $ph->pattern_general)) {
-			$out = preg_replace($ph->pattern_general, '', $out);
 		}
 		
 		/* Return generated value */
@@ -850,36 +878,37 @@ class CNR_Field_Type extends CNR_Content_Base {
 		else
 			$placeholder = '_' . $placeholder;
 		
-		add_filter('cnr_process_placeholder' . $placeholder, $handler, $priority, 4);
+		add_filter('cnr_process_placeholder' . $placeholder, $handler, $priority, 5);
 	}
 	
 	/**
 	 * Default placeholder processing
 	 * To be executed when current placeholder has not been handled by another handler
-	 * @param string $target_property Value to be used in place of placeholder
+	 * @param string $ph_output Value to be used in place of placeholder
 	 * @param CNR_Field $field Field containing placeholder
 	 * @param array $placeholder Current placeholder
 	 * @see CNR_Field::parse_layout for structure of $placeholder array
 	 * @param string $layout Layout to build
+	 * @param array $data Extended data for field (Default: null)
 	 * @return string Value to use in place of current placeholder
 	 */
-	function process_placeholder_default($target_property, $field, $placeholder, $layout) {
+	function process_placeholder_default($ph_output, $field, $placeholder, $layout, $data) {
 		//Validate parameters before processing
-		if ( empty($target_property) && is_a($field, 'CNR_Field_Type') && is_array($placeholder) ) {
+		if ( empty($ph_output) && is_a($field, 'CNR_Field_Type') && is_array($placeholder) ) {
 			//Build path to replacement data
-			$target_property = $field->get_member_value($placeholder);
+			$ph_output = $field->get_member_value($placeholder);
 
 			//Check if value is group (properties, etc.)
 			//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
-			if (is_array($target_property) 
-				&& isset($target_property['value'])
-				&& is_scalar($target_property['value'])
+			if (is_array($ph_output) 
+				&& isset($ph_output['value'])
+				&& is_scalar($ph_output['value'])
 			) {
 				/* Targeted property is an array but has a value key */
 				/* We use the value of this key */
-				$target_property = $target_property['value'];
+				$ph_output = $ph_output['value'];
 				
-			} elseif (is_array($target_property)
+			} elseif (is_array($ph_output)
 				&& !empty($placeholder['attributes'])
 				&& is_array($placeholder['attributes'])
 				&& ($ph = $field->get_placeholder_defaults())
@@ -887,7 +916,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 			) {
 				/* Targeted property is an array, but the placeholder contains additional options on how property is to be used */
 				
-				//Find items matching criteria in $target_property
+				//Find items matching criteria in $ph_output
 				//Check for group criteria
 				//TODO: Implement more robust/flexible criteria handling (2010-03-11: Currently only processes property groups)
 				if ( 'properties' == $placeholder['tag'] && ($prop_group = $field->get_group($placeholder['attributes']['group'])) && !empty($prop_group) ) {
@@ -897,29 +926,26 @@ class CNR_Field_Type extends CNR_Content_Base {
 					foreach ( $prop_group as $prop_key => $prop_val ) {
 						$group_out[] = $prop_key . '="' . $field->get_property($prop_key) . '"'; 
 					}
-					$target_property = implode(' ', $group_out);
+					$ph_output = implode(' ', $group_out);
 				}
-			} elseif ( is_object($target_property) && is_a($target_property, $field->base_class) ) {
+			} elseif ( is_object($ph_output) && is_a($ph_output, $field->base_class) ) {
 				/* Targeted property is actually a nested field */
 				//Set caller to current field
-				$target_property->set_caller($field);
+				$ph_output->set_caller($field);
 				//Build layout for nested element
-				$target_property = $target_property->build_layout($layout);
+				$ph_output = $ph_output->build_layout($layout);
 			}
 		}
 		
-		return $target_property;
+		return $ph_output;
 	}
 	
 	/**
 	 * Build Field ID attribute
-	 * Uses calling/containing objects in ID value
-	 * @param string $target_property Value to replace placeholder with
-	 * @param CNR_Field $field Field being processed
-	 * @param array $placeholder Placeholder properties
-	 * @param string $layout Current layout being processed
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
 	 */
-	function process_placeholder_id($target_property, $field, $placeholder, $layout) {
+	function process_placeholder_id($ph_output, $field, $placeholder, $layout, $data) {
 		$c = $field;
 		$field_id = array();
 		$wrap = array(
@@ -942,18 +968,80 @@ class CNR_Field_Type extends CNR_Content_Base {
 	
 	/**
 	 * Retrieve data for field
-	 * @param string $target_property Value to replace placeholder with
-	 * @param CNR_Field $field Field being processed
-	 * @param array $placeholder Placeholder properties
-	 * @param string $layout Current layout being processed
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
 	 */
-	function process_placeholder_data($target_property, $field, $placeholder, $layout) {
+	function process_placeholder_data($ph_output, $field, $placeholder, $layout) {
 		$val = $field->get_data();
 		if ( !is_null($val) )
-			$target_property = $val;
+			$ph_output = $val;
 		
 		//Return data
-		return $target_property;
+		return $ph_output;
+	}
+	
+	/**
+	 * Loops over data to build field output
+	 * Options:
+	 *  data		- Dot-delimited path in field that contains data to loop through
+	 *  layout		- Name of layout to use for each data item in loop
+	 *  layout_data	- Name of layout to use for data item that matches previously-saved field data
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
+	 */
+	function process_placeholder_loop($ph_output, $field, $placeholder, $layout, $data) {
+		//Setup loop options
+		$attr_defaults = array (
+								'layout'		=> '',
+								'layout_data'	=> null,
+								'data'			=> ''
+								);
+								
+		$attr = wp_parse_args($placeholder['attributes'], $attr_defaults);
+		
+		if ( is_null($attr['layout_data']) ) {
+			$attr['layout_data'] =& $attr['layout'];
+		}
+		
+		//Get data for loop
+		$path = explode('.', $attr['data']);
+		$loop_data = $field->get_member_value($path);
+		if ( isset($loop_data['value']) )
+			$loop_data = $loop_data['value'];
+		$out = array();
+		
+		//Get field data
+		$data = $field->get_data();
+		
+		//Iterate over data and build output
+		if ( is_array($loop_data) && !empty($loop_data) ) {
+			foreach ( $loop_data as $value => $label ) {
+				//Load appropriate layout based on field value
+				$layout = ( ($data === 0 && $value === $data) xor $data == $value ) ? $attr['layout_data'] : $attr['layout'];
+				//Stop processing if no valid layout is returned
+				if ( empty($layout) )
+					continue;
+				//Prep extended field data
+				$data_ext = array('option_value' => $value, 'option_text' => $label);
+				$out[] = $field->build_layout($layout, $data_ext);
+			}
+		}
+		
+		//Return output
+		return implode($out);
+	}
+	
+	/**
+	 * Returns specified value from extended data array for field
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
+	 */
+	function process_placeholder_data_ext($ph_output, $field, $placeholder, $layout, $data) {
+		if ( isset($placeholder['attributes']['id']) && ($key = $placeholder['attributes']['id']) && isset($data[$key]) ) {
+			$ph_output = strval($data[$key]);
+		}
+		
+		return $ph_output;
 	}
 	
 }
@@ -1100,16 +1188,36 @@ class CNR_Content_Type extends CNR_Content_Base {
 	}
 	
 	/**
+	 * Retrieve specified field in Content Type
+	 * @param string $field Field ID
+	 * @return CNR_Field Specified field
+	 */
+	function &get_field($field) {
+		if ( $this->has_field($field) ) {
+			$field = trim($field);
+			return $this->fields[$field];
+		}
+		//Return empty field if no field exists
+		$field =& new CNR_Field('');
+		return $field;
+	}
+	
+	function has_field($field) {
+		return ( !is_string($field) || empty($field) || !isset($this->fields[$field]) ) ? false : true;
+	}
+	
+	/**
 	 * Adds field to a group in the content type
 	 * Group is created if it does not already exist
 	 * @param string $group ID of group to add field to
-	 * @param CNR_Field $field Field to add to group
+	 * @param string $field ID of field to add to group
 	 */
-	function add_to_group($group, &$field) {
+	function add_to_group($group, $field) {
 		//Validate parameters
 		$group = trim(strval($group));
-		if ( empty($group) || empty($field) || !is_a($field, 'CNR_Field_Type') )
+		if ( empty($group) || !$this->has_field($field) )
 			return false;
+		$field =& $this->get_field($field);
 		//Create group if it doesn't exist
 		if ( !$this->group_exists($group) )
 			$this->add_group($group);
@@ -1183,7 +1291,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 				//Start field output
 				$id = 'cnr_field_' . $field->get_id();
 				$out[] = '<div id="' . $id . '_wrap" class="cnr_attribute_wrap">';
-				//Build field layout 
+				//Build field layout
 				$out[] = $field->build_layout();
 				//end field output
 				$out[] = '</div>';
@@ -1295,13 +1403,16 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base->set_property('tag', 'span');
 		$base->set_property('class', '', 'attr');
 		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
+		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
 		$cnr_field_types[$base->id] =& $base;
 		
 		$base_closed = new CNR_Field_Type('base_closed');
 		$base_closed->set_parent('base');
 		$base_closed->set_description('Default Element (Closed Tag)');
 		$base_closed->set_property('value');
-		$base_closed->set_layout('form', '<{tag} {properties ref_base="root" group="attr"}>{value}</{tag}>');
+		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_id}" {properties ref_base="root" group="attr"}>');
+		$base_closed->set_layout('form_end', '</{tag}>');
+		$base_closed->set_layout('form', '{form_start ref_base="layout"}{value}{form_end ref_base="layout"}');
 		$cnr_field_types[$base_closed->id] =& $base_closed;
 		
 		$input = new CNR_Field_Type('input');
@@ -1317,7 +1428,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		$text->set_property('size', 15, 'attr');
 		$text->set_property('label');
 		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
-		$text->set_layout('label', '<label for="{field_id}">{label}</label>');
 		$cnr_field_types[$text->id] =& $text;
 		
 		$location = new CNR_Field_Type('location');
@@ -1355,6 +1465,30 @@ class CNR_Content_Utilities extends CNR_Base {
 		$span->set_property('value', 'Hello there!');
 		$cnr_field_types[$span->id] =& $span;
 		
+		$select = new CNR_Field_Type('select');
+		$select->set_description('Select tag');
+		$select->set_parent('base_closed');
+		$select->set_property('tag', 'select');
+		$select->set_property('tag_option', 'option');
+		$select->set_property('options', array());
+		$select->set_layout('form', '{label ref_base="layout"} {form_start ref_base="layout"}{loop data="properties.options" layout="option" layout_data="option_data"}{form_end ref_base="layout"}');
+		$select->set_layout('option', '<{tag_option} value="{data_ext id="option_value"}">{data_ext id="option_text"}</{tag_option}>');
+		$select->set_layout('option_data', '<{tag_option} value="{data_ext id="option_value"}" selected="selected">{data_ext id="option_text"}</{tag_option}>');		
+		$cnr_field_types[$select->id] =& $select;
+		
+		$attachment = new CNR_Field_Type('attachment');
+		$attachment->set_description('Post attachment');
+		$attachment->set_parent('base_closed');
+		$attachement->set_layout('image', '<img id="{field_id}-frame" src="{data}" class="image_frame" />
+			<input type="hidden" name="{field_id}" id="{field_id}" value="{data}" />');
+		$attachment->set_layout('form', '
+				<a href="#image_upload_iframe_src&amp;TB_iframe=true" id="{field_id}-lnk" class="thickbox button" title="image_title" onclick="return false;">Select Image</a>
+				<span id="{field_id}-options" class="options options-default">
+				or <a href="#" title="Remove Image" class="del-link" id="{field_id}-option_remove" onclick="return false; postImageAction(this); return false;">Remove Image</a>
+				 <span id="{field_id}-remove_confirmation" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="{field_id}-remove" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="{field_id}-remove_cancel" onclick="return postImageAction(this);">Cancel</a></span>
+				</span>');
+		$cnr_field_types[$attachment->id] =& $attachment;
+		
 		//Enable plugins to modify (add, remove, etc.) field types
 		do_action('cnr_register_field_types');
 		
@@ -1363,8 +1497,11 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ct = new CNR_Content_Type('post');
 		$ct->set_description('Standard Post');
 		$ct->add_group('subtitle', 'Subtitle');
-		$field =& $ct->add_field('subtitle', $text, array('size' => '50', 'label' => 'Subtitle'));
-		$ct->add_to_group('subtitle', $field);
+		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
+		$ct->add_to_group('subtitle', 'subtitle');
+		$ct->add_group('image_thumbnail', 'Post Thumbnail (F)');
+		$ct->add_field('image_thumbnail', 'attachment');
+		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
 		$cnr_content_types[$ct->id] =& $ct;
 		
 		//Enable plugins to modify (add, remove, etc.) content types
@@ -1412,8 +1549,8 @@ class CNR_Content_Utilities extends CNR_Base {
 	
 	/**
 	 * Checks if post contains specified field data
-	 * @param Object $post[optional] Post to check data for
-	 * @param string $field[optional] Field ID to check for
+	 * @param Object $post (optional) Post to check data for
+	 * @param string $field (optional) Field ID to check for
 	 * @return bool TRUE if data exists, FALSE otherwise
 	 */
 	function has_item_data($post = null, $field = null) {
@@ -1450,7 +1587,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		if ( 'post' != $type && 'page' != $type )
 			return false;
 
-		//TODO Determine content type of post
+		//TODO Determine actual content type of post
 		$item_type = 'post';
 		
 		//Get content type definition

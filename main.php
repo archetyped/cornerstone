@@ -77,8 +77,8 @@ function cnr_is_last_child() {
 /**
  * Retrieves featured posts
  * @return array Featured posts matching criteria 
- * @param int $limit[optional] Maximum number of featured posts to retrieve
- * @param int|bool $parent[optional] Section to get featured posts of (Defaults to current section).  FALSE if latest featured posts should be retrieved regardless of section
+ * @param int $limit (optional) Maximum number of featured posts to retrieve
+ * @param int|bool $parent (optional) Section to get featured posts of (Defaults to current section).  FALSE if latest featured posts should be retrieved regardless of section
  */
 function cnr_get_featured($limit = 0, $parent = null) {
 	global $cnr;
@@ -120,7 +120,7 @@ function cnr_featured_count() {
  * Checks if Post is "featured"
  * 
  * @return bool TRUE if post is featured, FALSE otherwise 
- * @param object $post[optional] Post to check.  Defaults to current post
+ * @param object $post (optional) Post to check.  Defaults to current post
  */
 function cnr_is_featured($post = null) {
 	global $cnr;
@@ -131,7 +131,7 @@ function cnr_is_featured($post = null) {
 
 /**
  * Checks if post has content to display
- * @param object $post [optional] Post object
+ * @param object $post (optional) Post object
  * @return bool TRUE if post has content, FALSE otherwise
  */
 function cnr_has_content($post = null) {
@@ -155,7 +155,7 @@ function cnr_lightbox_initialize() {
  * Gets Image associated with post
  * 
  * @return array|bool Source image data (url, width, height), or false if no image is available
- * @param int $post_id[optional] Post ID. Defaults to current post
+ * @param int $post_id (optional) Post ID. Defaults to current post
  */
 function cnr_get_post_image_src($post_id = 0) {
 	global $cnr;
@@ -215,7 +215,7 @@ function cnr_the_filesize($post = null, $formatted = true) {
 /**
  * Retrieves the post's section data 
  * @return string post's section data 
- * @param string $type[optional] Type of data to return (Default: ID)
+ * @param string $type (optional) Type of data to return (Default: ID)
  * 	Possible values:
  * 	ID		Returns the ID of the section
  * 	name	Returns the name of the section
@@ -227,7 +227,7 @@ function cnr_get_the_section($type = 'ID') {
 
 /**
  * Prints the post's section data
- * @param string $type[optional] Type of data to return (Default: ID)
+ * @param string $type (optional) Type of data to return (Default: ID)
  * @see cnr_get_the_section()
  */
 function cnr_the_section($type = 'ID') {
@@ -270,7 +270,7 @@ function cnr_have_parts() {
  * 
  * @return void
  * @param string $group Code (unique name) of page group to display
- * @param bool $wrap_list[optional] whether or not to wrap list in <ul></ul> tags.
+ * @param bool $wrap_list (optional) whether or not to wrap list in <ul></ul> tags.
  * 	Useful if page group list items are meant to be part of a larger list
  */
 function cnr_list_page_group($group, $wrap_list = true) {

@@ -182,7 +182,7 @@ class Cornerstone extends CNR_Base {
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
 		add_action('admin_menu', $this->m('admin_post_edit'));
 			//Dynamically built function call (media_upload_$type)
-		add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
+		//add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
 			//Attachments
 		add_filter('attachment_fields_to_edit', $this->m('attachment_fields_to_edit'), 11, 2);
 		add_action('pre-html-upload-ui', $this->m('attachment_html_upload_ui'));
@@ -646,7 +646,7 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function post_save($post_id, $post) {
-		$this->post_save_image($post_id, $post);
+		//$this->post_save_image($post_id, $post);
 	}
 	
 	/**
@@ -1127,7 +1127,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Builds Page title for current Page/Content
 	 * @return string Page title 
-	 * @param array|string $args[optional] Parameters for customizing Page title
+	 * @param array|string $args (optional) Parameters for customizing Page title
 	 */
 	function page_title_get($args = '') {
 		$defaults = array(
@@ -1194,7 +1194,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Outputs formatted page title
 	 * @return void
-	 * @param array|string $args[optional] Parameters for customizing Page title
+	 * @param array|string $args (optional) Parameters for customizing Page title
 	 */
 	function page_title($args = '') {
 		echo $this->page_title_get($args);
@@ -1242,7 +1242,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Retrieves the post's section data 
 	 * @return string post's section data 
-	 * @param string $type[optional] Type of data to return (Default: ID)
+	 * @param string $type (optional) Type of data to return (Default: ID)
 	 * 	Possible values:
 	 * 	ID		Returns the ID of the section
 	 * 	name	Returns the name of the section
@@ -1259,7 +1259,7 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Prints the post's section data
-	 * @param string $type[optional] Type of data to return (Default: ID)
+	 * @param string $type (optional) Type of data to return (Default: ID)
 	 * @see cnr_get_the_section()
 	 */
 	function post_the_section($type = 'ID') {
@@ -1376,7 +1376,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Retrieves matching attachments for post
 	 * @param object|int $post Post object or Post ID (Default: current global post)
-	 * @param array $args[optional] Associative array of query arguments
+	 * @param array $args (optional) Associative array of query arguments
 	 * @see get_posts() for query arguments
 	 * @return array|bool Array of post attachments
 	 */
@@ -1466,7 +1466,7 @@ class Cornerstone extends CNR_Base {
 	 * Retrieve all images attached to post
 	 * @return array Images attached to post. If there are no images attached to post, an empty array is returned
 	 * @param object $post
-	 * @param string $image_type [optional] Defines the type of image to retrieve.  (Default: null - All images)
+	 * @param string $image_type (optional) Defines the type of image to retrieve.  (Default: null - All images)
 	 * Image Types:
 	 * 	- thumbnail:	Used as thumbnail for post
 	 * 	- header:		Used as main header image for post (on post page, etc.)
@@ -1503,7 +1503,7 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Generates property name for storing specified image data in Post object 
-	 * @param object $image_type [optional] Image type to generate property for
+	 * @param object $image_type (optional) Image type to generate property for
 	 * @return string Property name
 	 */
 	function post_get_image_property($image_type = 'header') {
@@ -1512,8 +1512,8 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Retrieves specified image attached to Post
-	 * @param object $post [optional] Post Object (Default: current global post)
-	 * @param string $image_type [optional] Type of image to retrieve for post (Default: header image)
+	 * @param object $post (optional) Post Object (Default: current global post)
+	 * @param string $image_type (optional) Type of image to retrieve for post (Default: header image)
 	 * @return array Image metadata array (src, width, height)
 	*/ 
 	function post_get_image($post = null, $image_type = 'header') {
@@ -1544,10 +1544,10 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Determines whether or not specified image is attached to post
-	 * @param object $post [optional] Post object (Default: current global post)
-	 * @param string $image_type [optional] Image type to check for (Default: header image)
+	 * @param object $post (optional) Post object (Default: current global post)
+	 * @param string $image_type (optional) Image type to check for (Default: header image)
 	 * @see post_get_images() for list of image types
-	 * @param bool $object_only [optional] Check only post object for property existence/data if TRUE
+	 * @param bool $object_only (optional) Check only post object for property existence/data if TRUE
 	 * @return bool TRUE if post has specified image, FALSE otherwise
 	 */
 	function post_has_image($post = null, $image_type = 'header', $object_only = false) {
@@ -1565,7 +1565,7 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Outputs img element of image retrieved for post
-	 * @param object $post [optional]
+	 * @param object $post (optional)
 	 * @return 
 	 */
 	function post_the_image($post = null, $image_type = 'header') {
@@ -1613,7 +1613,7 @@ class Cornerstone extends CNR_Base {
 	 * 	0:	Source URI
 	 * 	1:	Width
 	 * 	2:	Height
-	 * @param string $alt [optional] Alt text for image
+	 * @param string $alt (optional) Alt text for image
 	 * @return void
 	 */
 	function post_the_image_element($image, $alt = '') {
@@ -1635,7 +1635,7 @@ class Cornerstone extends CNR_Base {
 	 * Gets image associated with post
 	 * 
 	 * @return array|bool Source image data (url, width, height), or false if no image is available
-	 * @param int $post_id[optional] Post ID. Defaults to current post
+	 * @param int $post_id (optional) Post ID. Defaults to current post
 	 */
 	function post_get_image_src($post_id = 0) {
 		$_post = null;
@@ -1752,8 +1752,8 @@ class Cornerstone extends CNR_Base {
 	 * 			- Ex: $fill_limit (bool) If TRUE, get additional posts to fill post limit
 	 * 
 	 * @return void
-	 * @param int $limit[optional] Maximum number of featured posts to retrieve (Default: -1 = All Featured Posts)
-	 * @param int|bool $parent[optional] Section to get featured posts of (Defaults to current section).
+	 * @param int $limit (optional) Maximum number of featured posts to retrieve (Default: -1 = All Featured Posts)
+	 * @param int|bool $parent (optional) Section to get featured posts of (Defaults to current section).
 	 * 	FALSE if latest featured posts should be retrieved regardless of section
 	 * @todo Integrate into CNR_Posts
 	 */
@@ -1971,7 +1971,7 @@ class Cornerstone extends CNR_Base {
 	 * Determines whether a post is classified as a "feature" or not
 	 * 
 	 * @return bool TRUE if post is classified as a "feature", FALSE otherwise 
-	 * @param int $post_id[optional] ID of the post.  Defaults to current post
+	 * @param int $post_id (optional) ID of the post.  Defaults to current post
 	 * @todo Fix this
 	 */
 	function post_is_featured($_post = null) {
@@ -2488,7 +2488,7 @@ class CNR_Page_Groups {
 	/**
 	 * Populates $groups variable with all Page groups in DB
 	 * @return mixed If a single group is specified, return the object, otherwise, return nothing
-	 * @param object $group_id[optional] Retrieve a specific group by ID
+	 * @param object $group_id (optional) Retrieve a specific group by ID
 	 */
 	function get($group_id = 0) {
 		global $wpdb;
@@ -2669,9 +2669,9 @@ class CNR_Page_Group {
 	/**
 	 * Class Constructor
 	 * @return void
-	 * @param mixed $id[optional] May be ID of existing Group OR name of new group OR a Page Group row returned from DB
-	 * @param string $name[optional] Name of Group
-	 * @param string $pages[optional] Pages in Group (CSV)
+	 * @param mixed $id (optional) May be ID of existing Group OR name of new group OR a Page Group row returned from DB
+	 * @param string $name (optional) Name of Group
+	 * @param string $pages (optional) Pages in Group (CSV)
 	 */
 	function CNR_Page_Group($id = 0, $name = '', $pages = '') {
 		//Get DB Values
@@ -2782,7 +2782,7 @@ class CNR_Page_Group {
 	 * Add page to Group
 	 * @return void
 	 * @param mixed $page Page object or int ID of page to add to group
-	 * @param int $position[optional] Position in group to add the page (Default = -1 (End of list))
+	 * @param int $position (optional) Position in group to add the page (Default = -1 (End of list))
 	 */
 	function add_page($page, $position = -1) {
 		global $wpdb;
@@ -3020,7 +3020,7 @@ class CNR_Page_Group {
 	/**
 	 * Generates HTML list of group pages
 	 * @return string Page list HTML
-	 * @param bool $wrap_list[optional] Whether or not to wrap list items in a UL element (Default = true)
+	 * @param bool $wrap_list (optional) Whether or not to wrap list items in a UL element (Default = true)
 	 */
 	function build_pages_list($wrap_list = true) {
 		$list = ($wrap_list) ? '<ul class="group-pages">%s</ul>' : '%s';
@@ -3039,7 +3039,7 @@ class CNR_Page_Group {
 	/**
 	 * Print HTML list of group pages
 	 * @return void
-	 * @param bool $wrap_list[optional] Whether or not to wrap list items in a UL element (Default = true)
+	 * @param bool $wrap_list (optional) Whether or not to wrap list items in a UL element (Default = true)
 	 */
 	function list_pages($wrap_list = true) {
 		echo $this->build_pages_list($wrap_list);
@@ -3047,7 +3047,7 @@ class CNR_Page_Group {
 	
 	/**
 	 * Retrieves specified template from instance object
-	 * @param string $temp[optional] Template to retrieve
+	 * @param string $temp (optional) Template to retrieve
 	 * @return string Specified template
 	 */
 	function get_template($temp = '') {
