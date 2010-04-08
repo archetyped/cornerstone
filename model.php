@@ -2,6 +2,7 @@
 
 require_once 'includes/class.base.php';
 require_once 'includes/class.content-types.php';
+require_once 'includes/class.media.php';
 require_once 'includes/class.posts.php';
 
 /**
@@ -184,11 +185,13 @@ class Cornerstone extends CNR_Base {
 			//Dynamically built function call (media_upload_$type)
 		//add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
 			//Attachments
+		/*
 		add_filter('attachment_fields_to_edit', $this->m('attachment_fields_to_edit'), 11, 2);
 		add_action('pre-html-upload-ui', $this->m('attachment_html_upload_ui'));
 		add_filter('media_meta', $this->m('media_meta'), 10, 2);
 		add_filter('admin_url', $this->m('media_upload_url'), 10, 2);
 		add_action('save_post', $this->m('post_save'), 10, 2);
+		*/
 		
 			//Management
 		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
@@ -1522,11 +1525,18 @@ class Cornerstone extends CNR_Base {
 		$ret = array();
 		if (!$this->util->check_post($post))
 			return $ret;
+		
+		global $cnr_content_utilities;
+		$field = 'image_' . $image_type;
+		//Get post subtitle data
+		$val = $cnr_content_utilities->get_item_data($post, $field, 0);
 			
+		/*
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
 		//Check for post meta info
 		$val = $this->post_meta_get($post->ID, $prop, true);
+		*/
 		//Get attachment with matching ID
 		$img = wp_get_attachment_image_src($val, '');
 		//Add properties to image data array
@@ -1554,10 +1564,17 @@ class Cornerstone extends CNR_Base {
 		if (!$this->util->check_post($post))
 			return false;
 		
+		global $cnr_content_utilities;
+		$field = 'image_' . $image_type;
+		//Get post subtitle data
+		$val = $cnr_content_utilities->get_item_data($post, $field, '');
+
+		/*
 		//Get image name to retrieve
 		$prop = $this->post_get_image_property($image_type);
 		//Check for post meta info
 		$val = $this->post_meta_get($post->ID, $prop, true);
+		*/
 		//Make sure attachment still exists
 		$val = (!empty($val) && is_numeric($val)) ? get_post($val) : null;
 		return (empty($val)) ? false : true;

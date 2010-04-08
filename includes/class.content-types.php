@@ -305,16 +305,37 @@ class CNR_Content_Base extends CNR_Base {
 	 */
 	function get_id($field = null) {
 		$ret = false;
-		if ( !empty($field) ) {
-			if ( is_a($field, 'cnr_field_type') )
-				$field = $field->id;
-		} elseif ( isset($this) ) {
-			$field = $this->id;
+		if ( ( !is_object($field) || !is_a($field, 'cnr_field_type') ) && isset($this) ) {
+			$field =& $this;
 		}
-
-		if ( is_string($field) )
-			$ret = trim($field);
 		
+		if ( is_a($field, 'cnr_field_type') )
+			$id = $field->id;
+		
+		if ( is_string($id) )
+			$ret = trim($id);
+		
+		//Check if field should be formatted
+		if ( is_string($ret) && ($num_args = func_num_args()) > 0 && ($format = func_get_arg($num_args - 1)) && true === $format ) {
+			$c = $field->get_caller();
+			$field_id = array($ret);
+			$wrap = array(
+				'open'	=> '[',
+				'close'	=> ']'	
+			);
+			while ( !!$c ) {
+				//Add ID of current field to array
+				if ( isset($c->id) )
+					$field_id[] = $c->id;
+				$c = $c->get_caller();
+			}
+			
+			//Add prefix to ID value
+			$field_id[] = 'attributes';
+			
+			//Convert array to string
+			return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . $wrap['close'];
+		}
 		return $ret;
 	}
 	
@@ -946,6 +967,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @return string Placeholder output
 	 */
 	function process_placeholder_id($ph_output, $field, $placeholder, $layout, $data) {
+		/*
 		$c = $field;
 		$field_id = array();
 		$wrap = array(
@@ -964,6 +986,8 @@ class CNR_Field_Type extends CNR_Content_Base {
 		
 		//Convert array to string
 		return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . $wrap['close'];
+		*/
+		return $field->get_id(true);
 	}
 	
 	/**
@@ -1476,17 +1500,11 @@ class CNR_Content_Utilities extends CNR_Base {
 		$select->set_layout('option_data', '<{tag_option} value="{data_ext id="option_value"}" selected="selected">{data_ext id="option_text"}</{tag_option}>');		
 		$cnr_field_types[$select->id] =& $select;
 		
-		$attachment = new CNR_Field_Type('attachment');
-		$attachment->set_description('Post attachment');
+		$attachment = new CNR_Field_Type('media');
+		$attachment->set_description('Media Item');
 		$attachment->set_parent('base_closed');
-		$attachement->set_layout('image', '<img id="{field_id}-frame" src="{data}" class="image_frame" />
-			<input type="hidden" name="{field_id}" id="{field_id}" value="{data}" />');
-		$attachment->set_layout('form', '
-				<a href="#image_upload_iframe_src&amp;TB_iframe=true" id="{field_id}-lnk" class="thickbox button" title="image_title" onclick="return false;">Select Image</a>
-				<span id="{field_id}-options" class="options options-default">
-				or <a href="#" title="Remove Image" class="del-link" id="{field_id}-option_remove" onclick="return false; postImageAction(this); return false;">Remove Image</a>
-				 <span id="{field_id}-remove_confirmation" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="{field_id}-remove" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="{field_id}-remove_cancel" onclick="return postImageAction(this);">Cancel</a></span>
-				</span>');
+		$attachment->set_property('title', 'Select Media');
+		$attachment->set_layout('form', '{media}');
 		$cnr_field_types[$attachment->id] =& $attachment;
 		
 		//Enable plugins to modify (add, remove, etc.) field types
@@ -1500,8 +1518,11 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
 		$ct->add_group('image_thumbnail', 'Post Thumbnail (F)');
-		$ct->add_field('image_thumbnail', 'attachment');
+		$ct->add_field('image_thumbnail', 'media');
 		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
+		$ct->add_group('image_header', 'Post Header (F)');
+		$ct->add_field('image_header', 'media');
+		$ct->add_to_group('image_header', 'image_header');
 		$cnr_content_types[$ct->id] =& $ct;
 		
 		//Enable plugins to modify (add, remove, etc.) content types

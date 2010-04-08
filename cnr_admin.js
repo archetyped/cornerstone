@@ -1405,45 +1405,55 @@ SitePages.Page.Attribute = 'pageData';
 
 /* Post */
 
+function convertImageId(img_id) {
+	return 'cnr_field_' + img_id.replace('cnr[attributes]', '').replace('][', '_').replace('[', '').replace(']', '')
+}
+
+function escSelector(id_value) {
+	return id_value.toString().replace(/(\[|\])/gi, '\\$1');
+}
+
 function setPostImage(img_id, img_url, img_type) {
-	//console.log('Arguments: %o', arguments);
-	if (typeof(img_type) == 'undefined' || !img_type.length)
-		img_type = 'thumbnail';
-	//console.log('Selector: %o', '#cnr_image_' + img_type + ' .container');
-	var container = jQuery('#cnr_image_' + img_type + ' .container');
-	//console.log('Selected Element: %o', container);
-	var img;
-	var imgElName = '_cnr_image_' + img_type;
-	//Set ID of image
-	var imgId = jQuery(container).find("#" + imgElName);
-	if (imgId.length == 0) {
-		imgId = jQuery('<input />').attr({
-			type: 'hidden',
-			id: imgElName,
-			name: imgElName
-		});
-		jQuery(container).prepend(imgId);
-	}
-	jQuery(imgId).attr('value', img_id);
-	//Build Image Element with Image URL
-	if (img_url.length > 0) {
-		img = jQuery(container).find("#" + imgElName + '-frame');
-		if (img.length == 0) {
-			img = jQuery("<img />").attr({
-				title: 'Post Image',
-				alt: 'Post Image',
-				'class': 'image_frame',
-				id: imgElName + '-frame'
+	console.log('Arguments: %o', arguments);
+	if (typeof(img_type) != 'undefined' && img_type.length) {
+		var selContainer = '#' + convertImageId(img_type) + '_wrap';
+		console.log('Selector: %o', selContainer);
+		var container = jQuery(selContainer);
+		console.log('Selected Element: %o', container);
+		var img;
+		var imgElName = escSelector(img_type);
+		//Set ID of image
+		var imgId = jQuery(container).find("#" + imgElName);
+		console.log('Field with ID (%s): %o', imgElName, imgId);
+		if (imgId.length == 0) {
+			imgId = jQuery('<input />').attr({
+				type: 'hidden',
+				id: img_type,
+				name: img_type
 			});
-			jQuery(container).prepend(img);
+			jQuery(container).prepend(imgId);
 		}
-		jQuery(img).attr('src', img_url);
+		jQuery(imgId).attr('value', img_id);
+		//Build Image Element with Image URL
+		if (img_url.length > 0) {
+			img = jQuery(container).find("#" + imgElName + '-frame');
+			if (img.length == 0) {
+				img = jQuery("<img />").attr({
+					title: 'Post Image',
+					alt: 'Post Image',
+					'class': 'image_frame',
+					id: img_type + '-frame'
+				});
+				jQuery(container).prepend(img);
+			}
+			jQuery(img).attr('src', img_url);
+		}
+		
+		//Show Image Options
+		var opts = jQuery('#' + imgElName + '-options').removeClass('options-default');
+		//Hide confirmation options
+		opts.find('.confirmation').addClass('confirmation-default');
 	}
-	
-	//Show Image Options
-	var opts = jQuery('#' + imgElName + '-options').removeClass('options-default');
-	//Hide confirmation options
-	opts.find('.confirmation').addClass('confirmation-default');
 	//Close popup
 	tb_remove();
 }
@@ -1458,11 +1468,11 @@ function postImageAction(el) {
 	var base = (parts.length > 2) ? parts.slice(0, parts.length - 1).join(sep) : parts[0];
 	//Action
 	var action = parts[parts.length - 1];
-	//console.log('Parts: %o \nBase: %o \nAction: %o', parts, base, action);
+	console.log('Parts: %o \nBase: %o \nAction: %o', parts, base, action);
 	var actEl;
 	var getEl = function (ident) {
 		ident = (typeof(ident) != 'undefined' && ident.length > 0) ? sep + ident : '';
-		return jQuery('#' + base + ident);
+		return jQuery('#' + escSelector(base) + ident);
 	}
 	switch (action) {
 		case 'option_remove':
