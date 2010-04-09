@@ -1414,17 +1414,17 @@ function escSelector(id_value) {
 }
 
 function setPostImage(img_id, img_url, img_type) {
-	console.log('Arguments: %o', arguments);
+	//console.log('Arguments: %o', arguments);
 	if (typeof(img_type) != 'undefined' && img_type.length) {
 		var selContainer = '#' + convertImageId(img_type) + '_wrap';
-		console.log('Selector: %o', selContainer);
+		//console.log('Selector: %o', selContainer);
 		var container = jQuery(selContainer);
-		console.log('Selected Element: %o', container);
+		//console.log('Selected Element: %o', container);
 		var img;
 		var imgElName = escSelector(img_type);
 		//Set ID of image
 		var imgId = jQuery(container).find("#" + imgElName);
-		console.log('Field with ID (%s): %o', imgElName, imgId);
+		//console.log('Field with ID (%s): %o', imgElName, imgId);
 		if (imgId.length == 0) {
 			imgId = jQuery('<input />').attr({
 				type: 'hidden',
@@ -1468,7 +1468,7 @@ function postImageAction(el) {
 	var base = (parts.length > 2) ? parts.slice(0, parts.length - 1).join(sep) : parts[0];
 	//Action
 	var action = parts[parts.length - 1];
-	console.log('Parts: %o \nBase: %o \nAction: %o', parts, base, action);
+	//console.log('Parts: %o \nBase: %o \nAction: %o', parts, base, action);
 	var actEl;
 	var getEl = function (ident) {
 		ident = (typeof(ident) != 'undefined' && ident.length > 0) ? sep + ident : '';
