@@ -59,6 +59,7 @@ class CNR_Media extends CNR_Base {
 						'type'				=> 'post_image',
 						'cnr_action'		=> 'post_image',
 						'cnr_image_type'	=> $img_id,
+						'cnr_set_as'		=> $field->get_property('set_as'),
 						'TB_iframe'			=> 'true'
 						);
 		$image_upload_iframe_src = apply_filters('image_upload_iframe_src', $media_upload_iframe_src . '?' . http_build_query($query));
@@ -117,8 +118,14 @@ class CNR_Media extends CNR_Base {
 				$src = $src[0];
 			//Build JS Arguments string
 			$args = "'$attachment_id', '$src'";
-			if (isset($_POST['attachments'][$attachment_id]['cnr_image_type']))
-				$args .= ", '" . $_REQUEST['attachments'][$attachment_id]['cnr_image_type'] . "'";
+			//$this->debug->print_message($_REQUEST);
+			$type = '';
+			if ( isset($_REQUEST['attachments'][$attachment_id]['cnr_image_type']) )
+				$type = $_REQUEST['attachments'][$attachment_id]['cnr_image_type'];
+			elseif ( isset($_REQUEST['cnr_image_type']) )
+				$type = $_REQUEST['cnr_image_type'];
+			$type = ( !empty($type) ) ? ", '" . $type . "'" : '';
+			$args .= $type;
 			?>
 			<script type="text/javascript">
 			/* <![CDATA[ */
@@ -151,9 +158,10 @@ class CNR_Media extends CNR_Base {
 			$form_fields = array();
 			if ( substr($post->post_mime_type, 0, 5) == 'image' ) {
 				//Add "Set as Image" button to form fields array
+				$set_as = 'Set as ' . ( ( isset($_REQUEST['cnr_set_as']) && !empty($_REQUEST['cnr_set_as']) ) ? trim($_REQUEST['cnr_set_as']) : 'media');
 				$field = array(
 								'input'		=> 'html',
-								'html'		=> '<input type="submit" class="button" value="Set as thumbnail" name="setimage[' . $post->ID . ']" />'
+								'html'		=> '<input type="submit" class="button" value="' . $set_as . '" name="setimage[' . $post->ID . ']" />'
 								);
 				$form_fields['buttons'] = $field;
 				//Add image type property as hidden field (if set)
@@ -195,9 +203,10 @@ class CNR_Media extends CNR_Base {
 	 * @return void
 	 */
 	function attachment_html_upload_ui() {
-		if (!isset($_REQUEST['cnr_action']))
-			return false;
-		echo '<input type="hidden" name="cnr_action" id="cnr_action" value="' . esc_attr($_REQUEST['cnr_action']) . '" />';
+		if ( isset($_REQUEST['cnr_action']) )
+			echo '<input type="hidden" name="cnr_action" id="cnr_action" value="' . esc_attr($_REQUEST['cnr_action']) . '" />';
+		if ( isset($_REQUEST['cnr_image_type']) )
+			echo '<input type="hidden" name="cnr_image_type" id="cnr_image_type" value="' . esc_attr($_REQUEST['cnr_image_type']) . '" />';
 	}
 	
 	/**

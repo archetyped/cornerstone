@@ -586,7 +586,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 		$prop_arr = array();
 		$prop_arr['value'] = $value;
 		//Add to properties array
-		$this->properties[$name] = $prop_arr;
+		$this->properties[$name] = $value;
 		//Add property to specified groups
 		if ( !empty($group) ) {
 			$this->set_group_property($group, $name);
@@ -614,8 +614,9 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 */
 	function get_property($name) {
 		$val = $this->get_member_value('properties', $name);
-		if ( isset($val['value']) )
+		/*if ( isset($val['value']) )
 			$val = $val['value'];
+		*/
 		return $val;
 	}
 	
@@ -921,15 +922,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 
 			//Check if value is group (properties, etc.)
 			//All groups must have additional attributes (beyond reserved attributes) that define how items in group are used
-			if (is_array($ph_output) 
-				&& isset($ph_output['value'])
-				&& is_scalar($ph_output['value'])
-			) {
-				/* Targeted property is an array but has a value key */
-				/* We use the value of this key */
-				$ph_output = $ph_output['value'];
-				
-			} elseif (is_array($ph_output)
+			if (is_array($ph_output)
 				&& !empty($placeholder['attributes'])
 				&& is_array($placeholder['attributes'])
 				&& ($ph = $field->get_placeholder_defaults())
@@ -1030,8 +1023,9 @@ class CNR_Field_Type extends CNR_Content_Base {
 		//Get data for loop
 		$path = explode('.', $attr['data']);
 		$loop_data = $field->get_member_value($path);
-		if ( isset($loop_data['value']) )
+		/*if ( isset($loop_data['value']) )
 			$loop_data = $loop_data['value'];
+		*/
 		$out = array();
 		
 		//Get field data
@@ -1230,6 +1224,11 @@ class CNR_Content_Type extends CNR_Content_Base {
 		return $field;
 	}
 	
+	/**
+	 * Checks if field exists in the content type
+	 * @param string $field Field ID
+	 * @return bool TRUE if field exists, FALSE otherwise
+	 */
 	function has_field($field) {
 		return ( !is_string($field) || empty($field) || !isset($this->fields[$field]) ) ? false : true;
 	}
@@ -1249,6 +1248,11 @@ class CNR_Content_Type extends CNR_Content_Base {
 		//Create group if it doesn't exist
 		if ( !$this->group_exists($group) )
 			$this->add_group($group);
+		//Remove field from any other group it's in (fields can only be in one group)
+		foreach ( array_keys($this->groups) as $group_id ) {
+			if ( isset($this->groups[$group_id]->fields[$field->id]) )
+				unset($this->groups[$group_id]->fields[$field->id]);
+		}
 		//Add reference to field in group
 		$this->groups[$group]->fields[$field->id] =& $field;
 	}
@@ -1510,6 +1514,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$attachment->set_property('title', 'Select Media');
 		$attachment->set_property('button','Select Media');
 		$attachment->set_property('remove', 'Remove Media');
+		$attachment->set_property('set_as', 'media');
 		$attachment->set_layout('form', '{media}');
 		$cnr_field_types[$attachment->id] =& $attachment;
 		
@@ -1519,6 +1524,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$image->set_property('title', 'Select Image');
 		$image->set_property('button', 'Select Image');
 		$image->set_property('remove', 'Remove Image');
+		$image->set_property('set_as', 'image');
 		$cnr_field_types[$image->id] =& $image;
 		
 		//Enable plugins to modify (add, remove, etc.) field types
@@ -1532,10 +1538,10 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
 		$ct->add_group('image_thumbnail', 'Thumbnail Image');
-		$thumb =& $ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image'));
+		$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
 		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
 		$ct->add_group('image_header', 'Header Image');
-		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image'));
+		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
 		$ct->add_to_group('image_header', 'image_header');
 		$cnr_content_types[$ct->id] =& $ct;
 		

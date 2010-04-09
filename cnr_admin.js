@@ -1414,7 +1414,7 @@ function escSelector(id_value) {
 }
 
 function setPostImage(img_id, img_url, img_type) {
-	//console.log('Arguments: %o', arguments);
+	//console.dir(arguments);
 	if (typeof(img_type) != 'undefined' && img_type.length) {
 		var selContainer = '#' + convertImageId(img_type) + '_wrap';
 		//console.log('Selector: %o', selContainer);
