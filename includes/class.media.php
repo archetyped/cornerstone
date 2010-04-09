@@ -83,9 +83,9 @@ class CNR_Media extends CNR_Base {
 		}
 	?>
 			<div class="buttons">
-				<a href="<?php echo "$image_upload_iframe_src" ?>" id="<?php echo "$image_name-lnk"?>" class="thickbox button" title="" onclick="return false;">{title}</a>
+				<a href="<?php echo "$image_upload_iframe_src" ?>" id="<?php echo "$image_name-lnk"?>" class="thickbox button" title="{title}" onclick="return false;">{button}</a>
 				<span id="<?php echo "$image_name-options"?>" class="options <?php if (!$post_image) : ?> options-default <?php endif; ?>">
-				or <a href="#" title="Remove Image" class="del-link" id="<?php echo "$image_name-option_remove"?>" onclick="postImageAction(this); return false;">Remove Image</a>
+				or <a href="#" title="Remove Image" class="del-link" id="<?php echo "$image_name-option_remove"?>" onclick="postImageAction(this); return false;">{remove}</a>
 				 <span id="<?php echo "$image_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$image_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$image_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
 				</span>
 			</div>

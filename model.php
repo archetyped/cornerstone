@@ -181,7 +181,7 @@ class Cornerstone extends CNR_Base {
 			//Menus
 		add_action('admin_menu', $this->m('admin_menu'));
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
-		add_action('admin_menu', $this->m('admin_post_edit'));
+		//add_action('admin_menu', $this->m('admin_post_edit'));
 			//Dynamically built function call (media_upload_$type)
 		//add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
 			//Attachments

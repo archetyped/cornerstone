@@ -1123,6 +1123,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * Adds group to content type
 	 * Groups are used to display related fields in the UI 
 	 * @param string $id Unique name for group
+	 * @param string $title Group title
 	 * @param string $description Short description of group's purpose
 	 * @param string $location Where group will be displayed on post edit form (Default: main)
 	 */
@@ -1153,9 +1154,12 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 */
 	function &create_group($title = '', $description = '', $location = 'normal') {
 		$group = new stdClass();
-		$group->title = trim($title);
-		$group->description = trim($description);
-		$group->location = trim($location);
+		$title = ( is_scalar($title) ) ? trim($title) : '';
+		$group->title = $title;
+		$description = ( is_scalar($description) ) ? trim($description) : '';
+		$group->description = $description;
+		$location = ( is_scalar($location) ) ? trim($location) : 'normal';
+		$group->location = $location;
 		$group->fields = array();
 		return $group;
 	}
@@ -1504,8 +1508,18 @@ class CNR_Content_Utilities extends CNR_Base {
 		$attachment->set_description('Media Item');
 		$attachment->set_parent('base_closed');
 		$attachment->set_property('title', 'Select Media');
+		$attachment->set_property('button','Select Media');
+		$attachment->set_property('remove', 'Remove Media');
 		$attachment->set_layout('form', '{media}');
 		$cnr_field_types[$attachment->id] =& $attachment;
+		
+		$image = new CNR_Field_Type('image');
+		$image->set_description('Image');
+		$image->set_parent('media');
+		$image->set_property('title', 'Select Image');
+		$image->set_property('button', 'Select Image');
+		$image->set_property('remove', 'Remove Image');
+		$cnr_field_types[$image->id] =& $image;
 		
 		//Enable plugins to modify (add, remove, etc.) field types
 		do_action('cnr_register_field_types');
@@ -1517,11 +1531,11 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
-		$ct->add_group('image_thumbnail', 'Post Thumbnail (F)');
-		$ct->add_field('image_thumbnail', 'media');
+		$ct->add_group('image_thumbnail', 'Thumbnail Image');
+		$thumb =& $ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image'));
 		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
-		$ct->add_group('image_header', 'Post Header (F)');
-		$ct->add_field('image_header', 'media');
+		$ct->add_group('image_header', 'Header Image');
+		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image'));
 		$ct->add_to_group('image_header', 'image_header');
 		$cnr_content_types[$ct->id] =& $ct;
 		
