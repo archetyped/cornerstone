@@ -73,6 +73,16 @@ class CNR_Content_Base extends CNR_Base {
 	var $data = null;
 	
 	/**
+	 * @var array Script resources to include for object
+	 */
+	var $scripts = array();
+	
+	/**
+	 * @var array CSS style resources to include for object
+	 */
+	var $styles = array();
+	
+	/**
 	 * Legacy Constructor
 	 */
 	function CNR_Content_Base($id = '') {
@@ -166,7 +176,7 @@ class CNR_Content_Base extends CNR_Base {
 		} else {
 			$path = $member;
 		}
-		
+
 		$path = $this->util->build_path($path, $name);
 		//Set defaults and prepare data
 		$val = $default;
@@ -181,20 +191,22 @@ class CNR_Content_Base extends CNR_Base {
 		 *     > Parent/container values should be merged with retrieved array
 		 *   > Value at path is a string that inherits from another field
 		 *     > Value from other field will be retrieved and will replace inheritance placeholder in retrieved value
-		 */ 
-		if ( ( !$this->path_isset($path) /* Value does not exist in current object */
-				|| ( ($val = $this->get_path_value($path)) /* Assigns variable */
-					&& !is_object($val)
-					&& ( is_array($val) /* Retrieved value is an array */
-						|| ($inherit = strpos($val, $inherit_tag)) !== false /* Retrieved val inherits a value from another  */
-						)
-					)
-				)
-				&& 'current' != $dir
-			) {
+		 */
+		
+		$deeper = false;
+		
+		if ( !$this->path_isset($path) )
+			$deeper = true;
+		else {
+			$val = $this->get_path_value($path);
+			if ( !is_object($val) && ( is_array($val) || ($inherit = strpos($val, $inherit_tag)) !== false ) )
+				$deeper = true;
+			else
+				$deeper = false;
+		}
+		if ( $deeper && 'current' != $dir ) {
 				//Get Parent value (recursive)
 				$ex_val = ( 'parent' != $dir ) ? $this->get_container_value($member, $name, $default) : $this->get_parent_value($member, $name, $default);
-				
 				//Handle inheritance
 				if ( is_array($val) ) {
 					//Combine Arrays
@@ -350,6 +362,26 @@ class CNR_Content_Base extends CNR_Base {
 	function get_description() {
 		return $this->get_member_value('description', '','','current');
 	}
+	
+	function add_script( $handle, $src = false, $deps = array(), $ver = false, $in_footer = false ) {
+		$args = func_get_args();
+		array_shift($args);
+		$this->scripts[$handle] = $args;
+	}
+	
+	function get_scripts() {
+		return $this->get_member_value('scripts', '', array());
+	}
+	
+	function add_style( $handle, $src = false, $deps = array(), $ver = false, $media = false ) {
+		$args = func_get_args();
+		array_shift($args);
+		$this->styles[$handle] = $args;
+	}
+	
+	function get_styles() {
+		return $this->get_member_value('styles', '', array());
+	}
 }
 
 /**
@@ -372,7 +404,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @var array Array of Field types that make up current Field type
 	 */
 	var $elements = array();
-		
+	
 	/**
 	 * Structure: Property names stored as keys in group
 	 * Root
@@ -1561,6 +1593,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		//Save Field data
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
+		
+		//Enqueue scripts for fields in current post type
+		add_action('admin_enqueue_scripts', $this->m('admin_enqueue_files'));
 	}
 	
 	/**
@@ -1573,6 +1608,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Get item type from Post object
 		if ( is_object($item) ) {
 			//TODO retrieve content type for content item
+			$item = ( isset($item->post_type) ) ? $item->post_type : 'post';
 		}
 		global $cnr_content_types;
 		if ( isset($cnr_content_types[$item]) ) {
@@ -1614,6 +1650,31 @@ class CNR_Content_Utilities extends CNR_Base {
 			}
 		}
 		return $ret; 
+	}
+	
+	function admin_enqueue_files($page = null) {
+		//Confirm post is being edited
+		if ( ( 'post.php' == $page && isset($_GET['action']) && 'edit' == $_GET['action'] ) || 'post-new.php' == $page ) {
+			global $post;
+			
+			//Get post's content type
+			$ct =& $this->get_type($post);
+			//Get content type fields
+			foreach ( $ct->fields as $field ) {
+				//Enqueue scripts/styles for each field
+				$scripts = $field->get_scripts();
+				foreach ( $scripts as $handle => $args ) {
+					array_unshift($args, $handle);
+					call_user_func_array('wp_enqueue_script', $args);
+				}
+				
+				$styles = $field->get_styles();
+				foreach ( $styles as $handle => $args ) {
+					array_shift($args, $handle);
+					call_user_func_array('wp_enqueue_style', $args);
+				}
+			}
+		}
 	}
 	
 	/**

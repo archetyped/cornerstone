@@ -31,12 +31,26 @@ class CNR_Media extends CNR_Base {
 	/* Methods */
 	
 	function register_hooks() {
+		//Register media placeholder handler
 		cnr_register_placeholder_handler('media', $this->m('content_type_process_placeholder_media'));
-		add_action('media_upload_post_image', $this->m('admin_upload_post_image'));
+
+		//Register handler for custom media requests
+		add_action('media_upload_cnr_field_media', $this->m('field_upload_media'));
+		
+		//Display 'Set as...' button in media item box
 		add_filter('attachment_fields_to_edit', $this->m('attachment_fields_to_edit'), 11, 2);
+		
+		//Add form fields to upload form (to pass query vars along with form submission)
 		add_action('pre-html-upload-ui', $this->m('attachment_html_upload_ui'));
-		add_filter('media_meta', $this->m('media_meta'), 10, 2);
+		
+		//Display additional meta data for media item (dimensions, etc.)
+		//add_filter('media_meta', $this->m('media_meta'), 10, 2);
+		
+		//Modifies media upload query vars so that request is routed through plugin
 		add_filter('admin_url', $this->m('media_upload_url'), 10, 2);
+		
+		//Modify tabs in upload popup for fields
+		add_filter('media_upload_tabs', $this->m('field_upload_tabs'));
 	}
 	
 	/**
@@ -56,9 +70,9 @@ class CNR_Media extends CNR_Base {
 		$image_name = $img_id;
 		$query = array (
 						'post_id'			=> $uploading_iframe_ID,
-						'type'				=> 'post_image',
-						'cnr_action'		=> 'post_image',
-						'cnr_image_type'	=> $img_id,
+						'type'				=> 'cnr_field_media',
+						'cnr_action'		=> 'true',
+						'cnr_field'			=> $img_id,
 						'cnr_set_as'		=> $field->get_property('set_as'),
 						'TB_iframe'			=> 'true'
 						);
@@ -101,12 +115,13 @@ class CNR_Media extends CNR_Base {
 	 * Handles upload of Post image on post edit form
 	 * @return 
 	 */
-	function admin_upload_post_image() {
+	function field_upload_media() {
 		$errors = array();
 		$id = 0;
-		if (!isset($_POST['setimage'])) {
-			wp_iframe( 'media_upload_type_form', 'post_image', $errors, $id );
-		} else { /* Send image data to main post edit form and close popup */
+		
+		//Process image selection
+		if ( isset($_POST['setimage']) ) {
+			/* Send image data to main post edit form and close popup */
 			//Get Attachment ID
 			$attachment_id = array_keys($_POST['setimage']);
 			$attachment_id = array_shift($attachment_id); 
@@ -120,10 +135,10 @@ class CNR_Media extends CNR_Base {
 			$args = "'$attachment_id', '$src'";
 			//$this->debug->print_message($_REQUEST);
 			$type = '';
-			if ( isset($_REQUEST['attachments'][$attachment_id]['cnr_image_type']) )
-				$type = $_REQUEST['attachments'][$attachment_id]['cnr_image_type'];
-			elseif ( isset($_REQUEST['cnr_image_type']) )
-				$type = $_REQUEST['cnr_image_type'];
+			if ( isset($_REQUEST['attachments'][$attachment_id]['cnr_field']) )
+				$type = $_REQUEST['attachments'][$attachment_id]['cnr_field'];
+			elseif ( isset($_REQUEST['cnr_field']) )
+				$type = $_REQUEST['cnr_field'];
 			$type = ( !empty($type) ) ? ", '" . $type . "'" : '';
 			$args .= $type;
 			?>
@@ -136,6 +151,26 @@ class CNR_Media extends CNR_Base {
 			<?php
 			exit;
 		}
+		
+		//Handle HTML upload
+		if ( isset($_POST['html-upload']) && !empty($_FILES) ) {
+			$id = media_handle_upload('async-upload', $_REQUEST['post_id']);
+			//Clear uploaded files
+			unset($_FILES);
+			if ( is_wp_error($id) ) {
+				$errors['upload_error'] = $id;
+				$id = false;
+			}
+		}
+		
+		//Display default UI
+					
+		//Determine media type
+		$type = ( isset($_REQUEST['type']) ) ? $_REQUEST['type'] : 'cnr_field_media';
+		//Determine UI to use (disk or URL upload)
+		$upload_form = ( isset($_GET['tab']) && 'type_url' == $_GET['tab'] ) ? 'media_upload_type_url_form' : 'media_upload_type_form';
+		//Load UI
+		return wp_iframe( $upload_form, $type, $errors, $id );
 	}
 	
 	/**
@@ -153,24 +188,37 @@ class CNR_Media extends CNR_Base {
 	function attachment_fields_to_edit($form_fields, $attachment) {
 		
 		if ($this->is_custom_media()) {
+			//$this->debug->print_message('Request', $_REQUEST, 'Post', $_POST);
 			$post =& get_post($attachment);
 			//Clear all form fields
 			$form_fields = array();
 			if ( substr($post->post_mime_type, 0, 5) == 'image' ) {
+				$set_as = 'media';
+				$qvar = 'cnr_set_as';
+				//Get set as text from request
+				if ( isset($_REQUEST[$qvar]) && !empty($_REQUEST[$qvar]) )
+					$set_as = $_REQUEST[$qvar];
+				elseif ( ( strpos($_SERVER['PHP_SELF'], 'async-upload.php') !== false || isset($_POST['html-upload']) ) && ($ref = wp_get_referer()) && strpos($ref, $qvar) !== false && ($ref = parse_url($ref)) && isset($ref['query']) ) {
+					//Get set as text from referer (for async uploads)
+					$qs = array();
+					parse_str($ref['query'], $qs);
+					if ( isset($qs[$qvar]) )
+						$set_as = $qs[$qvar];
+				}
 				//Add "Set as Image" button to form fields array
-				$set_as = 'Set as ' . ( ( isset($_REQUEST['cnr_set_as']) && !empty($_REQUEST['cnr_set_as']) ) ? trim($_REQUEST['cnr_set_as']) : 'media');
+				$set_as = 'Set as ' . $set_as;
 				$field = array(
 								'input'		=> 'html',
 								'html'		=> '<input type="submit" class="button" value="' . $set_as . '" name="setimage[' . $post->ID . ']" />'
 								);
 				$form_fields['buttons'] = $field;
-				//Add image type property as hidden field (if set)
-				if (isset($_REQUEST['cnr_image_type'])) {
+				//Add field ID value as hidden field (if set)
+				if (isset($_REQUEST['cnr_field'])) {
 					$field = array(
 									'input'	=> 'hidden',
-									'value'	=> $_REQUEST['cnr_image_type']
+									'value'	=> $_REQUEST['cnr_field']
 									);
-					$form_fields['cnr_image_type'] = $field;
+					$form_fields['cnr_field'] = $field;
 				}
 			}
 		}
@@ -203,10 +251,11 @@ class CNR_Media extends CNR_Base {
 	 * @return void
 	 */
 	function attachment_html_upload_ui() {
-		if ( isset($_REQUEST['cnr_action']) )
-			echo '<input type="hidden" name="cnr_action" id="cnr_action" value="' . esc_attr($_REQUEST['cnr_action']) . '" />';
-		if ( isset($_REQUEST['cnr_image_type']) )
-			echo '<input type="hidden" name="cnr_image_type" id="cnr_image_type" value="' . esc_attr($_REQUEST['cnr_image_type']) . '" />';
+		$vars = array ('cnr_action', 'cnr_field');
+		foreach ( $vars as $var ) {
+			if ( isset($_REQUEST[$var]) )
+				echo '<input type="hidden" name="' . $var . '" id="' . $var . '" value="' . esc_attr($_REQUEST[$var]) . '" />';
+		}
 	}
 	
 	/**
@@ -252,6 +301,21 @@ class CNR_Media extends CNR_Base {
 			$url = str_replace($qs, $qs_upd, $url);
 		}
 		return $url;
+	}
+	
+	/*-** Field-Specific **-*/
+	
+	/**
+	 * Removes URL tab from media upload popup for fields
+	 * Fields currently only support media stored @ website
+	 * @param array $default_tabs Media upload tabs
+	 * @see media_upload_tabs() for full $default_tabs array
+	 * @return array Modified tabs array
+	 */
+	function field_upload_tabs($default_tabs) {
+		if ( $this->is_custom_media() )
+			unset($default_tabs['type_url']);
+		return $default_tabs;
 	}
 }
 ?>
