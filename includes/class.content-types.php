@@ -363,10 +363,25 @@ class CNR_Content_Base extends CNR_Base {
 		return $this->get_member_value('description', '','','current');
 	}
 	
-	function add_script( $handle, $src = false, $deps = array(), $ver = false, $in_footer = false ) {
+	function add_dependency($type, $context, $handle, $src = false, $deps = array(), $ver = false, $ex = false) {
 		$args = func_get_args();
-		array_shift($args);
-		$this->scripts[$handle] = $args;
+		//Remove type/context from arguments
+		$args = array_slice($args, 2);
+		
+		//Set context
+		if ( !is_array($context) ) {
+			if ( is_string($context) )
+				$context = array($context);
+			else 
+				$context = array();
+		}
+		$this->{$type}[$handle] = array('context' => $context, 'params' => $args);
+	}
+	
+	function add_script( $context, $handle, $src = false, $deps = array(), $ver = false, $in_footer = false ) {
+		$args = func_get_args();
+		array_unshift($args, 'scripts');
+		call_user_method_array('add_dependency', $this, $args);
 	}
 	
 	function get_scripts() {
@@ -375,8 +390,8 @@ class CNR_Content_Base extends CNR_Base {
 	
 	function add_style( $handle, $src = false, $deps = array(), $ver = false, $media = false ) {
 		$args = func_get_args();
-		array_shift($args);
-		$this->styles[$handle] = $args;
+		array_unshift($args, 'styles');
+		call_user_method_array('add_dependency', $this, $args);
 	}
 	
 	function get_styles() {
@@ -1515,12 +1530,14 @@ class CNR_Content_Utilities extends CNR_Base {
 		$hidden->set_property('type', 'hidden');
 		$cnr_field_types[$hidden->id] =& $hidden;
 		
+		/*
 		$image = new CNR_Field_Type('image');
 		$image->set_parent('base');
 		$image->set_description('Image');
 		$image->set_property('tag', 'img');
 		$image->set_property('src', '/wp-admin/images/wp-logo.gif', 'attr');
 		$cnr_field_types[$image->id] =& $image;
+		*/
 		
 		$span = new CNR_Field_Type('span');
 		$span->set_description('Inline wrapper');
@@ -1540,25 +1557,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		$select->set_layout('option_data', '<{tag_option} value="{data_ext id="option_value"}" selected="selected">{data_ext id="option_text"}</{tag_option}>');		
 		$cnr_field_types[$select->id] =& $select;
 		
-		$attachment = new CNR_Field_Type('media');
-		$attachment->set_description('Media Item');
-		$attachment->set_parent('base_closed');
-		$attachment->set_property('title', 'Select Media');
-		$attachment->set_property('button','Select Media');
-		$attachment->set_property('remove', 'Remove Media');
-		$attachment->set_property('set_as', 'media');
-		$attachment->set_layout('form', '{media}');
-		$cnr_field_types[$attachment->id] =& $attachment;
-		
-		$image = new CNR_Field_Type('image');
-		$image->set_description('Image');
-		$image->set_parent('media');
-		$image->set_property('title', 'Select Image');
-		$image->set_property('button', 'Select Image');
-		$image->set_property('remove', 'Remove Image');
-		$image->set_property('set_as', 'image');
-		$cnr_field_types[$image->id] =& $image;
-		
 		//Enable plugins to modify (add, remove, etc.) field types
 		do_action('cnr_register_field_types');
 		
@@ -1569,12 +1567,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
-		$ct->add_group('image_thumbnail', 'Thumbnail Image');
-		$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
-		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
-		$ct->add_group('image_header', 'Header Image');
-		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
-		$ct->add_to_group('image_header', 'image_header');
 		$cnr_content_types[$ct->id] =& $ct;
 		
 		//Enable plugins to modify (add, remove, etc.) content types
@@ -1595,17 +1587,20 @@ class CNR_Content_Utilities extends CNR_Base {
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
 		
 		//Enqueue scripts for fields in current post type
-		add_action('admin_enqueue_scripts', $this->m('admin_enqueue_files'));
+		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
 	}
 	
 	/**
 	 * Retrieves content type definition for specified content item (post, page, etc.)
 	 * @param string|object $item Post object, or item type (string)
-	 * @return CNR_Content_Type Matching content type, empty content type if no matching type exists
+	 * @return CNR_Content_Type Reference to matching content type, empty content type if no matching type exists
 	 */
 	function &get_type($item) {
 		$type = null;
 		//Get item type from Post object
+		if ( is_numeric($item) ) {
+			$item = get_post($item);
+		}
 		if ( is_object($item) ) {
 			//TODO retrieve content type for content item
 			$item = ( isset($item->post_type) ) ? $item->post_type : 'post';
@@ -1652,28 +1647,37 @@ class CNR_Content_Utilities extends CNR_Base {
 		return $ret; 
 	}
 	
-	function admin_enqueue_files($page = null) {
-		//Confirm post is being edited
-		if ( ( 'post.php' == $page && isset($_GET['action']) && 'edit' == $_GET['action'] ) || 'post-new.php' == $page ) {
-			global $post;
-			
-			//Get post's content type
-			$ct =& $this->get_type($post);
-			//Get content type fields
-			foreach ( $ct->fields as $field ) {
-				//Enqueue scripts/styles for each field
-				$scripts = $field->get_scripts();
-				foreach ( $scripts as $handle => $args ) {
-					array_unshift($args, $handle);
-					call_user_func_array('wp_enqueue_script', $args);
-				}
-				
-				$styles = $field->get_styles();
-				foreach ( $styles as $handle => $args ) {
-					array_shift($args, $handle);
-					call_user_func_array('wp_enqueue_style', $args);
+	function enqueue_files($page = null) {
+		$post = false;
+		if ( isset($GLOBALS['post']) && !is_null($GLOBALS['post']) )
+			$post = $GLOBALS['post'];
+		elseif ( isset($_REQUEST['post_id']) )
+			$post = $_REQUEST['post_id'];
+		elseif ( isset($_REQUEST['post']) )
+			$post = $_REQUEST['post'];
+		
+		//Get post's content type
+		$ct =& $this->get_type($post);
+		$file_types = array('scripts' => 'script', 'styles' => 'style');
+		//Get content type fields
+		foreach ( $ct->fields as $field ) {
+			//Enqueue scripts/styles for each field
+			foreach ( $file_types as $type => $func_base ) {
+				$deps = $field->{"get_$type"}();
+				foreach ( $deps as $handle => $args ) {
+					//Confirm context
+					if ( 'all' == $args['context'] || in_array($page, $args['context']) ) {
+						$this->enqueue_file($func_base, $args['params']);
+					}
 				}
 			}
+		}
+	}
+	
+	function enqueue_file($type = 'script', $args = array()) {
+		$func = 'wp_enqueue_' . $type;
+		if ( function_exists($func) ) {
+			call_user_func_array($func, $args);
 		}
 	}
 	

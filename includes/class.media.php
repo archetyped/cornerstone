@@ -33,7 +33,13 @@ class CNR_Media extends CNR_Base {
 	function register_hooks() {
 		//Register media placeholder handler
 		cnr_register_placeholder_handler('media', $this->m('content_type_process_placeholder_media'));
-
+		
+		//Register field types
+		add_action('cnr_register_field_types', $this->m('register_field_types'));
+		
+		//Register/Modify content types
+		add_action('cnr_register_content_types', $this->m('register_content_types'));
+		
 		//Register handler for custom media requests
 		add_action('media_upload_cnr_field_media', $this->m('field_upload_media'));
 		
@@ -51,6 +57,50 @@ class CNR_Media extends CNR_Base {
 		
 		//Modify tabs in upload popup for fields
 		add_filter('media_upload_tabs', $this->m('field_upload_tabs'));
+	}
+	
+	/**
+	 * Register media-specific field types
+	 */
+	function register_field_types() {
+		global $cnr_field_types;
+		
+		$media = new CNR_Field_Type('media');
+		$media->set_description('Media Item');
+		$media->set_parent('base_closed');
+		$media->set_property('title', 'Select Media');
+		$media->set_property('button','Select Media');
+		$media->set_property('remove', 'Remove Media');
+		$media->set_property('set_as', 'media');
+		$media->set_layout('form', '{media}');
+		$media->add_script( array('post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
+		$cnr_field_types[$media->id] =& $media;
+		
+		$image = new CNR_Field_Type('image');
+		$image->set_description('Image');
+		$image->set_parent('media');
+		$image->set_property('title', 'Select Image');
+		$image->set_property('button', 'Select Image');
+		$image->set_property('remove', 'Remove Image');
+		$image->set_property('set_as', 'image');
+		$cnr_field_types[$image->id] =& $image;
+	}
+	
+	/**
+	 * Register media-specific content types
+	 */
+	function register_content_types() {
+		global $cnr_content_types, $cnr_content_utilities;
+		
+		$ct =& $cnr_content_utilities->get_type('post');
+		
+		//Add thumbnail image fields to post content type
+		$ct->add_group('image_thumbnail', 'Thumbnail Image');
+		$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
+		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
+		$ct->add_group('image_header', 'Header Image');
+		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
+		$ct->add_to_group('image_header', 'image_header');
 	}
 	
 	/**

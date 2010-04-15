@@ -10,17 +10,20 @@ require_once 'class.utilities.php';
 class CNR_Base {
 	
 	/**
-	 * @var string Prefix for Cornerstone-related data (attributes, DB tables, etc.)
+	 * Prefix for Cornerstone-related data (attributes, DB tables, etc.)
+	 * @var string
 	 */
 	var $prefix = 'cnr';
 	
 	/**
-	 * @var CNR_Utilities Utilities instance
+	 * Utilities instance
+	 * @var CNR_Utilities
 	 */
 	var $util;
 	
 	/**
-	 * @var CNR_Debug Debug instance
+	 * Debug instance
+	 * @var CNR_Debug
 	 */
 	var $debug;
 	
@@ -112,6 +115,36 @@ class CNR_Base {
 		}
 		
 		return $key;
+	}
+	
+	/**
+	 * Retrieve class prefix (with separator if set)
+	 * @param bool|string $sep Separator to append to class prefix (Default: no separator)
+	 * @return string Class prefix
+	 */
+	function get_prefix($sep = false) {
+		$sep = ( is_string($sep) ) ? $sep : '';
+		$prefix = ( !empty($this->prefix) ) ? $this->prefix . $sep : '';
+		return $prefix;
+	}
+	
+	/**
+	 * Prepend plugin prefix to some text
+	 * @param string $text Text to add to prefix
+	 * @param string $sep Text used to separate prefix and text
+	 * @return string Text with prefix prepended
+	 */
+	function add_prefix($text = '', $sep = '_') {
+		return $this->get_prefix($sep) . $text;
+	}
+	
+	/**
+	 * Returns Database prefix for Cornerstone-related DB Tables
+	 * @return string Database prefix
+	 */
+	function get_db_prefix() {
+		global $wpdb;
+		return $wpdb->prefix . $this->get_prefix('_');
 	}
 }
 

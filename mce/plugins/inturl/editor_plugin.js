@@ -1,8 +1,8 @@
 /**
- * $Id: editor_plugin_src.js 201 2007-02-12 15:56:56Z spocke $
+ * Internal URL MCE Plugin
  *
- * @author Moxiecode
- * @copyright Copyright � 2004-2008, Moxiecode Systems AB, All rights reserved.
+ * @author SM
+ * @package Cornerstone
  */
 
 (function() {
@@ -19,8 +19,10 @@
 		 *
 		 * @param {tinymce.Editor} ed Editor instance that the plugin is initialized in.
 		 * @param {string} url Absolute URL to where the plugin is located.
+		 *
 		*/
 		
+		//TODO Create icon
 		init : function(ed, url) {
 			
 			var props = {

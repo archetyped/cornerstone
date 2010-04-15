@@ -32,6 +32,8 @@ class CNR_Utilities {
 	
 	/* Helper Functions */
 	
+	/*-** WP **-*/
+	
 	/**
 	 * Checks if $post is a valid Post object
 	 * If $post is not valid, assigns global post object to $post (if available)
@@ -56,12 +58,74 @@ class CNR_Utilities {
 		return true;
 	}
 	
+	/*-** Request **-*/
+	
 	/**
 	 * Checks $_SERVER['SCRIPT_NAME'] to see if file base name matches specified file name
 	 * @param string $filename Filename to check for
 	 */
 	function is_file( $filename ) {
 		return ( $filename == basename( $_SERVER['SCRIPT_NAME'] ) );
+	}
+	
+	/**
+	 * Returns URL of file (assumes that it is in plugin directory)
+	 * @param string $file name of file get URL
+	 * @return string File path
+	 */
+	function get_file_url($file) {
+		if (is_string($file) && '' != trim($file)) {
+			$file = ltrim(trim($file), '/');
+			$file = sprintf('%s/%s', $this->get_url_base(), $file);
+		}
+		return $file;
+	}
+	
+	/**
+	 * Retrieve base URL for plugin-specific files
+	 * @return string Base URL
+	 */
+	function get_url_base() {
+		static $url_base = '';
+		if ( '' == $url_base ) {
+			$sl_f = '/';
+			$sl_b = '\\';
+			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', dirname(dirname(__FILE__)));
+			$url_base = str_replace($sl_b, $sl_f, WP_PLUGIN_URL . $plugin_dir);
+		}
+		return $url_base;
+	}
+	
+	/*-** General **-*/
+	
+	/**
+	 * Checks if a property exists in a class or object
+	 * (Compatibility method for PHP 4
+	 * @param mixed $class Class or object to check 
+	 * @param string $property Name of property to look for in $class
+	 */
+	function property_exists($class, $property) {
+		if ( !is_object($class) && !is_array($class) )
+			return false;
+		if ( function_exists('property_exists') && is_object($class) ) {
+			return property_exists($class, $property);
+		} else {
+			return array_key_exists($property, $class);
+		}
+	}
+	
+	/**
+	 * Retrieve specified property from object or array
+	 * @param object|array $obj Object or array to get property from
+	 * @param string $property Property name to retrieve
+	 * @return mixed Property value
+	 */
+	function &get_property(&$obj, $property) {
+		$property = trim($property);
+		if ( is_object($obj) )
+			return $obj->{$property};
+		if ( is_array($obj) )
+			return $obj[$property];
 	}
 	
 	/**
@@ -220,30 +284,6 @@ class CNR_Utilities {
 		}
 		
 		return $path;
-	}
-	
-	/**
-	 * Checks if a property exists in a class or object
-	 * (Compatibility method for PHP 4
-	 * @param mixed $class Class or object to check 
-	 * @param string $property Name of property to look for in $class
-	 */
-	function property_exists($class, $property) {
-		if ( !is_object($class) && !is_array($class) )
-			return false;
-		if ( function_exists('property_exists') && is_object($class) ) {
-			return property_exists($class, $property);
-		} else {
-			return array_key_exists($property, $class);
-		}
-	}
-	
-	function &get_property(&$obj, $property) {
-		$property = trim($property);
-		if ( is_object($obj) )
-			return $obj->{$property};
-		if ( is_array($obj) )
-			return $obj[$property];
 	}
 }
 

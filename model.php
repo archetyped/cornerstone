@@ -249,40 +249,6 @@ class Cornerstone extends CNR_Base {
 	/*-** Helpers **-*/
 	
 	/**
-	 * Returns URL of file (assumes that it is in plugin directory)
-	 * @return string File path
-	 * @param string $file name of file get URL
-	 */
-	function get_file_url($file) {
-		if (is_string($file) && '' != trim($file)) {
-			$file = ltrim(trim($file), '/');
-			$file = sprintf('%s/%s', $this->url_base, $file);
-		}
-		return $file;
-	}
-	
-	/**
-	 * Returns Database prefix for Cornerstone-related DB Tables
-	 * @static
-	 * @return string Database prefix
-	 */
-	function get_db_prefix() {
-		global $wpdb;
-		$c_vars = get_class_vars(__CLASS__);
-		return $wpdb->prefix . $c_vars['_prefix'];
-	}
-	
-	/**
-	 * Returns Class prefix
-	 * @static
-	 * @return string Class prefix
-	 */
-	function get_prefix() {
-		$c_vars = get_class_vars(__CLASS__);
-		return $c_vars['_prefix'];
-	}
-	
-	/**
 	 * Get the IDs of a collection of posts
 	 * @return array IDs of Posts passed to function
 	 * @param array $posts Array of Post objects 
@@ -539,7 +505,7 @@ class Cornerstone extends CNR_Base {
 		//Define file properties
 		$file_base = 'admin_styles';
 		$handle = $this->_prefix . $file_base;
-		$file_url = $this->get_file_url($file_base . '.css');
+		$file_url = $this->util->get_file_url($file_base . '.css');
 		
 		//Add to page
 		wp_register_style($handle, $file_url);
@@ -555,17 +521,17 @@ class Cornerstone extends CNR_Base {
 		if (strpos($_SERVER['QUERY_STRING'], 'page=page-groups') !== false) {
 			wp_enqueue_script('jquery-ui-sortable');
 			wp_enqueue_script('jquery-ui-draggable');
-			wp_enqueue_script('jquery-ui-effects', $this->get_file_url('effects.core.js'));
-			wp_enqueue_script($this->_prefix . 'script-ns', $this->get_file_url('jtree.js'));
-			wp_enqueue_script($this->_prefix . 'script', $this->get_file_url('cnr.js'));
+			wp_enqueue_script('jquery-ui-effects', $this->util->get_file_url('effects.core.js'));
+			wp_enqueue_script($this->_prefix . 'script-ns', $this->util->get_file_url('jtree.js'));
+			wp_enqueue_script($this->_prefix . 'script', $this->util->get_file_url('cnr.js'));
 		}
 		//Edit Posts
 		if ( 'edit.php' == basename($_SERVER['SCRIPT_NAME']) ) {
-			wp_enqueue_script( $this->_prefix . 'inline-edit-post', $this->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
+			wp_enqueue_script( $this->_prefix . 'inline-edit-post', $this->util->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
 			echo '<script type="text/javascript">postData = {};</script>';
 		}
 		//Default admin scripts
-		wp_enqueue_script($this->_prefix . 'script_admin', $this->get_file_url('cnr_admin.js'), array('jquery'));
+		wp_enqueue_script($this->add_prefix('script_admin'), $this->util->get_file_url('cnr_admin.js'), array('jquery'));
 	}
 	
 	/**
@@ -823,12 +789,12 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function admin_mce_before_init($initArray) {
-		$initArray['content_css'] = $this->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
+		$initArray['content_css'] = $this->util->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
 		return $initArray;
 	}
 	
 	function admin_mce_external_plugins($plugin_array) {
-		$plugin_array['cnr_inturl'] = $this->url_base . "/mce/plugins/inturl/editor_plugin.js";
+		$plugin_array['cnr_inturl'] = $this->util->get_file_url('mce/plugins/inturl/editor_plugin.js');
 		return $plugin_array;
 	}
 	
@@ -2481,7 +2447,7 @@ class Cornerstone extends CNR_Base {
 	
 }
 
-class CNR_Page_Groups {
+class CNR_Page_Groups extends CNR_Base {
 	
 	/**
 	 * @var array Stores page groups
@@ -2499,7 +2465,11 @@ class CNR_Page_Groups {
 	/*-** Constructor **-*/
 	
 	function CNR_Page_Groups() {
-		
+		$this->__construct();
+	}
+	
+	function __construct() {
+		parent::__construct();
 	}
 	
 	/**
@@ -2518,7 +2488,7 @@ class CNR_Page_Groups {
 			$qry = 'SELECT * FROM %s WHERE ID = %d LIMIT 0, 1';
 		}
 		//Get
-		$db_table = call_user_func(array(__CLASS__, 'get_db_table'));
+		$db_table = $this->get_db_table();
 		$qry = sprintf($qry, $db_table, $group_id);
 		$res_groups = $wpdb->get_results($qry);
 		
@@ -2601,11 +2571,9 @@ class CNR_Page_Groups {
 	/**
 	 * Returns DB table that stores page groups
 	 * @return string DB Table name
-	 * @static
 	 */
 	function get_db_table() {
-		$c_vars = get_class_vars(__CLASS__);
-		return Cornerstone::get_db_prefix() . $c_vars['_db_table'];
+		return $this->get_db_prefix() . $this->_db_table;
 	}
 }
 
@@ -2613,7 +2581,7 @@ class CNR_Page_Groups {
  * Class for managing a Page Group
  * @package Cornerstone
  */
-class CNR_Page_Group {
+class CNR_Page_Group extends CNR_Base {
 	
 	/*-** Properties **-*/
 	
@@ -2683,6 +2651,10 @@ class CNR_Page_Group {
 	
 	/*-** Constructor **-*/
 	
+	function CNR_Page_Group($id = 0, $name = '', $pages = '') {
+		$this->__construct($id, $name, $pages);
+	}
+							
 	/**
 	 * Class Constructor
 	 * @return void
@@ -2690,9 +2662,11 @@ class CNR_Page_Group {
 	 * @param string $name (optional) Name of Group
 	 * @param string $pages (optional) Pages in Group (CSV)
 	 */
-	function CNR_Page_Group($id = 0, $name = '', $pages = '') {
+	function __construct($id = 0, $name = '', $pages = '') {
+		parent::__construct();
 		//Get DB Values
-		$this->db_table_groups = CNR_Page_Groups::get_db_table();
+		$grps = new CNR_Page_Groups();
+		$this->db_table_groups = $grps->get_db_table();
 		//Check if ID of existing group is being set
 		if (is_numeric($id))
 			$id = (int)$id;
@@ -2710,11 +2684,10 @@ class CNR_Page_Group {
 	}
 	
 	function register_hooks() {
-		$cls = __CLASS__;
-		add_action('wp_ajax_pg_save', array($cls, 'save_ajax'));
-		add_action('wp_ajax_pg_check_code', array($cls, 'check_code_ajax'));
-		add_action('wp_ajax_pg_remove', array($cls, 'remove_ajax'));
-		add_action('wp_ajax_pg_get_template', array($cls, 'build_template_ajax'));
+		add_action('wp_ajax_pg_save', $this->m('save_ajax'));
+		add_action('wp_ajax_pg_check_code', $this->m('check_code_ajax'));
+		add_action('wp_ajax_pg_remove', $this->m('remove_ajax'));
+		add_action('wp_ajax_pg_get_template', $this->m('build_template_ajax'));
 	}
 	
 	/*-** Operations **-*/
@@ -3134,7 +3107,7 @@ class CNR_Page_Group {
 	 */
 	function get_nonce_name($action) {
 		$name_temp = "%s%s%s_%s";
-		$name = sprintf($name_temp, Cornerstone::get_prefix(), $this->node_prefix, $this->id, $action);
+		$name = sprintf($name_temp, $this->get_prefix('_'), $this->node_prefix, $this->id, $action);
 		return $name;
 	}
 	
