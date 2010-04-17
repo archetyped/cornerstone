@@ -1495,7 +1495,7 @@ class Cornerstone extends CNR_Base {
 		global $cnr_content_utilities;
 		$field = 'image_' . $image_type;
 		//Get post subtitle data
-		$val = $cnr_content_utilities->get_item_data($post, $field, 0);
+		$val = $cnr_content_utilities->get_item_data($post, $field);
 			
 		/*
 		//Get image name to retrieve
@@ -1533,7 +1533,7 @@ class Cornerstone extends CNR_Base {
 		global $cnr_content_utilities;
 		$field = 'image_' . $image_type;
 		//Get post subtitle data
-		$val = $cnr_content_utilities->get_item_data($post, $field, '');
+		$val = $cnr_content_utilities->get_item_data($post, $field);
 
 		/*
 		//Get image name to retrieve
@@ -1990,7 +1990,7 @@ class Cornerstone extends CNR_Base {
 		global $cnr_content_utilities;
 		$field = 'subtitle';
 		//Get post subtitle data
-		return $cnr_content_utilities->get_item_data($post, $field, '');
+		return $cnr_content_utilities->get_item_data($post, $field);
 	}
 	
 	function post_has_subtitle($post = null) {

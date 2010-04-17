@@ -19,13 +19,14 @@ function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10
 	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
 }
 
-function cnr_get_post_data($field, $post = null) {
-	$c = new CNR_Content_Utilities();
-	return $c->get_item_data($post, $field);
+function cnr_get_data($field_id = null, $layout = null, $item = null, $default = '') {
+	global $cnr_content_utilities;
+	return $cnr_content_utilities->get_item_data($item, $field_id, $layout, $default);
 }
 
-function cnr_the_post_data($field, $post = null) {
-	echo cnr_get_post_data($field, $post);
+function cnr_the_data($field_id = null, $layout = null, $item = null, $default = '') {
+	global $cnr_content_utilities;
+	$cnr_content_utilities->the_item_data($item, $field_id, $layout, $default);
 }
 
 /* Hooks */
@@ -1483,6 +1484,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base->set_property('class', '', 'attr');
 		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
 		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
+		$base->set_layout('display', '{data}');
 		$cnr_field_types[$base->id] =& $base;
 		
 		$base_closed = new CNR_Field_Type('base_closed');
@@ -1530,15 +1532,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		$hidden->set_property('type', 'hidden');
 		$cnr_field_types[$hidden->id] =& $hidden;
 		
-		/*
-		$image = new CNR_Field_Type('image');
-		$image->set_parent('base');
-		$image->set_description('Image');
-		$image->set_property('tag', 'img');
-		$image->set_property('src', '/wp-admin/images/wp-logo.gif', 'attr');
-		$cnr_field_types[$image->id] =& $image;
-		*/
-		
 		$span = new CNR_Field_Type('span');
 		$span->set_description('Inline wrapper');
 		$span->set_parent('base_closed');
@@ -1558,7 +1551,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$cnr_field_types[$select->id] =& $select;
 		
 		//Enable plugins to modify (add, remove, etc.) field types
-		do_action('cnr_register_field_types');
+		do_action_ref_array('cnr_register_field_types', array(&$cnr_field_types));
 		
 		//Content Types
 		
@@ -1570,7 +1563,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$cnr_content_types[$ct->id] =& $ct;
 		
 		//Enable plugins to modify (add, remove, etc.) content types
-		do_action('cnr_register_content_types');
+		do_action_ref_array('cnr_register_content_types', array(&$cnr_content_types));
 	}
 	
 	/**
@@ -1625,9 +1618,9 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param string $field (optional) Field ID to check for
 	 * @return bool TRUE if data exists, FALSE otherwise
 	 */
-	function has_item_data($post = null, $field = null) {
-		$ret = $this->get_item_data($post, $field, null);
-		return ( empty($ret) ) ? false : true;
+	function has_item_data($item = null, $field = null) {
+		$ret = $this->get_item_data($item, $field, 'raw', null);
+		return ( is_null($ret) ) ? false : true;
 	}
 	
 	/**
@@ -1636,6 +1629,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param string $field ID of field to retrieve data for
 	 * @return mixed Field data array for post, or data for single field if specified
 	 */
+	/*
 	function get_item_data($post = null, $field = null, $default = array()) {
 		$ret = $default;
 		if ( $this->util->check_post($post) ) {
@@ -1645,6 +1639,103 @@ class CNR_Content_Utilities extends CNR_Base {
 			}
 		}
 		return $ret; 
+	}
+	*/
+	
+	/**
+	 * Retrieve specified field data from content item (e.g. post)
+	 * Usage Examples:
+	 * get_item_data($post_id, 'field_id')
+	 *  - Retrieves field_id data from global $post object
+	 *  - Field data is formatted using 'display' layout of field
+	 *  
+	 * get_item_data($post_id, 'field_id', 'raw')
+	 *  - Retrieves field_id data from global $post object
+	 *  - Raw field data is returned (no formatting)
+	 *  
+	 * get_item_data($post_id, 'field_id', 'display', $post_id)
+	 *  - Retrieves field_id data from post matching $post_id
+	 *  - Field data is formatted using 'display' layout of field
+	 *  
+	 * get_item_data($post_id, 'field_id', null)
+	 *  - Retrieves field_id data from post matching $post_id
+	 *  - Field data is formatted using 'display' layout of field
+	 *    - The default layout is used when no valid layout is specified
+	 *
+	 * get_item_data($post_id)
+	 *  - Retrieves full data array from post matching $post_id
+	 *  
+	 * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
+	 * @param string $field ID of field to retrieve
+	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
+	 * @return mixed Specified field data 
+	 */
+	function get_item_data($item = null, $field = null, $layout = null, $default = '') {
+		$ret = $default;
+		
+		//Get item
+		$item = get_post($item);
+			
+		if ( !isset($item->ID) )
+			return $ret;
+		
+		//Get item data
+		$data = get_post_meta($item->ID, $this->get_meta_key(), true);
+		
+		//Get field data
+		
+		//Set return value to data if no field specified
+		if ( empty($field) || !is_string($field) )
+			$ret = $data;
+		//Stop if no valid field specified
+		if ( !isset($data[$field]) ) {
+			//TODO Check $item object to see if specified field exists (e.g. title, post_status, etc.)
+			return $ret;
+		}
+
+		$ret = $data[$field];
+		
+		//Initialize layout value
+		$layout_def = 'display';
+		
+		if ( !is_scalar($layout) || empty($layout) )
+			$layout = $layout_def;
+
+		$layout = strtolower($layout);
+					
+		//Check if raw data requested
+		if ( 'raw' == $layout )
+			return $ret;
+		
+		/* Build specified layout */
+		
+		//Get item's content type
+		$ct =& $this->get_type($item);
+		$ct->set_data($data);
+		
+		//Get field definition
+		$fdef =& $ct->get_field($field);
+		
+		//Validate layout
+		if ( !$fdef->has_layout($layout) )
+			$layout = $layout_def;
+		
+		//Build layout
+		$ret = $fdef->build_layout($layout);
+		
+		//Return formatted value
+		return $ret;
+	}
+	
+	/**
+	 * Prints an item's field data
+	 * @see CNR_Content_Utilities::get_item_data() for more information
+	 * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
+	 * @param string $field ID of field to retrieve
+	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
+	 */
+	function the_item_data($item = null, $field = null, $layout = null, $default = '') {
+		echo apply_filters('cnr_the_item_data', $this->get_item_data($item, $field, $layout, $default), $item, $field, $layout, $default);
 	}
 	
 	function enqueue_files($page = null) {

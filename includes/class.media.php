@@ -62,8 +62,8 @@ class CNR_Media extends CNR_Base {
 	/**
 	 * Register media-specific field types
 	 */
-	function register_field_types() {
-		global $cnr_field_types;
+	function register_field_types($field_types) {
+		//global $cnr_field_types;
 		
 		$media = new CNR_Field_Type('media');
 		$media->set_description('Media Item');
@@ -73,8 +73,9 @@ class CNR_Media extends CNR_Base {
 		$media->set_property('remove', 'Remove Media');
 		$media->set_property('set_as', 'media');
 		$media->set_layout('form', '{media}');
+		$media->set_layout('display', '{media format="display"}');
 		$media->add_script( array('post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
-		$cnr_field_types[$media->id] =& $media;
+		$field_types[$media->id] =& $media;
 		
 		$image = new CNR_Field_Type('image');
 		$image->set_description('Image');
@@ -83,15 +84,16 @@ class CNR_Media extends CNR_Base {
 		$image->set_property('button', 'Select Image');
 		$image->set_property('remove', 'Remove Image');
 		$image->set_property('set_as', 'image');
-		$cnr_field_types[$image->id] =& $image;
+		$field_types[$image->id] =& $image;
 	}
 	
 	/**
 	 * Register media-specific content types
 	 */
-	function register_content_types() {
-		global $cnr_content_types, $cnr_content_utilities;
+	function register_content_types($content_types) {
+		global $cnr_content_utilities;
 		
+		//Load post content type
 		$ct =& $cnr_content_utilities->get_type('post');
 		
 		//Add thumbnail image fields to post content type
@@ -114,55 +116,70 @@ class CNR_Media extends CNR_Base {
 	 */
 	function content_type_process_placeholder_media($ph_output, $field, $placeholder, $layout, $data) {
 		global $post_ID, $temp_ID;
-		$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
-		$media_upload_iframe_src = "media-upload.php";
-		$img_id = $field->get_id(true);
-		$image_name = $img_id;
-		$query = array (
-						'post_id'			=> $uploading_iframe_ID,
-						'type'				=> 'cnr_field_media',
-						'cnr_action'		=> 'true',
-						'cnr_field'			=> $img_id,
-						'cnr_set_as'		=> $field->get_property('set_as'),
-						'TB_iframe'			=> 'true'
-						);
-		$image_upload_iframe_src = apply_filters('image_upload_iframe_src', $media_upload_iframe_src . '?' . http_build_query($query));
-		//$image_title = __('Set Post ' . ucwords(strtolower($img)));
-		$post_image = $field->get_data();
-		//Get Attachment Image URL
-		$post_image_src = ( ((int) $post_image) > 0 ) ? wp_get_attachment_image_src($post_image, '') : false;
-		if (!$post_image_src)
-			$post_image = false;
-		else
-			$post_image_src = $post_image_src[0];
+		$attr_default = array('format' => 'form', 'id' => '', 'class' => '');
+		$attr = wp_parse_args($placeholder['attributes'], $attr_default);
+		//Get media ID
+		$post_media = $field->get_data();
 		
-		//Start output
-		ob_start();
-?>
-	<?php
-		if ($post_image) { 
-	?>
-			<img id="<?php echo "$image_name-frame"?>" src="<?php echo $post_image_src ?>" class="image_frame" />
-			<input type="hidden" name="<?php echo "$image_name"?>" id="<?php echo "$image_name"?>" value="<?php echo $post_image ?>" />
-	<?php
+		//Format output based on placeholder attribute
+		switch ( strtolower($attr['format']) ) {
+			case 'form':
+				$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
+				$media_upload_iframe_src = "media-upload.php";
+				$media_id = $field->get_id(true);
+				$media_name = $media_id;
+				$query = array (
+								'post_id'			=> $uploading_iframe_ID,
+								'type'				=> 'cnr_field_media',
+								'cnr_action'		=> 'true',
+								'cnr_field'			=> $media_id,
+								'cnr_set_as'		=> $field->get_property('set_as'),
+								'TB_iframe'			=> 'true'
+								);
+				$media_upload_iframe_src = apply_filters('image_upload_iframe_src', $media_upload_iframe_src . '?' . http_build_query($query));
+				
+				//Get Attachment media URL
+				$post_media_valid = get_post($post_media);
+				$post_media_valid = ( isset($post_media_valid->post_type) && 'attachment' == $post_media_valid->post_type ) ? true : false;
+
+				//Start output
+				ob_start();
+			?>
+			<?php
+				if ($post_media_valid) {
+					//Add media preview 
+			?>
+					{media format="display" id="<?php echo "$media_name-frame"?>" class="media_frame"}
+					<input type="hidden" name="<?php echo "$media_name"?>" id="<?php echo "$media_name"?>" value="<?php echo $post_media ?>" />
+			<?php
+				}
+				//Add media action options (upload, remove, etc.)
+			?>
+					<div class="buttons">
+						<a href="<?php echo "$media_upload_iframe_src" ?>" id="<?php echo "$media_name-lnk"?>" class="thickbox button" title="{title}" onclick="return false;">{button}</a>
+						<span id="<?php echo "$media_name-options"?>" class="options <?php if (!$post_media_valid) : ?> options-default <?php endif; ?>">
+						or <a href="#" title="Remove media" class="del-link" id="<?php echo "$media_name-option_remove"?>" onclick="postImageAction(this); return false;">{remove}</a>
+						 <span id="<?php echo "$media_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$media_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$media_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
+						</span>
+					</div>
+			<?php
+				//Output content
+				$ph_output = ob_get_clean();
+				break;
+			case 'display':
+				//Get Attachment media URL
+				$post_media_src = ( ((int) $post_media) > 0 ) ? wp_get_attachment_image_src($post_media, '') : false;
+				if ( is_array($post_media_src) && count($post_media_src) > 0 ) {
+					$post_media_src = $post_media_src[0];
+					$ph_output = '<img src="' . $post_media_src . '" id="' . $attr['id'] . '" class="' . $attr['class'] . '" />';
+				}
+				break;
 		}
-	?>
-			<div class="buttons">
-				<a href="<?php echo "$image_upload_iframe_src" ?>" id="<?php echo "$image_name-lnk"?>" class="thickbox button" title="{title}" onclick="return false;">{button}</a>
-				<span id="<?php echo "$image_name-options"?>" class="options <?php if (!$post_image) : ?> options-default <?php endif; ?>">
-				or <a href="#" title="Remove Image" class="del-link" id="<?php echo "$image_name-option_remove"?>" onclick="postImageAction(this); return false;">{remove}</a>
-				 <span id="<?php echo "$image_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$image_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$image_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
-				</span>
-			</div>
-	<?php
-		//Output content
-		$ph_output = ob_get_clean();
-		
 		return $ph_output;
 	}
 	
 	/**
-	 * Handles upload of Post image on post edit form
+	 * Handles upload of Post media on post edit form
 	 * @return 
 	 */
 	function field_upload_media() {
