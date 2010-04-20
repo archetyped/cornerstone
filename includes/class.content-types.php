@@ -19,14 +19,19 @@ function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10
 	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
 }
 
-function cnr_get_data($field_id = null, $layout = null, $item = null, $default = '') {
+function cnr_has_data($field_id = null, $item = null) {
 	global $cnr_content_utilities;
-	return $cnr_content_utilities->get_item_data($item, $field_id, $layout, $default);
+	return $cnr_content_utilities->has_item_data($item, $field_id);
 }
 
-function cnr_the_data($field_id = null, $layout = null, $item = null, $default = '') {
+function cnr_get_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
 	global $cnr_content_utilities;
-	$cnr_content_utilities->the_item_data($item, $field_id, $layout, $default);
+	return $cnr_content_utilities->get_item_data($item, $field_id, $layout, $default, $attr);
+}
+
+function cnr_the_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
+	global $cnr_content_utilities;
+	$cnr_content_utilities->the_item_data($item, $field_id, $layout, $default, $attr);
 }
 
 /* Hooks */
@@ -60,6 +65,11 @@ class CNR_Content_Base extends CNR_Base {
 	 * @var string Short description
 	 */
 	var $description = '';
+	
+	/**
+	 * @var string Plural description
+	 */
+	var $description_plural = '';
 	
 	/**
 	 * @var array Object Properties
@@ -356,12 +366,41 @@ class CNR_Content_Base extends CNR_Base {
 	 * Set field type description
 	 * @param string $description Description for field typ
 	 */
-	function set_description($description = '') {
-		$this->description = attribute_escape( trim($description) );
+	function set_description($description = '', $plural = '') {
+		$this->description = strip_tags(trim($description));
+		if ( isset($plural) )
+			$this->description_plural = strip_tags(trim($plural));
 	}
 	
-	function get_description() {
-		return $this->get_member_value('description', '','','current');
+	/**
+	 * Retrieve content type description
+	 * @param bool $plural TRUE if plural description should be retrieved, FALSE otherwise (Default: FALSE)
+	 */
+	function get_description($plural = false) {
+		$dir = 'current';
+		//Singular
+		if ( !$plural )
+			return $this->get_member_value('description', '','', $dir);
+		//Plural
+		$desc = $this->get_member_value('description_plural', '', '', $dir);
+		if ( empty($desc) ) {
+			//Use singular description for plural base
+			$desc = $this->get_member_value('description', '', '', $dir);
+			//Determine technique for making description plural
+			//Get last letter
+			$tail = substr($desc, -1);
+			switch ( $tail ) {
+				case 's' :
+					$desc .= 'es';
+					break;
+				case 'y' :
+					$desc = substr($desc, 0, -1) . 'ies';
+					break;
+				default :
+					$desc .= 's';
+			}
+		}
+		return $desc;
 	}
 	
 	function add_dependency($type, $context, $handle, $src = false, $deps = array(), $ver = false, $ex = false) {
@@ -382,7 +421,7 @@ class CNR_Content_Base extends CNR_Base {
 	function add_script( $context, $handle, $src = false, $deps = array(), $ver = false, $in_footer = false ) {
 		$args = func_get_args();
 		array_unshift($args, 'scripts');
-		call_user_method_array('add_dependency', $this, $args);
+		call_user_func_array(array(&$this, 'add_dependency'), $args);
 	}
 	
 	function get_scripts() {
@@ -747,8 +786,8 @@ class CNR_Field_Type extends CNR_Content_Base {
 		//Find all nested layouts in current layout
 		if ( !empty($layout) && !!$parse_nested ) {
 			$ph = $this->get_placeholder_defaults();
-		
-			while ($ph->match = $this->parse_layout($out, $ph->pattern_layout)) {
+
+			while ($ph->match = $this->parse_layout($layout, $ph->pattern_layout)) {
 				//Iterate through the different types of layout placeholders
 				foreach ($ph->match as $tag => $instances) {
 					//Iterate through instances of a specific type of layout placeholder
@@ -758,7 +797,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	
 						//Replace layout placeholder with retrieved item data
 						if ( !empty($nested_layout) )
-							$out = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $out);
+							$layout = str_replace($ph->start . $instance['match'] . $ph->end, $nested_layout, $layout);
 					}
 				}
 			}
@@ -1555,8 +1594,8 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		//Content Types
 		
-		$ct = new CNR_Content_Type('post');
-		$ct->set_description('Standard Post');
+		$ct = new CNR_Content_Type('project');
+		$ct->set_description('Project');
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
@@ -1572,6 +1611,9 @@ class CNR_Content_Utilities extends CNR_Base {
 	function register_hooks() {
 		//Register types
 		add_action('init', $this->m('register_types'));
+		
+		//Add menus
+		add_action('admin_menu', $this->m('admin_menu'));
 		
 		//Build UI on post edit form
 		add_action('do_meta_boxes', $this->m('admin_do_meta_boxes'), 10, 3);
@@ -1620,27 +1662,8 @@ class CNR_Content_Utilities extends CNR_Base {
 	 */
 	function has_item_data($item = null, $field = null) {
 		$ret = $this->get_item_data($item, $field, 'raw', null);
-		return ( is_null($ret) ) ? false : true;
+		return ( !empty($ret) || $ret === 0 );
 	}
-	
-	/**
-	 * Retrieve field data for item
-	 * @param object|int $post Post object or Post ID
-	 * @param string $field ID of field to retrieve data for
-	 * @return mixed Field data array for post, or data for single field if specified
-	 */
-	/*
-	function get_item_data($post = null, $field = null, $default = array()) {
-		$ret = $default;
-		if ( $this->util->check_post($post) ) {
-			$ret = get_post_meta($post->ID, $this->get_meta_key(), true);
-			if ( is_string($field) && ($field = trim($field)) && !empty($field) ) {
-				$ret = ( isset($ret[$field]) ) ? $ret[$field] : '';
-			}
-		}
-		return $ret; 
-	}
-	*/
 	
 	/**
 	 * Retrieve specified field data from content item (e.g. post)
@@ -1670,7 +1693,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
 	 * @return mixed Specified field data 
 	 */
-	function get_item_data($item = null, $field = null, $layout = null, $default = '') {
+	function get_item_data($item = null, $field = null, $layout = null, $default = '', $attr = null) {
 		$ret = $default;
 		
 		//Get item
@@ -1721,7 +1744,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			$layout = $layout_def;
 		
 		//Build layout
-		$ret = $fdef->build_layout($layout);
+		$ret = $fdef->build_layout($layout, $attr);
 		
 		//Return formatted value
 		return $ret;
@@ -1734,8 +1757,9 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param string $field ID of field to retrieve
 	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
 	 */
-	function the_item_data($item = null, $field = null, $layout = null, $default = '') {
-		echo apply_filters('cnr_the_item_data', $this->get_item_data($item, $field, $layout, $default), $item, $field, $layout, $default);
+	function the_item_data($item = null, $field = null, $layout = null, $default = '', $attr = null) {
+		//echo apply_filters('cnr_the_item_data', $this->get_item_data($item, $field, $layout, $default), $item, $field, $layout, $default);
+		echo $this->get_item_data($item, $field, $layout, $default, $attr);
 	}
 	
 	function enqueue_files($page = null) {
@@ -1765,11 +1789,54 @@ class CNR_Content_Utilities extends CNR_Base {
 		}
 	}
 	
+	/**
+	 * Enqueues files
+	 * @param string $type Type of file to enqueue (script or style)
+	 * @param array $args (optional) Arguments to pass to enqueue function
+	 */
 	function enqueue_file($type = 'script', $args = array()) {
 		$func = 'wp_enqueue_' . $type;
 		if ( function_exists($func) ) {
 			call_user_func_array($func, $args);
 		}
+	}
+	
+	/**
+	 * Add admin menus for content types
+	 */
+	function admin_menu() {
+		global $cnr_content_types;
+		
+		$pos = 21;
+		foreach ( $cnr_content_types as $id => $type ) {
+			$page = $this->add_prefix('post_type_' . $id);
+			$callback = $this->m('admin_page');
+			$access = 8;
+			$pos += 1;
+			//Main menu
+			add_menu_page($type->get_description(true), $type->get_description(true), $access, $page, $callback, '', $pos);
+			//Edit
+			$page_edit = $page . '-edit';
+			add_submenu_page($page, __('Edit'), __('Edit'), $access, $page, $callback);
+			//Add
+			$page_add = $page . '-add';
+			add_submenu_page($page, __('Add New'), __('Add New'), $access, $page_add, $callback);
+		}
+	}
+	
+	/**
+	 * Populate administration page for content type
+	 */
+	function admin_page() {
+		$prefix = $this->add_prefix('post_type_');
+		if ( strpos($_GET['page'], $prefix) !== 0 )
+			return false;
+		
+		$type = str_replace(array($prefix, '-add'), '', $_GET['page']);
+		$type =& $this->get_type($type);
+		$title = $type->get_description(true);
+		
+		include_once ABSPATH . 'wp-admin/edit.php';
 	}
 	
 	/**

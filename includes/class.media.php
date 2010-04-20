@@ -18,7 +18,7 @@ class CNR_Media extends CNR_Base {
 	 * Legacy Constructor
 	 */
 	function CNR_Media() {
-		$this->__construct($id);
+		$this->__construct();
 	}
 	
 	/**
@@ -74,6 +74,7 @@ class CNR_Media extends CNR_Base {
 		$media->set_property('set_as', 'media');
 		$media->set_layout('form', '{media}');
 		$media->set_layout('display', '{media format="display"}');
+		$media->set_layout('display_url', '{media format="display" type="url"}');
 		$media->add_script( array('post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
 		$field_types[$media->id] =& $media;
 		
@@ -116,7 +117,7 @@ class CNR_Media extends CNR_Base {
 	 */
 	function content_type_process_placeholder_media($ph_output, $field, $placeholder, $layout, $data) {
 		global $post_ID, $temp_ID;
-		$attr_default = array('format' => 'form', 'id' => '', 'class' => '');
+		$attr_default = array('format' => 'form', 'type' => 'html', 'id' => '', 'class' => '');
 		$attr = wp_parse_args($placeholder['attributes'], $attr_default);
 		//Get media ID
 		$post_media = $field->get_data();
@@ -167,12 +168,16 @@ class CNR_Media extends CNR_Base {
 				$ph_output = ob_get_clean();
 				break;
 			case 'display':
-				//Get Attachment media URL
-				$post_media_src = ( ((int) $post_media) > 0 ) ? wp_get_attachment_image_src($post_media, '') : false;
-				if ( is_array($post_media_src) && count($post_media_src) > 0 ) {
-					$post_media_src = $post_media_src[0];
-					$ph_output = '<img src="' . $post_media_src . '" id="' . $attr['id'] . '" class="' . $attr['class'] . '" />';
+				//Add placeholder attributes to attributes from function call
+				
+				//Remove attributes used by system
+				$type = $attr['type'];
+				$attr_system = array('format', 'type');
+				foreach ($attr_system as $key) {
+					unset($attr[$key]);
 				}
+				$data = wp_parse_args($data, $attr);
+				$ph_output = $this->get_media_output($post_media, $type, $data);
 				break;
 		}
 		return $ph_output;
@@ -200,7 +205,6 @@ class CNR_Media extends CNR_Base {
 				$src = $src[0];
 			//Build JS Arguments string
 			$args = "'$attachment_id', '$src'";
-			//$this->debug->print_message($_REQUEST);
 			$type = '';
 			if ( isset($_REQUEST['attachments'][$attachment_id]['cnr_field']) )
 				$type = $_REQUEST['attachments'][$attachment_id]['cnr_field'];
@@ -255,7 +259,6 @@ class CNR_Media extends CNR_Base {
 	function attachment_fields_to_edit($form_fields, $attachment) {
 		
 		if ($this->is_custom_media()) {
-			//$this->debug->print_message('Request', $_REQUEST, 'Post', $_POST);
 			$post =& get_post($attachment);
 			//Clear all form fields
 			$form_fields = array();
@@ -383,6 +386,193 @@ class CNR_Media extends CNR_Base {
 		if ( $this->is_custom_media() )
 			unset($default_tabs['type_url']);
 		return $default_tabs;
+	}
+	
+	/*-** Post Attachments **-*/
+	
+	/**
+	 * Retrieves matching attachments for post
+	 * @param object|int $post Post object or Post ID (Default: current global post)
+	 * @param array $args (optional) Associative array of query arguments
+	 * @see get_posts() for query arguments
+	 * @return array|bool Array of post attachments (FALSE on failure)
+	 */
+	function post_get_attachments($post = null, $args = '') {
+		if (!$this->util->check_post($post))
+			return false;
+		global $wpdb;
+		
+		//Default arguments
+		$defaults = array(
+						'post_type'			=>	'attachment',
+						'post_parent'		=>	(int) $post->ID,
+						'numberposts'		=>	-1
+						);
+		
+		$args = wp_parse_args($args, $defaults);
+		
+		//Get attachments
+		$attachments = get_children($args);
+		
+		//Return attachments
+		return $attachments;
+	}
+	
+	/**
+	 * Retrieve the attachment's path
+	 * Path = Full URL to attachment - site's base URL
+	 * Useful for filesystem operations (e.g. file_exists(), etc.)
+	 * @param object|id $post Attachment object or ID
+	 * @return string Attachment path
+	 */
+	function get_attachment_path($post = null) {
+		if (!$this->util->check_post($post))
+			return '';
+		//Get Attachment URL
+		$url = wp_get_attachment_url($post->ID);
+		//Replace with absolute path
+		$path = str_ireplace(get_bloginfo('wpurl') . '/', ABSPATH, $url);
+		return $path;
+	}
+	
+	/**
+	 * Retrieves filesize of an attachment
+	 * @param obj|int $post (optional) Attachment object or ID (uses global $post object if parameter not provided)
+	 * @param bool $formatted (optional) Whether or not filesize should be formatted (kb/mb, etc.) (Default: TRUE)
+	 * @return int|string Filesize in bytes (@see filesize()) or as formatted string based on parameters
+	 */
+	function get_attachment_filesize($post = null, $formatted = true) {
+		$size = 0;
+		if (!$this->util->check_post($post))
+			return $size;
+		//Get path to attachment
+		$path = $this->get_attachment_path($post);
+		//Get file size
+		if (file_exists($path))
+			$size = filesize($path);
+		if ($size > 0 && $formatted) {
+			$size = (int) $size;
+			$label = 'b';
+			$format = "%s%s";
+			//Format file size
+			if ($size >= 1024 && $size < 102400) {
+				$label = 'kb';
+				$size = intval($size/1024);
+			}
+			elseif ($size >= 102400) {
+				$label = 'mb';
+				$size = round(($size/1024)/1024, 1);
+			}
+			$size = sprintf($format, $size, $label);
+		}
+		
+		return $size;
+	}
+	
+	/**
+	 * Prints the attachment's filesize 
+	 * @param obj|int $post (optional) Attachment object or ID (uses global $post object if parameter not provided)
+	 * @param bool $formatted (optional) Whether or not filesize should be formatted (kb/mb, etc.) (Default: TRUE)
+	 */
+	function the_attachment_filesize($post = null, $formatted = true) {
+		echo $this->get_attachment_filesize($post, $formatted);
+	}
+	
+	/**
+	 * Build output for media item
+	 * Based on media type and output type parameter
+	 * @param int|obj $media Media object or ID
+	 * @param string $type (optional) Output type (Default: source URL)
+	 * @return string Media output
+	 */
+	function get_media_output($media, $type = 'url', $attr = array()) {
+		$ret = '';
+		$media =& get_post($media);
+		if ( !!$media || 'attachment' != $media->post_type ) {
+			//URL - Same for all attachments
+			if ( 'url' == $type ) {
+				$ret = wp_get_attachment_url($media->ID);
+			} else {
+				//Determine media type
+				$mime = get_post_mime_type($media);
+				$mime_main = substr($mime, 0, strpos($mime, '/'));
+				$mime_sub = substr($mime, strpos($mime, '/') + 1);
+				
+				//Pass to handler for media type + output type
+				$handler = implode('_', array('get', $mime_main, 'output'));
+				if ( method_exists($this, $handler))
+					$ret = $this->{$handler}($media, $type, $attr);
+			}
+		}
+		
+		
+		return apply_filters($this->add_prefix('get_media_output'), $ret, $media, $type);
+	}
+	
+	/**
+	 * Build HTML for displaying media
+	 * Output based on media type (image, video, etc.)
+	 * @param int|obj $media (Media object or ID)
+	 * @return string HTML for media
+	 */
+	function get_media_html($media) {
+		$out = '';
+		return $out;
+	}
+	
+	/**
+	 * Builds output for image attachments
+	 * @param int|obj $media Media object or ID
+	 * @param string $type Output type
+	 * @return string Image output
+	 */
+	function get_image_output($media, $type = 'html', $attr = array()) {
+		$ret = '';
+		if ( !wp_attachment_is_image($media->ID) )
+			return $ret;
+		
+		//Get image properties
+		$attr = wp_parse_args($attr, array('alt' => trim(strip_tags( $media->post_excerpt ))));
+		list($attr['src'], $attribs['width'], $attribs['height']) = wp_get_attachment_image_src($media->ID, '');
+			
+		switch ( $type ) {
+			case 'html' :
+				array_map('esc_attr', $attr);
+				$attr_str = '';
+				foreach ( $attr as $key => $val ) {
+					$attr_str .= ' ' . $key . '="' . $val . '"';
+				}
+				$ret = '<img' . $attr_str . ' />';
+				break;
+		}
+		
+		return $ret;
+	}
+	
+	/**
+	 * Build HTML IMG element of an Image
+	 * @param array $image Array of image properties
+	 * 	0:	Source URI
+	 * 	1:	Width
+	 * 	2:	Height
+	 * @return string HTML IMG element of specified image
+	 */
+	function get_image_html($image, $attributes = '') {
+		$ret = '';
+		if (is_array($image) && count($image) >= 3) {
+			//Build attribute string
+			if (is_array($attributes)) {
+				$attribs = '';
+				$attr_format = '%s="%s"';
+				foreach ($attributes as $attr => $val) {
+					$attribs .= sprintf($attr_format, $attr, attribute_escape($val));
+				}
+				$attributes = $attribs;
+			}
+			$format = '<img src="%1$s" width="%2$d" height="%3$d" ' . $attributes . ' />';
+			$ret = sprintf($format, $image[0], $image[1], $image[2]);
+		}
+		return $ret;
 	}
 }
 ?>

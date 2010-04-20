@@ -156,59 +156,85 @@ function cnr_lightbox_initialize() {
  * 
  * @return array|bool Source image data (url, width, height), or false if no image is available
  * @param int $post_id (optional) Post ID. Defaults to current post
- */
+ * @deprecated (2010-04-19) Removed inner method
 function cnr_get_post_image_src($post_id = 0) {
 	global $cnr;
 	return $cnr->post_get_image_src($post_id);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) Removed inner method
 function cnr_has_subtitle() {
 	global $cnr;
 	return $cnr->post_has_subtitle();
 }
+*/
 
 /**
  * Prints the post's subtitle text
- */
+ * @deprecated (2010-04-19) Removed inner method
 function cnr_the_subtitle() {
 	global $cnr;
 	$cnr->post_the_subtitle();
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) Removed inner method
 function cnr_has_image($image_type = 'header') {
 	global $cnr;
 	return $cnr->post_has_image(null, $image_type);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) Changed methodology for storing post images
 function cnr_get_image($image_type = 'header') {
 	global $cnr;
 	return $cnr->post_get_image(null, $image_type);
 }
+*/
 
+/**
+ * @param $image_type
 function cnr_the_image($image_type = 'header') {
 	global $cnr;
 	$cnr->post_the_image(null, $image_type);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19)
 function cnr_the_image_data($data = 'src', $image_type = 'header') {
 	global $cnr;
 	$cnr->post_the_image_data($data, $image_type);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) inner method moved to media class
 function cnr_get_attachments($post = null) {
 	global $cnr;
 	return $cnr->post_get_attachments($post);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) inner method moved to media class 
 function cnr_get_filesize($post = null, $formatted = true) {
 	global $cnr;
-	return $cnr->post_get_attachment_filesize($post, $formatted);
+	return $cnr->get_attachment_filesize($post, $formatted);
 }
+*/
 
+/**
+ * @deprecated (2010-04-19) inner method moved to media class 
 function cnr_the_filesize($post = null, $formatted = true) {
 	global $cnr;
-	$cnr->post_the_attachment_filesize($post, $formatted);
+	$cnr->the_attachment_filesize($post, $formatted);
 }
+*/
 
 	/* Section */
 	
