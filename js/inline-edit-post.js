@@ -1,3 +1,5 @@
+if ( typeof(postData) == 'undefined' )
+	postData = {};
 (function($) {
 	//Move init method to guarantee execution order
 	inlineEditPost.initSaved = inlineEditPost.init;
@@ -53,7 +55,6 @@
 		var t = this, post_id, section_select, parent_id;
 		if (typeof(id) == 'object')
 			id = t.getId(id);
-		
 		//Get master section selection
 		section_select = $('#inline-edit #post_parent');
 		//Get Parent ID

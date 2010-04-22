@@ -38,7 +38,7 @@ class CNR_Media extends CNR_Base {
 		add_action('cnr_register_field_types', $this->m('register_field_types'));
 		
 		//Register/Modify content types
-		add_action('cnr_register_content_types', $this->m('register_content_types'));
+		add_action('cnr_post_register_content_types', $this->m('register_content_types'));
 		
 		//Register handler for custom media requests
 		add_action('media_upload_cnr_field_media', $this->m('field_upload_media'));

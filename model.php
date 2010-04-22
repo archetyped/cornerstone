@@ -295,6 +295,12 @@ class Cornerstone extends CNR_Base {
 	 */
 	function admin_init() {
 		$this->admin_settings_lightbox();
+		$this->admin_register_scripts();
+	}
+	
+	function admin_register_scripts() {
+		wp_register_script( $this->add_prefix('script_admin'), $this->util->get_file_url('cnr_admin.js'), array('jquery') );
+		wp_register_script( $this->add_prefix('inline-edit-post'), $this->util->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
 	}
 	
 	/**
@@ -527,11 +533,10 @@ class Cornerstone extends CNR_Base {
 		}
 		//Edit Posts
 		if ( 'edit.php' == basename($_SERVER['SCRIPT_NAME']) ) {
-			wp_enqueue_script( $this->_prefix . 'inline-edit-post', $this->util->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
-			echo '<script type="text/javascript">postData = {};</script>';
+			wp_enqueue_script( $this->add_prefix('inline-edit-post') );
 		}
 		//Default admin scripts
-		wp_enqueue_script($this->add_prefix('script_admin'), $this->util->get_file_url('cnr_admin.js'), array('jquery'));
+		wp_enqueue_script($this->add_prefix('script_admin'));
 	}
 	
 	/**

@@ -139,6 +139,16 @@ class CNR_Base {
 	}
 	
 	/**
+	 * Creates a meta key for storing post meta data
+	 * Prefixes standard prefixed text with underscore to hide meta data on post edit forms
+	 * @param string $text Text to use as base of meta key
+	 * @return string Formatted meta key
+	 */
+	function make_meta_key($text = '') {
+		return '_' . $this->add_prefix($text);
+	}
+	
+	/**
 	 * Returns Database prefix for Cornerstone-related DB Tables
 	 * @return string Database prefix
 	 */

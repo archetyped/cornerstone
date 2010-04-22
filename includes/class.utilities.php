@@ -96,6 +96,21 @@ class CNR_Utilities {
 		return $url_base;
 	}
 	
+	/**
+	 * Retrieve current action based on URL query variables
+	 * @return string Current action
+	 */
+	function get_action($default = null) {
+		$action = '';
+		if ( isset($_GET['action']) )
+			$action = $_GET['action'];
+		elseif ( isset($_GET['page']) && ($pos = strrpos($_GET['page'], '-')) && $pos !== false && ( $pos != count($_GET['page']) - 1 ) )
+			$action = trim(substr($_GET['page'], $pos + 1), '-_');	
+		if ( empty($action) )
+			$action = $default;
+		return $action;
+	}
+	
 	/*-** General **-*/
 	
 	/**

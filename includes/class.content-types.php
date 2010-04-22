@@ -62,14 +62,21 @@ class CNR_Content_Base extends CNR_Base {
 	var $id = '';
 	
 	/**
+	 * Title
+	 * @var string
+	 */
+	var $title = '';
+	
+	/**
+	 * Plural Title
+	 * @var string
+	 */
+	var $title_plural = '';
+	
+	/**
 	 * @var string Short description
 	 */
 	var $description = '';
-	
-	/**
-	 * @var string Plural description
-	 */
-	var $description_plural = '';
 	
 	/**
 	 * @var array Object Properties
@@ -363,43 +370,64 @@ class CNR_Content_Base extends CNR_Base {
 	}
 	
 	/**
-	 * Set field type description
-	 * @param string $description Description for field typ
+	 * Set object title
+	 * @param string $title Title for object
+	 * @param string $plural Plural form of title
 	 */
-	function set_description($description = '', $plural = '') {
-		$this->description = strip_tags(trim($description));
+	function set_title($title = '', $plural = '') {
+		$this->title = strip_tags(trim($title));
 		if ( isset($plural) )
-			$this->description_plural = strip_tags(trim($plural));
+			$this->title_plural = strip_tags(trim($plural));
 	}
 	
 	/**
-	 * Retrieve content type description
+	 * Retrieve object title
+	 * @param bool $plural TRUE if plural title should be retrieved, FALSE otherwise (Default: FALSE)
+	 */
+	function get_title($plural = false) {
+		$dir = 'current';
+		//Singular
+		if ( !$plural )
+			return $this->get_member_value('title', '','', $dir);
+		//Plural
+		$title = $this->get_member_value('title_plural', '', '', $dir);
+		if ( empty($title) ) {
+			//Use singular description for plural base
+			$title = $this->get_member_value('title', '', '', $dir);
+			//Determine technique for making description plural
+			//Get last letter
+			if ( !empty($title) ) {
+				$tail = substr($title, -1);
+				switch ( $tail ) {
+					case 's' :
+						$title .= 'es';
+						break;
+					case 'y' :
+						$title = substr($title, 0, -1) . 'ies';
+						break;
+					default :
+						$title .= 's';
+				}
+			}
+		}
+		return $title;
+	}
+	
+	/**
+	 * Set object description
+	 * @param string $description Description for object
+	 */
+	function set_description($description = '') {
+		$this->description = strip_tags(trim($description));
+	}
+	
+	/**
+	 * Retrieve object description
 	 * @param bool $plural TRUE if plural description should be retrieved, FALSE otherwise (Default: FALSE)
 	 */
 	function get_description($plural = false) {
 		$dir = 'current';
-		//Singular
-		if ( !$plural )
-			return $this->get_member_value('description', '','', $dir);
-		//Plural
-		$desc = $this->get_member_value('description_plural', '', '', $dir);
-		if ( empty($desc) ) {
-			//Use singular description for plural base
-			$desc = $this->get_member_value('description', '', '', $dir);
-			//Determine technique for making description plural
-			//Get last letter
-			$tail = substr($desc, -1);
-			switch ( $tail ) {
-				case 's' :
-					$desc .= 'es';
-					break;
-				case 'y' :
-					$desc = substr($desc, 0, -1) . 'ies';
-					break;
-				default :
-					$desc .= 's';
-			}
-		}
+		return $this->get_member_value('description', '','', $dir);
 		return $desc;
 	}
 	
@@ -1186,7 +1214,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * Legacy constructor
 	 * @param string $id Content type ID
 	 */
-	function CNR_Content_Type($id = '') {
+	function CNR_Content_Type($id) {
 		$this->__construct($id);
 	}
 	
@@ -1196,6 +1224,9 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 */
 	function __construct($id = '') {
 		parent::__construct($id);
+		//Set title
+		$this->set_title($id);
+		//TODO Register custom post type
 	}
 	
 	/* Getters/Setters */
@@ -1594,15 +1625,21 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		//Content Types
 		
-		$ct = new CNR_Content_Type('project');
-		$ct->set_description('Project');
+		$ct = new CNR_Content_Type('post');
+		$ct->set_title('Post');
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
 		$cnr_content_types[$ct->id] =& $ct;
 		
-		//Enable plugins to modify (add, remove, etc.) content types
+		$proj = new CNR_Content_Type('project');
+		$proj->set_title('Project');
+		$cnr_content_types[$proj->id] =& $proj;
+		
+		//Enable plugins to add/remove content types
 		do_action_ref_array('cnr_register_content_types', array(&$cnr_content_types));
+		//Enable plugins to modify content types after they have all been registered
+		do_action_ref_array('cnr_post_register_content_types', array(&$cnr_content_types));
 	}
 	
 	/**
@@ -1618,11 +1655,345 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Build UI on post edit form
 		add_action('do_meta_boxes', $this->m('admin_do_meta_boxes'), 10, 3);
 		
+		//Get edit link for items
+		add_filter('get_edit_post_link', $this->m('get_edit_item_url'), 10, 3);
+		
 		//Save Field data
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
 		
 		//Enqueue scripts for fields in current post type
 		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
+		
+		//Modify post query for content type compatibility
+		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+	}
+	
+	/*-** Handlers **-*/
+	
+	/**
+	 * Modifies query parameters to be compatible with custom content types
+	 * If a custom content type is specified in the 'post_type' query variable,
+	 * query parameters will be modified to include posts of this type in the query
+	 * @param obj $q Reference to WP_Query object being used to perform posts query
+	 * @see WP_Query for reference
+	 * @todo Make compabitible with WP 3.0 custom post types (stored in posts table instead of postmeta table)
+	 */
+	function pre_get_posts($q) {
+		$qv =& $q->query_vars;
+		$pt =& $qv['post_type'];
+		
+		$default_types = $this->get_default_post_types();
+		
+		//Unwrap array if only one post type is set within
+		if ( is_array($pt) && count($pt) == 1 )
+			$pt = implode($pt);
+		//Use meta key/value for single custom post types
+		if ( is_scalar($pt) && ! in_array($pt, $default_types) && $this->type_exists($pt) ) {
+			$qv['meta_key'] = $this->get_type_meta_key();
+			$qv['meta_value'] = serialize(array($pt));
+			//Reset post type variable
+			$pt = 'post';
+		} elseif ( is_array($pt) && ( $custom_types = array_diff($pt, $default_types) ) && !empty($custom_types) ) {
+			//Multiple post types specified
+			global $wpdb;
+			$compare = '{compare}';
+			$compare_ids = '{ids}';
+			$operator = 'IN';
+			$id_query = "SELECT DISTINCT post_id from $wpdb->postmeta WHERE meta_key = %s AND meta_value $compare $compare_ids";
+			//Check if only custom types are supplied
+			if ( count($custom_types) == count($pt) ) {
+				/* Query contains ONLY custom post types (use Inclusion - post__in) */
+				$id_var = 'post__in';
+			} else {
+				/* Query contains default AND custom post types (use Exclusion - post__not_in) */
+				$id_var = 'post__not_in';
+				$operator = 'NOT IN';
+			}
+			
+			$serialized = array();
+			foreach ( $custom_types as $type ) {
+				if ( $this->type_exists($type) ) {
+					//Wrap type in array and serialize
+					$serialized[] = serialize(array($type));
+				}
+			}
+			$serialized = "('" . implode("','", $serialized) . "')";
+			//Get matching post IDs
+			$id_query = str_replace($compare_ids, $serialized, str_replace($compare, $operator, $id_query));
+			$id_query = $wpdb->prepare($id_query, $this->get_type_meta_key());
+			$ids = $wpdb->get_col($id_query);
+			//Add IDs to appropriate query variable
+			if ( is_array($qv[$id_var]) )
+				$ids = array_unique( array_merge($ids, $qv[$id_var]) );
+			$qv[$id_var] = $ids;
+		}
+	}
+	
+	/**
+	 * Enqueues files for fields in current content type
+	 * @param string $page Current context
+	 */
+	function enqueue_files($page = null) {
+		$post = false;
+		if ( isset($GLOBALS['post']) && !is_null($GLOBALS['post']) )
+			$post = $GLOBALS['post'];
+		elseif ( isset($_REQUEST['post_id']) )
+			$post = $_REQUEST['post_id'];
+		elseif ( isset($_REQUEST['post']) )
+			$post = $_REQUEST['post'];
+		
+		//Get post's content type
+		if ( !empty($post) ) {
+			$ct =& $this->get_type($post);
+			$file_types = array('scripts' => 'script', 'styles' => 'style');
+			//Get content type fields
+			foreach ( $ct->fields as $field ) {
+				//Enqueue scripts/styles for each field
+				foreach ( $file_types as $type => $func_base ) {
+					$deps = $field->{"get_$type"}();
+					foreach ( $deps as $handle => $args ) {
+						//Confirm context
+						if ( 'all' == $args['context'] || in_array($page, $args['context']) ) {
+							$this->enqueue_file($func_base, $args['params']);
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Enqueues files
+	 * @param string $type Type of file to enqueue (script or style)
+	 * @param array $args (optional) Arguments to pass to enqueue function
+	 */
+	function enqueue_file($type = 'script', $args = array()) {
+		$func = 'wp_enqueue_' . $type;
+		if ( function_exists($func) ) {
+			call_user_func_array($func, $args);
+		}
+	}
+	
+	/**
+	 * Add admin menus for content types
+	 */
+	function admin_menu() {
+		global $cnr_content_types;
+		
+		$pos = 21;
+		foreach ( $cnr_content_types as $id => $type ) {
+			$page = $this->get_admin_page_file($id);
+			$callback = $this->m('admin_page');
+			$access = 8;
+			$pos += 1;
+			$title = $type->get_title(true);
+			if ( !empty($title) ) {
+				//Main menu
+				add_menu_page($type->get_title(true), $type->get_title(true), $access, $page, $callback, '', $pos);
+				//Edit
+				add_submenu_page($page, __('Edit'), __('Edit'), $access, $page, $callback);
+				$hook = get_plugin_page_hookname($page, $page);
+				add_action('load-' . $hook, $this->m('admin_menu_load_plugin'));
+				//Add
+				$page_add = $this->get_admin_page_file($id, 'add');
+				add_submenu_page($page, __('Add New'), __('Add New'), $access, $page_add, $callback);
+			}
+		}
+	}
+	
+	function admin_menu_load_plugin() {
+		//Get Action
+		$action = $this->util->get_action();
+		switch ( $action ) {
+			case 'edit' :
+			case 'add'	:
+				break;
+			default		:
+				wp_enqueue_script( $this->add_prefix('inline-edit-post') );
+		}
+	}
+	
+	/**
+	 * Build admin page file name for the specified post type
+	 * @param string|CNR_Content_Type $type Content type ID or object
+	 * @param string $action Action to build file name for
+	 * @param bool $sep_action Whether action should be a separate query variable (Default: false)
+	 * @return string Admin page file name
+	 */
+	function get_admin_page_file($type, $action = '', $sep_action = false) {
+		if ( isset($type->id) )
+			$type = $type->id;
+		$page = $this->add_prefix('post_type_' . $type);
+		if ( !empty($action) ) {
+			if ( $sep_action )
+				$page .= '&amp;action=';
+			else
+				$page .= '-';
+			
+			$page .= $action;
+		}
+		return $page;
+	}
+	
+	/**
+	 * Populate administration page for content type
+	 */
+	function admin_page() {
+		$prefix = $this->add_prefix('post_type_');
+		if ( strpos($_GET['page'], $prefix) !== 0 )
+			return false;
+		
+		//Get action
+		$action = $this->util->get_action('manage');
+		//Get content type
+		$type = $_GET['page'];
+		//Remove prefix
+		if ( ($pos = strpos($type, $prefix)) === 0)
+			$type = substr($type, strlen($prefix));
+		//Remove action
+		if ( ($pos = strrpos($type, '-')) && $pos !== false )
+			$type = substr($type, 0, $pos);
+		$type =& $this->get_type($type);
+		global $title, $parent_file, $submenu_file;
+		$title = $type->get_title(true);
+		//$parent_file = $prefix . $type->id;
+		//$submenu_file = $parent_file;
+		
+		switch ( $action ) {
+			case 'edit' :
+			case 'add' :
+				$this->admin_page_edit($type, $action);
+				break;
+			default :
+				$this->admin_page_manage($type, $action);
+		}
+	}
+	
+	/**
+	 * Builds management page for items of a specific custom content type
+	 * @param CNR_Content_Type $type Content Type to manage
+	 * @param string $action Current action
+	 */
+	function admin_page_manage($type, $action) {
+		if ( !current_user_can('edit_posts') )
+			wp_die(__('You do not have sufficient permissions to access this page.'));
+		global $title, $parent_file;
+		$admin_path = ABSPATH . 'wp-admin/'; 
+		
+		global $plugin_page, $page_hook;
+		//require_once(ABSPATH . 'wp-admin/admin.php');
+		$add_url = $this->get_admin_page_url($type->id, 'add');
+		
+		//Get content items
+		$query = array('post_type' => $type->id);
+		wp($query);
+		
+		?>
+		<div class="wrap">
+		<?php screen_icon('edit'); ?>
+		<h2><?php echo esc_html( $title ); ?> <a href="<?php echo $add_url; ?>" class="button add-new-h2"><?php echo esc_html_x('Add New', 'post'); ?></a> <?php
+		if ( isset($_GET['s']) && $_GET['s'] )
+			printf( '<span class="subtitle">' . __('Search results for &#8220;%s&#8221;') . '</span>', esc_html( get_search_query() ) ); ?>
+		</h2>
+		<form id="posts-filter" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="get">
+		<?php 
+		if ( have_posts() ) {
+			include ($admin_path . 'edit-post-rows.php');
+		}
+		?>
+		</form>
+		<?php inline_edit_row('post'); ?>
+		<div id="ajax-response"></div>
+		<br class="clear" />
+		</div>
+		<?php
+	}
+	
+	function admin_page_edit($type, $action) {
+		$this->debug->print_message('Edit');
+	}
+	
+	/**
+	 * Adds meta boxes for post's content type
+	 * Each group in content type is a separate meta box
+	 * @param string $type Type of item meta boxes are being build for (post, page, link)
+	 * @param string $context Location of meta box (normal, advanced, side)
+	 * @param object $post Post object
+	 */
+	function admin_do_meta_boxes($type, $context, $post) {
+		//Validate $type. Should be 'post' or 'page' for our purposes
+		if ( 'post' != $type && 'page' != $type )
+			return false;
+
+		//TODO Determine actual content type of post
+		$item_type = 'post';
+		
+		//Get content type definition
+		$ct =& $this->get_type($item_type);
+
+		//Pass processing to content type instance
+		$ct->admin_do_meta_boxes($type, $context, $post);
+	}
+	
+	
+	/**
+	 * Saves field data submitted for current post
+	 * @param int $post_id ID of current post
+	 * @param object $post Post object
+	 */
+	function save_item_data($post_id, $post) {
+		if ( !isset($_POST['cnr']['attributes']) || empty($post_id) || empty($post) )
+			return false;
+		$prev_data = $this->get_item_data($post_id);
+		
+		//Get current field data
+		$curr_data = $_POST['cnr']['attributes'];
+		
+		//Merge arrays together (new data overwrites old data)
+		if ( is_array($prev_data) && is_array($curr_data) ) {
+			$curr_data = array_merge($prev_data, $curr_data);
+		}
+		
+		//Save to database
+		update_post_meta($post_id, $this->get_fields_meta_key(), $curr_data);
+	}
+	
+	
+	/*-** Helpers **-*/
+	
+	/**
+	 * Get array of default post types
+	 * @return array Default post types
+	 */
+	function get_default_post_types() {
+		return array('post', 'page', 'attachment', 'revision');
+	}
+	
+	/**
+	 * Checks if post's post type is a standard WP post type
+	 * @param mixed $post_type Post type (default) or post ID/object to evaluate
+	 * @see CNR_Content_Utilities::get_type() for possible parameter values
+	 * @return bool TRUE if post is default type, FALSE if it is a custom type
+	 */
+	function is_default_post_type($post_type) {
+		$type = $this->get_type($post_type);
+		return in_array($type->id, $this->get_default_post_types());
+	}
+	
+	/**
+	 * Checks if specified content type has been defined
+	 * @param string|CNR_Content_Type $type Content type ID or object
+	 * @return bool TRUE if content type exists, FALSE otherwise
+	 */
+	function type_exists($type) {
+		global $cnr_content_types;
+		if ( ! is_scalar($type) ) {
+			if ( is_a($type, 'CNR_Content_Type') )
+				$type = $type->id;
+			else
+				$type = null;
+		}
+		return ( isset($cnr_content_types[$type]) );
 	}
 	
 	/**
@@ -1632,26 +2003,47 @@ class CNR_Content_Utilities extends CNR_Base {
 	 */
 	function &get_type($item) {
 		$type = null;
-		//Get item type from Post object
-		if ( is_numeric($item) ) {
-			$item = get_post($item);
-		}
-		if ( is_object($item) ) {
-			//TODO retrieve content type for content item
-			$item = ( isset($item->post_type) ) ? $item->post_type : 'post';
-		}
-		global $cnr_content_types;
-		if ( isset($cnr_content_types[$item]) ) {
-			$type =& $cnr_content_types[$item];
+		$post = $item;
+		if ( ($post = get_post($post)) && isset($post->post_type) ) {
+			//Get item type from Post object
+			$type = $post->post_type;
+			//Check for post_type in meta data if item type is standard type
+			if ( $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
+				$type = ( is_array($type_meta) ) ? implode($type_meta) : $type_meta;
+			}
 		} else {
-			$type =& new CNR_Content_Type($item);
+			$type = $item;
+		}
+		
+		global $cnr_content_types;
+		if ( $this->type_exists($type) ) {
+			//Retrieve content type from global array
+			$type =& $cnr_content_types[$type];
+		} else {
+			//Create new empty content type if it does not already exist
+			$type =& new CNR_Content_Type($type);
+			//Add to global content types array (if valid ID provided)
+			if ( !empty($type) )
+				$cnr_content_types[$type->id] =& $type;
 		}
 		
 		return $type;
 	}
 	
-	function get_meta_key() {
-		return '_cnr_fields';
+	/**
+	 * Retrieve meta key for post fields
+	 * @return string Fields meta key
+	 */
+	function get_fields_meta_key() {
+		return $this->make_meta_key('fields');
+	}
+	
+	/**
+	 * Retrieve meta key for post type
+	 * @return string Post type meta key
+	 */
+	function get_type_meta_key() {
+		return $this->make_meta_key('post_type');
 	}
 	
 	/**
@@ -1703,7 +2095,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			return $ret;
 		
 		//Get item data
-		$data = get_post_meta($item->ID, $this->get_meta_key(), true);
+		$data = get_post_meta($item->ID, $this->get_fields_meta_key(), true);
 		
 		//Get field data
 		
@@ -1762,126 +2154,27 @@ class CNR_Content_Utilities extends CNR_Base {
 		echo $this->get_item_data($item, $field, $layout, $default, $attr);
 	}
 	
-	function enqueue_files($page = null) {
-		$post = false;
-		if ( isset($GLOBALS['post']) && !is_null($GLOBALS['post']) )
-			$post = $GLOBALS['post'];
-		elseif ( isset($_REQUEST['post_id']) )
-			$post = $_REQUEST['post_id'];
-		elseif ( isset($_REQUEST['post']) )
-			$post = $_REQUEST['post'];
-		
-		//Get post's content type
-		$ct =& $this->get_type($post);
-		$file_types = array('scripts' => 'script', 'styles' => 'style');
-		//Get content type fields
-		foreach ( $ct->fields as $field ) {
-			//Enqueue scripts/styles for each field
-			foreach ( $file_types as $type => $func_base ) {
-				$deps = $field->{"get_$type"}();
-				foreach ( $deps as $handle => $args ) {
-					//Confirm context
-					if ( 'all' == $args['context'] || in_array($page, $args['context']) ) {
-						$this->enqueue_file($func_base, $args['params']);
-					}
-				}
-			}
-		}
+	/**
+	 * Build Admin URL for specified post type
+	 * @param string|CNR_Content_Type $type Content type ID or object
+	 * @param string $action Action to build URL for
+	 * @param bool $sep_action Whether action should be a separate query variable (Default: false)
+	 * @return string Admin page URL
+	 */
+	function get_admin_page_url($type, $action = '', $sep_action = false) {
+		$url = admin_url('admin.php');
+		$url .= '?page=' . $this->get_admin_page_file($type, $action, $sep_action);
+		return $url; 
 	}
 	
-	/**
-	 * Enqueues files
-	 * @param string $type Type of file to enqueue (script or style)
-	 * @param array $args (optional) Arguments to pass to enqueue function
-	 */
-	function enqueue_file($type = 'script', $args = array()) {
-		$func = 'wp_enqueue_' . $type;
-		if ( function_exists($func) ) {
-			call_user_func_array($func, $args);
-		}
-	}
-	
-	/**
-	 * Add admin menus for content types
-	 */
-	function admin_menu() {
-		global $cnr_content_types;
-		
-		$pos = 21;
-		foreach ( $cnr_content_types as $id => $type ) {
-			$page = $this->add_prefix('post_type_' . $id);
-			$callback = $this->m('admin_page');
-			$access = 8;
-			$pos += 1;
-			//Main menu
-			add_menu_page($type->get_description(true), $type->get_description(true), $access, $page, $callback, '', $pos);
-			//Edit
-			$page_edit = $page . '-edit';
-			add_submenu_page($page, __('Edit'), __('Edit'), $access, $page, $callback);
-			//Add
-			$page_add = $page . '-add';
-			add_submenu_page($page, __('Add New'), __('Add New'), $access, $page_add, $callback);
-		}
-	}
-	
-	/**
-	 * Populate administration page for content type
-	 */
-	function admin_page() {
-		$prefix = $this->add_prefix('post_type_');
-		if ( strpos($_GET['page'], $prefix) !== 0 )
-			return false;
-		
-		$type = str_replace(array($prefix, '-add'), '', $_GET['page']);
-		$type =& $this->get_type($type);
-		$title = $type->get_description(true);
-		
-		include_once ABSPATH . 'wp-admin/edit.php';
-	}
-	
-	/**
-	 * Adds meta boxes for post's content type
-	 * Each group in content type is a separate meta box
-	 * @param string $type Type of item meta boxes are being build for (post, page, link)
-	 * @param string $context Location of meta box (normal, advanced, side)
-	 * @param object $post Post object
-	 */
-	function admin_do_meta_boxes($type, $context, $post) {
-		//Validate $type. Should be 'post' or 'page' for our purposes
-		if ( 'post' != $type && 'page' != $type )
-			return false;
-
-		//TODO Determine actual content type of post
-		$item_type = 'post';
-		
-		//Get content type definition
-		$ct =& $this->get_type($item_type);
-
-		//Pass processing to content type instance
-		$ct->admin_do_meta_boxes($type, $context, $post);
-	}
-	
-	
-	/**
-	 * Saves field data submitted for current post
-	 * @param int $post_id ID of current post
-	 * @param object $post Post object
-	 */
-	function save_item_data($post_id, $post) {
-		if ( !isset($_POST['cnr']['attributes']) || empty($post_id) || empty($post) )
-			return false;
-		$prev_data = $this->get_item_data($post_id);
-		
-		//Get current field data
-		$curr_data = $_POST['cnr']['attributes'];
-		
-		//Merge arrays together (new data overwrites old data)
-		if ( is_array($prev_data) && is_array($curr_data) ) {
-			$curr_data = array_merge($prev_data, $curr_data);
+	function get_edit_item_url($edit_url, $item_id, $context) {
+		//Get post type
+		$type = $this->get_type($item_id);
+		if (  ! $this->is_default_post_type($type->id) && $this->type_exists($type) ) {
+			$edit_url = $this->get_admin_page_url($type, 'edit', true) . '&amp;post=' . $item_id;
 		}
 		
-		//Save to database
-		update_post_meta($post_id, $this->get_meta_key(), $curr_data);
+		return $edit_url;
 	}
 }
 ?>
