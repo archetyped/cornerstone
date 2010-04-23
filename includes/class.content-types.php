@@ -1782,6 +1782,8 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		$pos = 21;
 		foreach ( $cnr_content_types as $id => $type ) {
+			if ( $this->is_default_post_type($id) )
+				continue;
 			$page = $this->get_admin_page_file($id);
 			$callback = $this->m('admin_page');
 			$access = 8;
@@ -1878,6 +1880,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		if ( !current_user_can('edit_posts') )
 			wp_die(__('You do not have sufficient permissions to access this page.'));
 		global $title, $parent_file;
+		$title = __('Edit ' . $type->get_title(true));
 		$admin_path = ABSPATH . 'wp-admin/'; 
 		
 		global $plugin_page, $page_hook;
@@ -1922,17 +1925,12 @@ class CNR_Content_Utilities extends CNR_Base {
 	 */
 	function admin_do_meta_boxes($type, $context, $post) {
 		//Validate $type. Should be 'post' or 'page' for our purposes
-		if ( 'post' != $type && 'page' != $type )
-			return false;
-
-		//TODO Determine actual content type of post
-		$item_type = 'post';
-		
-		//Get content type definition
-		$ct =& $this->get_type($item_type);
-
-		//Pass processing to content type instance
-		$ct->admin_do_meta_boxes($type, $context, $post);
+		if ( in_array($type, array('post', 'page')) ) {
+			//Get content type definition
+			$ct =& $this->get_type($post);
+			//Pass processing to content type instance
+			$ct->admin_do_meta_boxes($type, $context, $post);
+		}
 	}
 	
 	
@@ -2004,7 +2002,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	function &get_type($item) {
 		$type = null;
 		$post = $item;
-		if ( ($post = get_post($post)) && isset($post->post_type) ) {
+		if ( ( is_object($post) || is_numeric($post) ) && ($post = get_post($post)) && isset($post->post_type) ) {
 			//Get item type from Post object
 			$type = $post->post_type;
 			//Check for post_type in meta data if item type is standard type
