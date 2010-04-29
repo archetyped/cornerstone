@@ -1523,6 +1523,14 @@ class CNR_Content_Type extends CNR_Content_Base {
 		echo implode($output);
 	}
 	
+	/**
+	 * Retrieves type ID formatted as a meta value
+	 * @return string
+	 */
+	function get_meta_value() {
+		return serialize(array($this->id));
+	}
+	
 }
 
 /**
@@ -1658,7 +1666,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Get edit link for items
 		add_filter('get_edit_post_link', $this->m('get_edit_item_url'), 10, 3);
 		
-		//Save Field data
+		add_action('edit_form_advanced', $this->m('admin_page_edit_form'));
+		
+		//Save Field data/Content type
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
 		
 		//Enqueue scripts for fields in current post type
@@ -1674,21 +1684,21 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Modifies query parameters to be compatible with custom content types
 	 * If a custom content type is specified in the 'post_type' query variable,
 	 * query parameters will be modified to include posts of this type in the query
-	 * @param obj $q Reference to WP_Query object being used to perform posts query
+	 * @param WP_Query $q Reference to WP_Query object being used to perform posts query
 	 * @see WP_Query for reference
 	 * @todo Make compabitible with WP 3.0 custom post types (stored in posts table instead of postmeta table)
 	 */
 	function pre_get_posts($q) {
 		$qv =& $q->query_vars;
 		$pt =& $qv['post_type'];
-		
+		//$this->debug->print_message('pre_get_posts', $qv);
 		$default_types = $this->get_default_post_types();
 		
 		//Unwrap array if only one post type is set within
 		if ( is_array($pt) && count($pt) == 1 )
 			$pt = implode($pt);
 		//Use meta key/value for single custom post types
-		if ( is_scalar($pt) && ! in_array($pt, $default_types) && $this->type_exists($pt) ) {
+		if ( is_scalar($pt) && ! $this->is_default_post_type($pt) && $this->type_exists($pt) ) {
 			$qv['meta_key'] = $this->get_type_meta_key();
 			$qv['meta_value'] = serialize(array($pt));
 			//Reset post type variable
@@ -1742,6 +1752,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		elseif ( isset($_REQUEST['post']) )
 			$post = $_REQUEST['post'];
 		
+		$action = $this->util->get_action();
+		if ( empty($post) )
+			$post = $this->get_page_type();
 		//Get post's content type
 		if ( !empty($post) ) {
 			$ct =& $this->get_type($post);
@@ -1753,7 +1766,7 @@ class CNR_Content_Utilities extends CNR_Base {
 					$deps = $field->{"get_$type"}();
 					foreach ( $deps as $handle => $args ) {
 						//Confirm context
-						if ( 'all' == $args['context'] || in_array($page, $args['context']) ) {
+						if ( 'all' == $args['context'] || in_array($page, $args['context']) || in_array($action, $args['context']) ) {
 							$this->enqueue_file($func_base, $args['params']);
 						}
 					}
@@ -1793,22 +1806,78 @@ class CNR_Content_Utilities extends CNR_Base {
 				//Main menu
 				add_menu_page($type->get_title(true), $type->get_title(true), $access, $page, $callback, '', $pos);
 				//Edit
-				add_submenu_page($page, __('Edit'), __('Edit'), $access, $page, $callback);
+				add_submenu_page($page, __('Edit ' . $type->get_title(true)), __('Edit'), $access, $page, $callback);
 				$hook = get_plugin_page_hookname($page, $page);
 				add_action('load-' . $hook, $this->m('admin_menu_load_plugin'));
 				//Add
 				$page_add = $this->get_admin_page_file($id, 'add');
-				add_submenu_page($page, __('Add New'), __('Add New'), $access, $page_add, $callback);
+				add_submenu_page($page, __('Add New ' . $type->get_title()), __('Add New'), $access, $page_add, $callback);
+				$hook = get_plugin_page_hook($page_add, $page);
+				add_action('load-' . $hook, $this->m('admin_menu_load_plugin'));
+				//Hook for additional menus
+				$menu_hook = 'cnr_admin_menu_type';
+				//Type specific
+				do_action_ref_array($menu_hook . '_' . $id, array(&$type));
+				//General
+				do_action_ref_array($menu_hook, array(&$type));
 			}
 		}
 	}
 	
+	/**
+	 * Load data for plugin admin page prior to admin-header.php is loaded
+	 * Useful for enqueueing scripts/styles, etc.
+	 */
 	function admin_menu_load_plugin() {
 		//Get Action
+		global $editing, $post, $post_ID, $p;
 		$action = $this->util->get_action();
+		if ( isset($_GET['delete_all']) )
+			$action = 'delete_all';
+		if ( isset($_GET['action']) && 'edit' == $_GET['action'] && ! isset($_GET['bulk_edit']))
+			$action = 'manage';
 		switch ( $action ) {
+			case 'delete_all' :
 			case 'edit' :
+				//Handle bulk actions
+				//Redirect to edit.php for processing
+				
+				//Build query string
+				$qs = $_GET;
+				unset($qs['page']);
+				$edit_uri = admin_url('edit.php') . '?' . build_query($qs);
+				wp_redirect($edit_uri);
+				break;
+			case 'edit-item' :
+				wp_enqueue_script('admin_comments');
+				enqueue_comment_hotkeys_js();
+				//Get post being edited
+				if ( empty($_GET['post']) ) {
+					wp_redirect("post.php"); //TODO redict to appropriate manage page
+					exit();
+				}
+				$post_ID = $p = (int) $_GET['post'];
+				$post = get_post($post_ID);
+				if ( !current_user_can('edit_post', $post_ID) )
+					wp_die( __('You are not allowed to edit this item') );
+					
+				if ( $last = wp_check_post_lock($post->ID) ) {
+					add_action('admin_notices', '_admin_notice_post_locked');
+				} else {
+					wp_set_post_lock($post->ID);
+					$locked = true;
+				}
 			case 'add'	:
+				$editing = true;
+				wp_enqueue_script('autosave');
+				wp_enqueue_script('post');
+				if ( user_can_richedit() )
+					wp_enqueue_script('editor');
+				add_thickbox();
+				wp_enqueue_script('media-upload');
+				wp_enqueue_script('word-count');
+				add_action( 'admin_print_footer_scripts', 'wp_tiny_mce', 25 );
+				wp_enqueue_script('quicktags');
 				break;
 			default		:
 				wp_enqueue_script( $this->add_prefix('inline-edit-post') );
@@ -1828,13 +1897,34 @@ class CNR_Content_Utilities extends CNR_Base {
 		$page = $this->add_prefix('post_type_' . $type);
 		if ( !empty($action) ) {
 			if ( $sep_action )
-				$page .= '&amp;action=';
+				$page .= '&action=';
 			else
 				$page .= '-';
 			
 			$page .= $action;
 		}
 		return $page;
+	}
+	
+	/**
+	 * Determine content type based on URL query variables
+	 * Uses $_GET['page'] variable to determine content type
+	 * @return string Content type of page
+	 */
+	function get_page_type() {
+		$type = null;
+		//Extract type from query variable
+		if ( isset($_GET['page']) ) {
+			$type = $_GET['page'];
+			$prefix = $this->add_prefix('post_type_');
+			//Remove plugin page prefix
+			if ( ($pos = strpos($type, $prefix)) === 0 )
+				$type = substr($type, strlen($prefix));
+			//Remove action (if present)
+			if ( ($pos = strrpos($type, '-')) && $pos !== false )
+				$type = substr($type, 0, $pos);
+		}
+		return $type;
 	}
 	
 	/**
@@ -1848,21 +1938,14 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Get action
 		$action = $this->util->get_action('manage');
 		//Get content type
-		$type = $_GET['page'];
-		//Remove prefix
-		if ( ($pos = strpos($type, $prefix)) === 0)
-			$type = substr($type, strlen($prefix));
-		//Remove action
-		if ( ($pos = strrpos($type, '-')) && $pos !== false )
-			$type = substr($type, 0, $pos);
-		$type =& $this->get_type($type);
+		$type =& $this->get_type($this->get_page_type());
 		global $title, $parent_file, $submenu_file;
 		$title = $type->get_title(true);
 		//$parent_file = $prefix . $type->id;
 		//$submenu_file = $parent_file;
 		
 		switch ( $action ) {
-			case 'edit' :
+			case 'edit-item' :
 			case 'add' :
 				$this->admin_page_edit($type, $action);
 				break;
@@ -1872,25 +1955,156 @@ class CNR_Content_Utilities extends CNR_Base {
 	}
 	
 	/**
+	 * Queries content items for admin management pages
+	 * Also retrieves available post status for specified content type
+	 * @see wp_edit_posts_query
+	 * @param CNR_Content_Type|string $type Content type instance or ID
+	 * @return array All item statuses and Available item status
+	 */
+	function admin_manage_query($type = 'post') {
+		global $wp_query;
+		$q = array();
+		//Get post type
+		if ( ! is_a($type, 'CNR_Content_Type') ) {
+			$type = $this->get_type($type);
+		}
+		$q = array('post_type' => $type->id);
+		$g = $_GET;
+		//Date
+		$q['m']   = isset($g['m']) ? (int) $g['m'] : 0;
+		//Category
+		$q['cat'] = isset($g['cat']) ? (int) $g['cat'] : 0;
+		$post_stati  = array(	//	array( adj, noun )
+					'publish' => array(_x('Published', 'post'), __('Published posts'), _n_noop('Published <span class="count">(%s)</span>', 'Published <span class="count">(%s)</span>')),
+					'future' => array(_x('Scheduled', 'post'), __('Scheduled posts'), _n_noop('Scheduled <span class="count">(%s)</span>', 'Scheduled <span class="count">(%s)</span>')),
+					'pending' => array(_x('Pending Review', 'post'), __('Pending posts'), _n_noop('Pending Review <span class="count">(%s)</span>', 'Pending Review <span class="count">(%s)</span>')),
+					'draft' => array(_x('Draft', 'post'), _x('Drafts', 'manage posts header'), _n_noop('Draft <span class="count">(%s)</span>', 'Drafts <span class="count">(%s)</span>')),
+					'private' => array(_x('Private', 'post'), __('Private posts'), _n_noop('Private <span class="count">(%s)</span>', 'Private <span class="count">(%s)</span>')),
+					'trash' => array(_x('Trash', 'post'), __('Trash posts'), _n_noop('Trash <span class="count">(%s)</span>', 'Trash <span class="count">(%s)</span>')),
+				);
+	
+		$post_stati = apply_filters('post_stati', $post_stati);
+		
+		$avail_post_stati = get_available_post_statuses('post');
+		
+		//Status
+		if ( isset($g['post_status']) && in_array( $g['post_status'], array_keys($post_stati) ) ) {
+			$q['post_status'] = $g['post_status'];
+			$q['perm'] = 'readable';
+		} else {
+			unset($q['post_status']);
+		}
+		
+		//Order
+		if ( isset($q['post_status']) && 'pending' === $q['post_status'] ) {
+			$q['order'] = 'ASC';
+			$q['orderby'] = 'modified';
+		} elseif ( isset($q['post_status']) && 'draft' === $q['post_status'] ) {
+			$q['order'] = 'DESC';
+			$q['orderby'] = 'modified';
+		} else {
+			$q['order'] = 'DESC';
+			$q['orderby'] = 'date';
+		}
+	
+		//Pagination
+		$posts_per_page = (int) get_user_option( 'edit_per_page', 0, false );
+		if ( empty( $posts_per_page ) || $posts_per_page < 1 )
+			$posts_per_page = 15;
+		if ( isset($g['paged']) && (int) $g['paged'] > 1 )
+			$q['paged'] = (int) $g['paged'];
+		$q['posts_per_page'] = apply_filters( 'edit_posts_per_page', $posts_per_page );
+		//Search
+		$q[s] = ( isset($g['s']) ) ? $g[s] : '';
+		$wp_query->query($q);
+	
+		return array($post_stati, $avail_post_stati);
+	}
+	
+	/**
+	 * Counts the number of items in the specified content type
+	 * @see wp_count_posts
+	 * @param CNR_Content_Type|string $type Content Type instance or ID
+	 * @param string $perm Permission level for items (e.g. readable)
+	 * @return array Associative array of item counts by post status (published, draft, etc.)
+	 */
+	function count_posts( $type, $perm = '' ) {
+		global $wpdb;
+	
+		$user = wp_get_current_user();
+		
+		if ( !is_a($type, 'CNR_Content_Type') )
+			$type = $this->get_type($type);
+		$type_val = $type->get_meta_value();
+		$type = $type->id;
+		$cache_key = $type;
+	
+		//$query = "SELECT post_status, COUNT( * ) AS num_posts FROM {$wpdb->posts} WHERE post_type = %s";
+		$query = "SELECT p.post_status, COUNT( * ) as num_posts FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id = p.id WHERE m.meta_key = '" . $this->get_type_meta_key() . "' AND m.meta_value = '$type_val'";
+		if ( 'readable' == $perm && is_user_logged_in() ) {
+			//TODO enable check for custom post types "read_private_{$type}s"
+			if ( !current_user_can("read_private_posts") ) {
+				$cache_key .= '_' . $perm . '_' . $user->ID;
+				$query .= " AND (p.post_status != 'private' OR ( p.post_author = '$user->ID' AND p.post_status = 'private' ))";
+			}
+		}
+		$query .= ' GROUP BY p.post_status';
+	
+		$count = wp_cache_get($cache_key, 'counts');
+		if ( false !== $count )
+			return $count;
+	
+		$count = $wpdb->get_results( $wpdb->prepare( $query, $type ), ARRAY_A );
+	
+		$stats = array( 'publish' => 0, 'private' => 0, 'draft' => 0, 'pending' => 0, 'future' => 0, 'trash' => 0 );
+		foreach( (array) $count as $row_num => $row ) {
+			$stats[$row['post_status']] = $row['num_posts'];
+		}
+	
+		$stats = (object) $stats;
+		wp_cache_set($cache_key, $stats, 'counts');
+	
+		return $stats;
+	}
+	
+	/**
 	 * Builds management page for items of a specific custom content type
 	 * @param CNR_Content_Type $type Content Type to manage
 	 * @param string $action Current action
+	 * 
+	 * @global string $title
+	 * @global string $parent_file
+	 * @global string $plugin_page
+	 * @global string $page_hook
+	 * @global WP_User $current_user
+	 * @global WP_Query $wp_query
+	 * @global wpdb $wpdb
+	 * @global WP_Locale $wp_locale
 	 */
 	function admin_page_manage($type, $action) {
 		if ( !current_user_can('edit_posts') )
 			wp_die(__('You do not have sufficient permissions to access this page.'));
-		global $title, $parent_file;
+			
+		global $title, $parent_file, $plugin_page, $page_hook, $current_user, $wp_query, $wpdb, $wp_locale;
 		$title = __('Edit ' . $type->get_title(true));
 		$admin_path = ABSPATH . 'wp-admin/'; 
 		
-		global $plugin_page, $page_hook;
-		//require_once(ABSPATH . 'wp-admin/admin.php');
+		//Pagination
+		if ( ! isset($_GET['paged']) )
+			$_GET['paged'] = 1;
+		
 		$add_url = $this->get_admin_page_url($type->id, 'add');
-		
-		//Get content items
-		$query = array('post_type' => $type->id);
-		wp($query);
-		
+		$is_trash = isset($_GET['post_status']) && $_GET['post_status'] == 'trash';
+		//User posts
+		$user_posts = false;
+		if ( !current_user_can('edit_others_posts') ) {
+			$user_posts_count = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(1) FROM $wpdb->posts p JOIN $wpdb->postmeta m ON m.post_id = p.id WHERE m.meta_key = '_cnr_post_type' AND m.meta_value = %s AND p.post_status != 'trash' AND p.post_author = %d", $type->get_meta_value(), $current_user->ID) );
+			$user_posts = true;
+			if ( $user_posts_count && empty($_GET['post_status']) && empty($_GET['all_posts']) && empty($_GET['author']) )
+				$_GET['author'] = $current_user->ID;
+		}
+		//Get content type items
+		list($post_stati, $avail_post_stati) = $this->admin_manage_query($type->id);
 		?>
 		<div class="wrap">
 		<?php screen_icon('edit'); ?>
@@ -1898,12 +2112,151 @@ class CNR_Content_Utilities extends CNR_Base {
 		if ( isset($_GET['s']) && $_GET['s'] )
 			printf( '<span class="subtitle">' . __('Search results for &#8220;%s&#8221;') . '</span>', esc_html( get_search_query() ) ); ?>
 		</h2>
-		<form id="posts-filter" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="get">
+		<?php /* Action messages here: saved, trashed, etc. */ ?>
+		<form id="posts-filter" action="<?php echo admin_url('admin.php'); ?>" method="get">
+		<?php if ( isset($_GET['page']) ) { ?>
+		<input type="hidden" name="page" id="page" value="<?php esc_attr_e($_GET['page']); ?>" />
+		<?php } ?>
+		<ul class="subsubsub">
+		<?php 
+		/* Status links */
+		if ( empty($locked_post_status) ) :
+			$status_links = array();
+			$num_posts = $this->count_posts($type, 'readable');
+			$class = '';
+			$allposts = '';
+			$curr_page = $_SERVER['PHP_SELF'] . '?page=' . $_GET['page'];
+			if ( $user_posts ) {
+				if ( isset( $_GET['author'] ) && ( $_GET['author'] == $current_user->ID ) )
+					$class = ' class="current"';
+				$status_links[] = "<li><a href='$curr_page&author=$current_user->ID'$class>" . sprintf( _nx( 'My Posts <span class="count">(%s)</span>', 'My Posts <span class="count">(%s)</span>', $user_posts_count, 'posts' ), number_format_i18n( $user_posts_count ) ) . '</a>';
+				$allposts = '?all_posts=1';
+			}
+			
+			$total_posts = array_sum( (array) $num_posts ) - $num_posts->trash;
+			$class = empty($class) && empty($_GET['post_status']) ? ' class="current"' : '';
+			$status_links[] = "<li><a href='$curr_page{$allposts}'$class>" . sprintf( _nx( 'All <span class="count">(%s)</span>', 'All <span class="count">(%s)</span>', $total_posts, 'posts' ), number_format_i18n( $total_posts ) ) . '</a>';
+			
+			foreach ( $post_stati as $status => $label ) {
+				$class = '';
+			
+				if ( !in_array( $status, $avail_post_stati ) )
+					continue;
+			
+				if ( empty( $num_posts->$status ) )
+					continue;
+			
+				if ( isset($_GET['post_status']) && $status == $_GET['post_status'] )
+					$class = ' class="current"';
+			
+				$status_links[] = "<li><a href='$curr_page&post_status=$status'$class>" . sprintf( _n( $label[2][0], $label[2][1], $num_posts->$status ), number_format_i18n( $num_posts->$status ) ) . '</a>';
+			}
+			echo implode( " |</li>\n", $status_links ) . '</li>';
+			unset( $status_links );
+		endif;
+		?>
+		</ul>
+		<p class="search-box">
+			<label class="screen-reader-text" for="post-search-input"><?php _e( 'Search Posts' ); ?>:</label>
+			<input type="text" id="post-search-input" name="s" value="<?php the_search_query(); ?>" />
+			<input type="submit" value="<?php esc_attr_e( 'Search Posts' ); ?>" class="button" />
+		</p>
 		<?php 
 		if ( have_posts() ) {
-			include ($admin_path . 'edit-post-rows.php');
+		?>
+		<div class="tablenav">
+		<?php 
+		$page_links = paginate_links( array(
+			'base'		=> add_query_arg( 'paged', '%#%' ),
+			'format'	=> '',
+			'prev_text'	=> __('&laquo;'),
+			'next_text'	=> __('&raquo;'),
+			'total'		=> $wp_query->max_num_pages,
+			'current'	=> $_GET['paged']
+		));
+		?>
+		<div class="alignleft actions">
+		<select name="action">
+			<option value="-1" selected="selected"><?php _e('Bulk Actions'); ?></option>
+			<?php if ( $is_trash ) { ?>
+			<option value="untrash"><?php _e('Restore'); ?></option>
+			<?php } else { ?>
+			<option value="edit"><?php _e('Edit'); ?></option>
+			<?php } if ( $is_trash || !EMPTY_TRASH_DAYS ) { ?>
+			<option value="delete"><?php _e('Delete Permanently'); ?></option>
+			<?php } else { ?>
+			<option value="trash"><?php _e('Move to Trash'); ?></option>
+			<?php } ?>
+		</select>
+		<input type="submit" value="<?php esc_attr_e('Apply'); ?>" name="doaction" id="doaction" class="button-secondary action" />
+		<?php wp_nonce_field('bulk-posts'); ?>
+		
+		<?php // view filters
+		if ( !is_singular() ) {
+		$arc_query = "SELECT DISTINCT YEAR(post_date) AS yyear, MONTH(post_date) AS mmonth FROM $wpdb->posts p JOIN $wpdb->postmeta m ON m.post_id = p.ID WHERE m.meta_key = '" . $this->get_type_meta_key() . "' AND m.meta_value = '" . $type->get_meta_value() . "' ORDER BY post_date DESC";
+		
+		$arc_result = $wpdb->get_results( $arc_query );
+		
+		$month_count = count($arc_result);
+		
+		if ( $month_count && !( 1 == $month_count && 0 == $arc_result[0]->mmonth ) ) {
+		$m = isset($_GET['m']) ? (int)$_GET['m'] : 0;
+		?>
+		<select name='m'>
+		<option<?php selected( $m, 0 ); ?> value='0'><?php _e('Show all dates'); ?></option>
+		<?php
+		foreach ($arc_result as $arc_row) {
+			if ( $arc_row->yyear == 0 )
+				continue;
+			$arc_row->mmonth = zeroise( $arc_row->mmonth, 2 );
+		
+			if ( $arc_row->yyear . $arc_row->mmonth == $m )
+				$default = ' selected="selected"';
+			else
+				$default = '';
+		
+			echo "<option$default value='" . esc_attr("$arc_row->yyear$arc_row->mmonth") . "'>";
+			echo $wp_locale->get_month($arc_row->mmonth) . " $arc_row->yyear";
+			echo "</option>\n";
 		}
 		?>
+		</select>
+		<?php } 
+		
+		$dropdown_options = array('show_option_all' => __('View all categories'), 'hide_empty' => 0, 'hierarchical' => 1,
+			'show_count' => 0, 'orderby' => 'name', 'selected' => $cat);
+		wp_dropdown_categories($dropdown_options);
+		do_action('restrict_manage_posts');
+		?>
+		<input type="submit" id="post-query-submit" value="<?php esc_attr_e('Filter'); ?>" class="button-secondary" />
+		<?php } 
+		
+		if ( $is_trash && current_user_can('edit_others_posts') ) { ?>
+		<input type="submit" name="delete_all" id="delete_all" value="<?php esc_attr_e('Empty Trash'); ?>" class="button-secondary apply" />
+		<?php } ?>
+		</div>
+		
+		<?php if ( $page_links ) { ?>
+		<div class="tablenav-pages"><?php $page_links_text = sprintf( '<span class="displaying-num">' . __( 'Displaying %s&#8211;%s of %s' ) . '</span>%s', 
+			number_format_i18n( ( $_GET['paged'] - 1 ) * $wp_query->query_vars['posts_per_page'] + 1 ),
+			number_format_i18n( min( $_GET['paged'] * $wp_query->query_vars['posts_per_page'], $wp_query->found_posts ) ),
+			number_format_i18n( $wp_query->found_posts ),
+			$page_links
+		); echo $page_links_text; ?></div>
+		<?php } //page links ?>
+		<div class="clear"></div>
+		</div>
+		<?php
+			include ($admin_path . 'edit-post-rows.php');
+		} else { //have_posts() ?>
+		<div class="clear"></div>
+		<p><?php
+		if ( $is_trash )
+			_e('No posts found in the trash');
+		else
+			_e('No posts found');
+		?></p>
+		<?php } ?>
 		</form>
 		<?php inline_edit_row('post'); ?>
 		<div id="ajax-response"></div>
@@ -1912,8 +2265,44 @@ class CNR_Content_Utilities extends CNR_Base {
 		<?php
 	}
 	
+	/**
+	 * Build admin edit page for custom type item
+	 * @param CNR_Content_Type $type Content type being edited
+	 * @param string $action Current action (add, edit, manage, etc.)
+	 */
 	function admin_page_edit($type, $action) {
-		$this->debug->print_message('Edit');
+		global $title, $hook_suffix, $parent_file, $screen_layout_columns, $post, $post_ID, $p;
+		$screen_layout_columns = 2;
+		//TODO Add default icon for content type
+		$parent_file = 'edit.php'; //Makes screen_icon() use edit icon on post edit form
+		switch ( $action ) {
+			case 'edit-item' :
+				$title = 'Edit';
+				$post = get_post_to_edit($post_ID);
+				break;
+			default :
+				$title = 'Add New';
+				$post = get_default_post_to_edit();
+				break;	
+		}
+		$title = __($title . ' ' . $type->get_title());
+		$admin_path = ABSPATH . 'wp-admin/';
+		include ($admin_path . 'edit-form-advanced.php');
+	}
+	
+	/**
+	 * Adds hidden field declaring content type on post edit form
+	 */
+	function admin_page_edit_form() {
+		global $post;
+		if ( empty($post) || !$post->ID ) {
+			$type = $this->get_type($post);
+			if ( ! empty($type) && ! empty($type->id) ) {
+			?>
+			<input type="hidden" name="cnr[content_type]" id="cnr[content_type]" value="<?php echo $type->id; ?>" />
+			<?php
+			}
+		}
 	}
 	
 	/**
@@ -1940,20 +2329,35 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param object $post Post object
 	 */
 	function save_item_data($post_id, $post) {
-		if ( !isset($_POST['cnr']['attributes']) || empty($post_id) || empty($post) )
+		if ( empty($post_id) || empty($post) )
 			return false;
-		$prev_data = $this->get_item_data($post_id);
-		
-		//Get current field data
-		$curr_data = $_POST['cnr']['attributes'];
-		
-		//Merge arrays together (new data overwrites old data)
-		if ( is_array($prev_data) && is_array($curr_data) ) {
-			$curr_data = array_merge($prev_data, $curr_data);
+		//Save field data
+		if ( isset($_POST['cnr']['attributes']) ) {  
+			$prev_data = $this->get_item_data($post_id);
+			
+			//Get current field data
+			$curr_data = $_POST['cnr']['attributes'];
+			
+			//Merge arrays together (new data overwrites old data)
+			if ( is_array($prev_data) && is_array($curr_data) ) {
+				$curr_data = array_merge($prev_data, $curr_data);
+			}
+			
+			//Save to database
+			update_post_meta($post_id, $this->get_fields_meta_key(), $curr_data);
 		}
 		
-		//Save to database
-		update_post_meta($post_id, $this->get_fields_meta_key(), $curr_data);
+		//Save content type
+		if ( isset($_POST['cnr']['content_type']) ) {
+			$type = $_POST['cnr']['content_type'];
+			$saved_type = get_post_meta($post_id, $this->get_type_meta_key(), true);
+			if ( is_array($saved_type) )
+				$saved_type = implode($saved_type);
+			if ( $type != $saved_type ) {
+				//Continue processing if submitted content type is different from previously-saved content type (or no type was previously set)
+				update_post_meta($post_id, $this->get_type_meta_key(), array($type));
+			}
+		}
 	}
 	
 	
@@ -2003,15 +2407,20 @@ class CNR_Content_Utilities extends CNR_Base {
 		$type = null;
 		$post = $item;
 		if ( ( is_object($post) || is_numeric($post) ) && ($post = get_post($post)) && isset($post->post_type) ) {
-			//Get item type from Post object
-			$type = $post->post_type;
-			//Check for post_type in meta data if item type is standard type
-			if ( $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
-				$type = ( is_array($type_meta) ) ? implode($type_meta) : $type_meta;
+			if ( $post->ID > 0 ) {
+				//Get item type from Post object
+				$type = $post->post_type;
+				//Check for post_type in meta data if item type is standard type
+				if ( $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
+					$type = ( is_array($type_meta) ) ? implode($type_meta) : $type_meta;
+				}
 			}
 		} else {
 			$type = $item;
 		}
+		
+		if ( empty($type) )
+			$type = $this->get_page_type();
 		
 		global $cnr_content_types;
 		if ( $this->type_exists($type) ) {
@@ -2169,7 +2578,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Get post type
 		$type = $this->get_type($item_id);
 		if (  ! $this->is_default_post_type($type->id) && $this->type_exists($type) ) {
-			$edit_url = $this->get_admin_page_url($type, 'edit', true) . '&amp;post=' . $item_id;
+			$edit_url = $this->get_admin_page_url($type, 'edit-item', true) . '&post=' . $item_id;
 		}
 		
 		return $edit_url;

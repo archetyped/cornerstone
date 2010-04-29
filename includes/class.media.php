@@ -55,6 +55,9 @@ class CNR_Media extends CNR_Base {
 		//Modifies media upload query vars so that request is routed through plugin
 		add_filter('admin_url', $this->m('media_upload_url'), 10, 2);
 		
+		//Adds admin menus for content types
+		add_action('cnr_admin_menu_type', $this->m('type_admin_menu'));
+		
 		//Modify tabs in upload popup for fields
 		add_filter('media_upload_tabs', $this->m('field_upload_tabs'));
 	}
@@ -75,7 +78,7 @@ class CNR_Media extends CNR_Base {
 		$media->set_layout('form', '{media}');
 		$media->set_layout('display', '{media format="display"}');
 		$media->set_layout('display_url', '{media format="display" type="url"}');
-		$media->add_script( array('post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
+		$media->add_script( array('add', 'edit', 'post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
 		$field_types[$media->id] =& $media;
 		
 		$image = new CNR_Field_Type('image');
@@ -95,15 +98,17 @@ class CNR_Media extends CNR_Base {
 		global $cnr_content_utilities;
 		
 		//Load post content type
-		$ct =& $cnr_content_utilities->get_type('post');
-		
-		//Add thumbnail image fields to post content type
-		$ct->add_group('image_thumbnail', 'Thumbnail Image');
-		$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
-		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
-		$ct->add_group('image_header', 'Header Image');
-		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
-		$ct->add_to_group('image_header', 'image_header');
+		foreach ( array('post', 'project') as $type ) {
+			$ct =& $cnr_content_utilities->get_type($type);
+			
+			//Add thumbnail image fields to post content type
+			$ct->add_group('image_thumbnail', 'Thumbnail Image');
+			$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
+			$ct->add_to_group('image_thumbnail', 'image_thumbnail');
+			$ct->add_group('image_header', 'Header Image');
+			$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
+			$ct->add_to_group('image_header', 'image_header');
+		}
 	}
 	
 	/**
@@ -573,6 +578,38 @@ class CNR_Media extends CNR_Base {
 			$ret = sprintf($format, $image[0], $image[1], $image[2]);
 		}
 		return $ret;
+	}
+	
+	/**
+	 * Registers admin menus for content types
+	 * @param CNR_Content_Type $type Content Type Instance
+	 * 
+	 * @global CNR_Content_Utilities $cnr_content_utilities
+	 */
+	function type_admin_menu($type) {
+		global $cnr_content_utilities;
+		$u =& $cnr_content_utilities;
+		
+		if ( 'project' != $type->id )
+			return false;
+			
+		//Add Menu
+		$parent_page = $u->get_admin_page_file($type->id);
+		$menu_page = $u->get_admin_page_file($type->id, 'extra');
+		$this->util->add_submenu_page($parent_page, __('Extra Menu'), __('Extra Menu'), 8, $menu_page, $this->m('type_admin_page'));
+	}
+	
+	function type_admin_page() {
+		global $title;
+		?>
+		<div class="wrap">
+			<?php screen_icon('edit'); ?>
+			<h2><?php esc_html_e($title); ?></h2>
+			<p>
+			This is an extra menu for a specific content type added via a plugin hook
+			</p>
+		</div>
+		<?php
 	}
 }
 ?>

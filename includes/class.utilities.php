@@ -300,6 +300,130 @@ class CNR_Utilities {
 		
 		return $path;
 	}
+	
+	/*-** Admin **-*/
+	
+	/**
+	 * Add submenu page in the admin menu
+	 * Adds ability to set the position of the page in the menu
+	 * @see add_submin_menu (Wraps functionality)
+	 * 
+	 * @param $parent
+	 * @param $page_title
+	 * @param $menu_title
+	 * @param $access_level
+	 * @param $file
+	 * @param $function
+	 * @param int $pos Index position of menu page
+	 * 
+	 * @global array $submenu Admin page submenus
+	 */
+	function add_submenu_page($parent, $page_title, $menu_title, $access_level, $file, $function = '', $pos = false) {
+		global $submenu;
+		
+		//Add submenu page as usual
+		$args = func_get_args();
+		$hookname = call_user_func_array('add_submenu_page', $args);
+		
+		if ( is_int($pos) ) {
+			//Get last submenu added
+			$parent = $this->get_submenu_parent_file($parent);
+			$subs =& $submenu[$parent];
+
+			//Make sure menu isn't already in the desired position
+			if ( $pos <= ( count($subs) - 1 ) ) {
+				//Get submenu that was just added
+				$sub = array_pop($subs);
+				//Insert into desired position
+				if ( 0 == $pos ) {
+					array_unshift($subs, $sub);
+				} else {
+					$top = array_slice($subs, 0, $pos);
+					$bottom = array_slice($subs, $pos);
+					array_push($top, $sub);
+					$subs = array_merge($top, $bottom);
+				}
+			}
+		}
+		
+		return $hookname;
+	}
+	
+	/**
+	 * Remove admin submenu
+	 * @param string $parent Submenu parent file
+	 * @param string $file Submenu file name
+	 * @return int|null Index of removed submenu (NULL if submenu not found)
+	 * 
+	 * @global array $submenu
+	 * @global array $_registered_pages
+	 */
+	function remove_submenu_page($parent, $file) {
+		global $submenu, $_registered_pages;
+		$ret = null;
+		
+		$parent = $this->get_submenu_parent_file($parent);
+		$file = plugin_basename($file);
+		$file_index = 2;
+		
+		//Find submenu
+		if ( isset($submenu[$parent]) ) {
+			$subs =& $submenu[$parent];
+			for ($x = 0; $x < count($subs); $x++) {
+				if ( $subs[$x][$file_index] == $file ) {
+					//Remove matching submenu
+					$hookname = get_plugin_page_hookname($file, $parent);
+					remove_all_actions($hookname);
+					unset($_registered_pages[$hookname]);
+					unset($subs[$x]);
+					$subs = array_values($subs);
+					//Set index and stop processing
+					$ret = $x;
+					break;
+				}
+			}
+		}
+		
+		return $ret;
+	}
+	
+	/**
+	 * Replace a submenu page
+	 * Adds a submenu page in the place of an existing submenu page that has the same $file value
+	 * 
+	 * @param $parent
+	 * @param $page_title
+	 * @param $menu_title
+	 * @param $access_level
+	 * @param $file
+	 * @param $function
+	 * @return string Hookname
+	 * 
+	 * @global array $submenu
+	 */
+	function replace_submenu_page($parent, $page_title, $menu_title, $access_level, $file, $function = '') {
+		global $submenu;
+		//Remove matching submenu (if exists)
+		$pos = $this->remove_submenu_page($parent, $file);
+		//Insert submenu page
+		$hookname = $this->add_submenu_page($parent, $page_title, $menu_title, $access_level, $file, $function, $pos);
+		return $hookname;
+	}
+	
+	/**
+	 * Retrieves parent file for submenu
+	 * @param string $parent Parent file
+	 * @return string Formatted parent file name
+	 * 
+	 * @global array $_wp_real_parent_file;
+	 */
+	function get_submenu_parent_file($parent) {
+		global $_wp_real_parent_file;
+		$parent = plugin_basename($parent);
+		if ( isset($_wp_real_parent_file[$parent]) )
+			$parent = $_wp_real_parent_file[$parent];
+		return $parent;
+	}
 }
 
 /**
