@@ -38,7 +38,7 @@ function setPostImage(img_id, img_url, img_type) {
 				img = jQuery("<img />").attr({
 					title: 'Post Image',
 					alt: 'Post Image',
-					'class': 'image_frame',
+					'class': 'media_frame',
 					id: img_type + '-frame'
 				});
 				jQuery(container).prepend(img);

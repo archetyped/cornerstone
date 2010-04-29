@@ -111,6 +111,11 @@ function cnr_is_first_featured() {
 	return $cnr->posts_featured->is_first();
 }
 
+function cnr_is_last_featured() {
+	global $cnr;
+	return $cnr->posts_featured_is_last();
+}
+
 function cnr_featured_count() {
 	global $cnr;
 	return $cnr->posts_featured->count;

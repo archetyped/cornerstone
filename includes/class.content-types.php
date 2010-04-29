@@ -19,6 +19,14 @@ function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10
 	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
 }
 
+/**
+ * Checks if data exists for specified field
+ * @param string $field_id ID of field to check for data
+ * @param int|obj $item (optional) Post ID or object to check for field data (Default: global post)
+ * @return bool TRUE if field data exists
+ * 
+ * @global $cnr_content_utilities
+ */
 function cnr_has_data($field_id = null, $item = null) {
 	global $cnr_content_utilities;
 	return $cnr_content_utilities->has_item_data($item, $field_id);
@@ -1635,9 +1643,12 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		$ct = new CNR_Content_Type('post');
 		$ct->set_title('Post');
+		/*
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
+		*/
+		
 		$cnr_content_types[$ct->id] =& $ct;
 		
 		$proj = new CNR_Content_Type('project');
@@ -1691,14 +1702,13 @@ class CNR_Content_Utilities extends CNR_Base {
 	function pre_get_posts($q) {
 		$qv =& $q->query_vars;
 		$pt =& $qv['post_type'];
-		//$this->debug->print_message('pre_get_posts', $qv);
 		$default_types = $this->get_default_post_types();
 		
 		//Unwrap array if only one post type is set within
 		if ( is_array($pt) && count($pt) == 1 )
 			$pt = implode($pt);
 		//Use meta key/value for single custom post types
-		if ( is_scalar($pt) && ! $this->is_default_post_type($pt) && $this->type_exists($pt) ) {
+		if ( is_scalar($pt) && ! $this->is_default_post_type($pt) && 'any' != $pt && $this->type_exists($pt) ) {
 			$qv['meta_key'] = $this->get_type_meta_key();
 			$qv['meta_value'] = serialize(array($pt));
 			//Reset post type variable

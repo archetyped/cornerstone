@@ -1546,6 +1546,14 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
+	 * Checks if current featured post is the last item in the post array
+	 * @return bool TRUE if item is the last featured item, FALSE otherwise
+	 */
+	function posts_featured_is_last() {
+		return ($this->posts_featured_current == $this->posts_featured_count - 1) ? true : false;
+	}
+	
+	/**
 	 * Determines whether a post is classified as a "feature" or not
 	 * 
 	 * @return bool TRUE if post is classified as a "feature", FALSE otherwise 
@@ -1607,9 +1615,12 @@ class Cornerstone extends CNR_Base {
 	 * Modifies post permalink to reflect position of post in site structure
 	 * Example: baseurl/section-name/post-name/
 	 * 
-	 * @return string
 	 * @param string $permalink Current permalink url for post
 	 * @param object $post Post object
+	 * @return string
+	 * 
+	 * @global array $wp_rewrite
+	 * @global WP_Query $wp_query
 	 */
 	function post_link($permalink, $post = '') {
 		global $wp_rewrite, $wp_query;
@@ -1661,7 +1672,6 @@ class Cornerstone extends CNR_Base {
 						'post_type'		=> 'any',
 						);
 			$ancestors = get_posts($args);
-			
 			//Sort array in ancestor order
 			$temp_parents = array();
 			foreach ($ancestors as $ancestor) {
