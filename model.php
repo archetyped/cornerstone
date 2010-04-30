@@ -165,6 +165,10 @@ class Cornerstone extends CNR_Base {
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
 		$this->posts_featured = new CNR_Posts( array( 'category' => $this->posts_featured_get_cat_id() ) );
 		
+		$this->register_hooks();
+	}
+	
+	function register_hooks() {
 		//Initialization
 		
 		register_activation_hook($this->_caller, $this->m('activate'));

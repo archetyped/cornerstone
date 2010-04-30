@@ -217,21 +217,15 @@ function cnr_the_image_data($data = 'src', $image_type = 'header') {
 }
 */
 
-/**
- * @deprecated (2010-04-19) inner method moved to media class
 function cnr_get_attachments($post = null) {
-	global $cnr;
-	return $cnr->post_get_attachments($post);
+	$m = new CNR_Media();
+	return $m->post_get_attachments($post);
 }
-*/
-
-/**
- * @deprecated (2010-04-19) inner method moved to media class 
+ 
 function cnr_get_filesize($post = null, $formatted = true) {
-	global $cnr;
-	return $cnr->get_attachment_filesize($post, $formatted);
+	$m = new CNR_Media();
+	return $m->get_attachment_filesize($post, $formatted);
 }
-*/
 
 /**
  * @deprecated (2010-04-19) inner method moved to media class 

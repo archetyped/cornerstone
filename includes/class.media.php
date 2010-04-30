@@ -402,7 +402,7 @@ class CNR_Media extends CNR_Base {
 	 * @see get_posts() for query arguments
 	 * @return array|bool Array of post attachments (FALSE on failure)
 	 */
-	function post_get_attachments($post = null, $args = '') {
+	function post_get_attachments($post = null, $args = '', $filter_special = true) {
 		if (!$this->util->check_post($post))
 			return false;
 		global $wpdb;
@@ -418,6 +418,21 @@ class CNR_Media extends CNR_Base {
 		
 		//Get attachments
 		$attachments = get_children($args);
+		
+		//Filter special attachments
+		if ( $filter_special ) {
+			$start = '[';
+			$end = ']';
+			$removed = false;
+			foreach ( $attachments as $i => $a ) {
+				if ( $start == substr($a->post_title, 0, 1) && $end == substr($a->post_title, -1) ) {
+					unset($attachments[$i]);
+					$removed = true;
+				}
+			}
+			if ( $removed )
+				$attachments = array_values($attachments);
+		}
 		
 		//Return attachments
 		return $attachments;
@@ -436,7 +451,7 @@ class CNR_Media extends CNR_Base {
 		//Get Attachment URL
 		$url = wp_get_attachment_url($post->ID);
 		//Replace with absolute path
-		$path = str_ireplace(get_bloginfo('wpurl') . '/', ABSPATH, $url);
+		$path = str_replace(get_bloginfo('wpurl') . '/', ABSPATH, $url);
 		return $path;
 	}
 	
