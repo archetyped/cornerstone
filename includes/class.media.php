@@ -66,8 +66,6 @@ class CNR_Media extends CNR_Base {
 	 * Register media-specific field types
 	 */
 	function register_field_types($field_types) {
-		//global $cnr_field_types;
-		
 		$media = new CNR_Field_Type('media');
 		$media->set_description('Media Item');
 		$media->set_parent('base_closed');
@@ -99,6 +97,7 @@ class CNR_Media extends CNR_Base {
 		
 		//Load post content type
 		foreach ( array('post', 'project') as $type ) {
+			unset($ct);
 			$ct =& $cnr_content_utilities->get_type($type);
 			
 			//Add thumbnail image fields to post content type

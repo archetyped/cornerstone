@@ -1919,7 +1919,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	/**
 	 * Determine content type based on URL query variables
 	 * Uses $_GET['page'] variable to determine content type
-	 * @return string Content type of page
+	 * @return string Content type of page (NULL if no type defined by page)
 	 */
 	function get_page_type() {
 		$type = null;
@@ -2388,14 +2388,19 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @return bool TRUE if post is default type, FALSE if it is a custom type
 	 */
 	function is_default_post_type($post_type) {
-		$type = $this->get_type($post_type);
-		return in_array($type->id, $this->get_default_post_types());
+		if ( !is_string($post_type) ) {
+			$post_type = $this->get_type($post_type);
+			$post_type = $post_type->id;
+		}
+		return in_array($post_type, $this->get_default_post_types());
 	}
 	
 	/**
 	 * Checks if specified content type has been defined
 	 * @param string|CNR_Content_Type $type Content type ID or object
 	 * @return bool TRUE if content type exists, FALSE otherwise
+	 * 
+	 * @uses array $cnr_content_types
 	 */
 	function type_exists($type) {
 		global $cnr_content_types;
@@ -2412,26 +2417,35 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Retrieves content type definition for specified content item (post, page, etc.)
 	 * @param string|object $item Post object, or item type (string)
 	 * @return CNR_Content_Type Reference to matching content type, empty content type if no matching type exists
+	 * 
+	 * @uses array $cnr_content_types
 	 */
 	function &get_type($item) {
+		//Return immediately if $item is a content type
+		if ( is_a($item, 'CNR_Content_Type') )
+			return $item;
+		
 		$type = null;
-		$post = $item;
-		if ( ( is_object($post) || is_numeric($post) ) && ($post = get_post($post)) && isset($post->post_type) ) {
-			if ( $post->ID > 0 ) {
-				//Get item type from Post object
+		
+		if ( is_string($item) )
+			$type = $item;
+		
+		if ( !$this->type_exists($type) ) {
+			$post = $item;
+			
+			//Check if $item is a post (object or ID)
+			if ( ( is_object($post) || is_numeric($post) ) && ( $post = get_post($post) ) && isset($post->post_type) ) {
 				$type = $post->post_type;
-				//Check for post_type in meta data if item type is standard type
-				if ( $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
+				if ( $post->ID > 0 && $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
+					//Check for post_type in meta data if item type is standard type
 					$type = ( is_array($type_meta) ) ? implode($type_meta) : $type_meta;
 				}
 			}
-		} else {
-			$type = $item;
+			
+			if ( ( $type_page = $this->get_page_type() ) && ( empty($type) || $this->is_default_post_type($type) ) ) {
+				$type = $type_page;
+			}
 		}
-		
-		if ( empty($type) )
-			$type = $this->get_page_type();
-		
 		global $cnr_content_types;
 		if ( $this->type_exists($type) ) {
 			//Retrieve content type from global array
@@ -2440,7 +2454,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			//Create new empty content type if it does not already exist
 			$type =& new CNR_Content_Type($type);
 			//Add to global content types array (if valid ID provided)
-			if ( !empty($type) )
+			if ( !empty($type) && !empty($type->id) )
 				$cnr_content_types[$type->id] =& $type;
 		}
 		
