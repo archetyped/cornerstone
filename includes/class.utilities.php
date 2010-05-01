@@ -78,7 +78,6 @@ class CNR_Utilities {
 			$file = ltrim(trim($file), '/');
 			$file = sprintf('%s/%s', $this->get_url_base(), $file);
 		}
-		$GLOBALS['cnr_debug']->print_message('URL: ' . $file);
 		return $file;
 	}
 	
@@ -91,7 +90,7 @@ class CNR_Utilities {
 		if ( '' == $url_base ) {
 			$sl_f = '/';
 			$sl_b = '\\';
-			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', dirname(dirname(__FILE__)));
+			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', str_replace($sl_f, $sl_b, dirname(dirname(__FILE__))));
 			$url_base = str_replace($sl_b, $sl_f, WP_PLUGIN_URL . $plugin_dir);
 		}
 		return $url_base;
@@ -165,7 +164,6 @@ class CNR_Utilities {
 		if (empty($args))
 			return false;
 		$this->debug = new CNR_Debug();
-		//$this->debug->print_message('Arguments', $args);
 		//Set first array as base array
 		$merged = $args[0];
 		//Iterate through arrays to merge
@@ -184,7 +182,6 @@ class CNR_Utilities {
 					//$merged[$key] = (is_array($val) && isset($merged[$key])) ? $this->array_merge_recursive_distinct($merged[$key], $val) : $val;
 			}
 		}
-		//$this->debug->print_message('Merged Array', $merged);
 		return $merged;
 	}
 	
