@@ -65,11 +65,26 @@ class CNR_Structure extends CNR_Base {
 		add_filter('admin_enqueue_scripts', $this->m('admin_enqueue_scripts'));
 	}
 	
+	/**
+	 * Returns formatted query variable for use in post requests, rewrite rules, etc.
+	 * @return string Custom query variable
+	 */
 	function get_query_var() {
 		static $qvar = '';
 		if ( empty($qvar) )
 			$qvar = $this->add_prefix($this->query_var);
 		return $qvar;
+	}
+	
+	/**
+	 * Checks if custom permalink structure is currently in use
+	 * @return bool TRUE if custom permalink structure is in use, FALSE otherwise
+	 * 
+	 * @global WP_Rewrite $wp_rewrite
+	 */
+	function is_permalink_structure_activated() {
+		global $wp_rewrite;
+		return ( $wp_rewrite->using_permalinks() && get_option('permalink_structure') == $this->permalink_structure );
 	}
 	
 	/**
@@ -101,12 +116,12 @@ class CNR_Structure extends CNR_Base {
 	 * @global WP_Query $wp_query
 	 */
 	function post_link($permalink, $post = '') {
-		global $wp_rewrite, $wp_query;
+		global $wp_query;
 		//Do not process further if $post has no name (e.g. drafts)
 		if ( is_object($post) && ( !$this->util->property_exists($post, 'post_name') || empty($post->post_name) ) )
 			return $permalink;
 		
-		if ($wp_rewrite->using_permalinks()) {
+		if ( $this->is_permalink_structure_activated() ) {
             
 			//Get base URL
 			$base = get_bloginfo('url');
@@ -197,7 +212,7 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function post_rewrite_rules($r) {
 		global $wp_rewrite;
-		if ( $wp_rewrite->permalink_structure == $this->permalink_structure )
+		if ( $this->is_permalink_structure_activated() )
 			$r = array();
 		return $r;
 	}
@@ -210,19 +225,20 @@ class CNR_Structure extends CNR_Base {
 	function rewrite_rules_array($rewrite_rules_array) {
 		$r =& $rewrite_rules_array;
 		
-		$wildcard = '(.+?)';
-		$var_page = 'pagename';
-		$var_new = $this->get_query_var();
-		$qv_page = "$var_page=$matches[1]";
-		$qv_new = str_replace($var_page, $var_new, $qv_page);
-		
-		//Replace all page rules with custom redirect so that we can process request before WP
-		foreach ( $r as $regex => $redirect ) {
-			if ( strpos($regex, $wildcard) === 0 && strpos($redirect, $qv_page) !== false ) {
-				$r[$regex] = str_replace($qv_page, $qv_new, $r[$regex]);
+		if ( $this->is_permalink_structure_activated() ) {
+			$wildcard = '(.+?)';
+			$var_page = 'pagename';
+			$var_new = $this->get_query_var();
+			$qv_page = "$var_page=$matches[1]";
+			$qv_new = str_replace($var_page, $var_new, $qv_page);
+			
+			//Replace all page rules with custom redirect so that we can process request before WP
+			foreach ( $r as $regex => $redirect ) {
+				if ( strpos($regex, $wildcard) === 0 && strpos($redirect, $qv_page) !== false ) {
+					$r[$regex] = str_replace($qv_page, $qv_new, $r[$regex]);
+				}
 			}
 		}
-
 		//Return rules array
 		return $r;
 	}
