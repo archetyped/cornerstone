@@ -27,14 +27,26 @@ class CNR_Base {
 	 */
 	var $debug;
 	
+	/**
+	 * Legacy constructor
+	 */
 	function CNR_Base() {
 		$this->__construct();
 	}
 	
+	/**
+	 * Constructor
+	 */
 	function __construct() {
 		$this->util = new CNR_Utilities();
 		$this->debug = &$GLOBALS['cnr_debug'];
 	}
+	
+	/**
+	 * Default initialization method
+	 * To be overriden by child classes
+	 */
+	function init() {}
 	
 	/**
 	 * Returns callback to instance method

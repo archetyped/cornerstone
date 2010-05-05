@@ -268,6 +268,44 @@ class CNR_Posts extends CNR_Base {
 		
 		return $this->post_ids;
 	}
+	
+	/**
+	 * Gets entire parent tree of post as an array
+	 * 
+	 * Array order is from top level to immediate post parent
+	 * @static
+	 * @param object $post Post to get path for
+	 * @param string $prop Property to retrieve from parents.  If specified, array will contain only this property from parents
+	 * @param $depth Unused
+	 * @return array of Post Objects/Properties
+	 */
+	function get_parents($post, $prop = '', $depth = '') {
+		$parents = get_post_ancestors($post = get_post($post, OBJECT, ''));
+		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
+			//Retrieve post data for parents if full data or property other than post ID is required
+			$args = array(
+						'include'		=> implode(',', $parents),
+						'post_type'		=> 'any',
+						);
+			$ancestors = get_posts($args);
+			//Sort array in ancestor order
+			$temp_parents = array();
+			foreach ($ancestors as $ancestor) {
+				//Get index of ancestor
+				$i = array_search($ancestor->ID, $parents);
+				if ( false === $i )
+					continue;
+				//Insert post at index
+				$temp_parents[$i] = $ancestor;
+			}
+			
+			if ( !empty($temp_parents) )
+				$parents = $temp_parents;
+		}
+		//Reverse Array (to put top level parent at beginning of array)
+		$parents = array_reverse($parents);
+		return $parents;
+	}
 }
 
 ?>

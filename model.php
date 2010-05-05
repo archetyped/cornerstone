@@ -4,6 +4,7 @@ require_once 'includes/class.base.php';
 require_once 'includes/class.content-types.php';
 require_once 'includes/class.media.php';
 require_once 'includes/class.posts.php';
+require_once 'includes/class.structure.php';
 
 /**
  * @package Cornerstone
@@ -12,38 +13,45 @@ class Cornerstone extends CNR_Base {
 	/* Variables */
 	
 	/**
-	 * @var string Path to calling file
+	 * Path to calling file
+	 * @var string
 	 */
 	var $_caller;
 	
 	/**
-	 * @var string Prefix base for elements created by plugin
+	 * Prefix base for elements created by plugin
+	 * @var string
 	 * @static
 	 */
 	var $_prefix = 'cnr_';
 	
 	/**
-	 * @var string Prefix for elements created by plugin
+	 * Prefix for elements created by plugin
+	 * @var string
 	 */
 	var $_prefix_db = '';
 	
 	/**
-	 * @var string variable to add to queries to indicate that the plugin has modified the query
+	 * Variable to add to queries to indicate that the plugin has modified the query
+	 * @var string
 	 */
 	var $_qry_var = 'var';
 	
 	/**
-	 * @var string Name of property to store post parts under
+	 * Name of property to store post parts under
+	 * @var string
 	 */
 	var $_post_parts_var = 'parts';
 	
 	/**
-	 * @var string Base name for Content Type Admin Menus
+	 * Base name for Content Type Admin Menus
+	 * @var string
 	 */
 	var $file_content_types = 'content-types';
 	
 	/**
-	 * @var string Path to plugin
+	 * Path to plugin
+	 * @var string
 	 */
 	var $path = __FILE__;
 	
@@ -51,17 +59,20 @@ class Cornerstone extends CNR_Base {
 	/* State Variables */
 	
 	/**
-	 * @var bool Whether the current request is occuring during WP initialization
+	 * Whether the current request is occuring during WP initialization
+	 * @var bool
 	 */
 	var $state_init = false;
 	
 	/**
-	 * @var bool Whether the current request is occuring during section children request
+	 * Whether the current request is occuring during section children request
+	 * @var bool
 	 */
 	var $state_children = false;
 	
 	/**
-	 * @var object|int Current section post object (or 0 if not in a section)
+	 * Current section post object (or 0 if not in a section)
+	 * @var object|int
 	 */
 	var $section_current = null;
 	
@@ -74,68 +85,86 @@ class Cornerstone extends CNR_Base {
 	var $posts_featured_cat = "feature";
 	
 	/**
-	 * @var array Stores featured posts
+	 * Stores featured posts
+	 * @var array
 	 */
 	//var $posts_featured = array();
 	
 	/**
-	 * @var bool Whether or not there are any featured posts
+	 * Whether or not there are any featured posts
+	 * @var bool
 	 */
 	var $posts_featured_has = false;
 	
 	/**
-	 * @var object Featured post object currently loaded in global $post variable
+	 * Featured post object currently loaded in global $post variable
+	 * @var object
 	 */
 	var $posts_featured_current = -1;
 	
 	/**
-	 * @var int Total number of featured posts
+	 * Total number of featured posts
+	 * @var int
 	 */
 	var $posts_featured_count = 0;
 	
 	/**
-	 * @var CNR_Posts Featured posts container
+	 * Featured posts container
+	 * @var CNR_Posts
 	 */
 	var $posts_featured = null;
 	
 	/**
-	 * @var string Key used to store post subtitle
+	 * Key used to store post subtitle
+	 * @var string
 	 */
 	var $post_subtitle_field = "_cnr_subtitle";
 	
 	/* Children Content Variables */
 	
 	/**
-	 * @var array Children posts of current post
+	 * Children posts of current post
+	 * @var array
 	 */
 	var $post_children = null;
 	
 	/**
-	 * @var int ID of Page that children were retrieved for
+	 * ID of Page that children were retrieved for
+	 * @var int
 	 */
 	var $post_children_parent = null;
 	
 	/**
-	 * @var bool Whether or not post has children
+	 * Whether or not post has children
+	 * @var bool
 	 */
 	var $post_children_has = false;
 	
 	/**
-	 * @var object Child post currently loaded in global $post variable
+	 * Child post currently loaded in global $post variable
+	 * @var object
 	 */
 	var $post_children_current = -1;
 	
 	/**
-	 * @var int Total number of children posts (in current request)
+	 * Total number of children posts (in current request)
+	 * @var int
 	 */
 	var $post_children_count = 0;
 	
 	/**
-	 * @var int Total number of children posts in database
+	 * Total number of children posts in database
+	 * @var int
 	 */
 	var $post_children_found = 0;
 	
 	/* Instance Variables */
+	
+	/**
+	 * Structure instance
+	 * @var CNR_Structure
+	 */
+	var $structure = null;
 	
 	/* Content Types */
 	
@@ -154,8 +183,6 @@ class Cornerstone extends CNR_Base {
 		//Parent Constructor
 		parent::__construct();
 		
-		//$GLOBALS['cnr'] =& $this;
-		
 		//Set Properties
 		$this->_caller = $caller;
 		$this->_prefix_db = $this->get_db_prefix();
@@ -166,6 +193,11 @@ class Cornerstone extends CNR_Base {
 		$this->posts_featured = new CNR_Posts( array( 'category' => $this->posts_featured_get_cat_id() ) );
 		
 		$this->register_hooks();
+		
+		//Init class instances
+		
+		$this->structure = new CNR_Structure();
+		$this->structure->init();
 	}
 	
 	function register_hooks() {
@@ -220,8 +252,11 @@ class Cornerstone extends CNR_Base {
 		add_filter('the_content', $this->m('feed_item_description'));
 		add_filter('the_excerpt_rss', $this->m('feed_item_description'));
 		//Rewrite Rules
+		/**
+		 * @deprecated 2010-05-04: Moved to CNR_Structure
 		add_filter('query_vars', $this->m('query_vars'));
 		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
+		*/
 		
 		//Post Filtering
 		
@@ -232,12 +267,14 @@ class Cornerstone extends CNR_Base {
 		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
+		/* @deprecated (2010-05-04): Moved to CNR_Structure class 
 		add_filter('post_link', $this->m('post_link'), 10, 2);
 		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
+		*/
 		add_filter('wp_list_pages', $this->m('post_section_highlight'));
 		
 		//Item retrieval
-		add_action('pre_get_posts', $this->m('pre_get_posts'));
+		//@deprecated 2010-05-04 - Moved to CNR_Structure: add_action('pre_get_posts', $this->m('pre_get_posts'));
 		//add_filter('posts_request', $this->m('posts_request'));
 
 		//Activate Shortcodes
@@ -864,7 +901,7 @@ class Cornerstone extends CNR_Base {
 		//Also make sure current page is not home page (no links should be marked as current)
 		if (is_singular() && $post && stripos($output, $class_current) === false) {
 			//Get all parents of current post
-			$parents = $this->post_get_parents($post, 'id');
+			$parents = CNR_Posts::get_parents($post, 'id');
 			
 			//Add current post to array
 			$parents[] = $post->ID;
@@ -1625,7 +1662,8 @@ class Cornerstone extends CNR_Base {
 	 * 
 	 * @global array $wp_rewrite
 	 * @global WP_Query $wp_query
-	 */
+	 * @deprecated 2010-05-04: Moved to CNR_Structure
+	 
 	function post_link($permalink, $post = '') {
 		global $wp_rewrite, $wp_query;
 		
@@ -1657,6 +1695,7 @@ class Cornerstone extends CNR_Base {
 		}
 		return $permalink;
 	}
+	*/
 	
 	/**
 	 * Gets entire parent tree of post as an array
@@ -1666,7 +1705,8 @@ class Cornerstone extends CNR_Base {
 	 * @param string $prop Property to retrieve from parents.  If specified, array will contain only this property from parents
 	 * @param $depth Unused
 	 * @return array of Post Objects/Properties
-	 */
+	 * @deprecated 2010-05-04: Moved to CNR_Posts
+	 
 	function post_get_parents($post, $prop = '', $depth = '') {
 		$parents = get_post_ancestors($post = get_post($post, OBJECT, ''));
 		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
@@ -1694,13 +1734,15 @@ class Cornerstone extends CNR_Base {
 		$parents = array_reverse($parents);
 		return $parents;
 	}
+	*/
 	
 	/**
 	 * Returns path to post based on site structure
 	 * @return string Path to post enclosed in '/' (forward slashes)
 	 * Example: /path/to/post/
 	 * @param object $post Post object
-	 */
+	 * @deprecated 2010-05-04: Moved to CNR_Structure
+	 
 	function post_get_path($post) {
 		//Get post parents
 		$parents = $this->post_get_parents($post);
@@ -1711,6 +1753,7 @@ class Cornerstone extends CNR_Base {
 		}
 		return $path;
 	}
+	*/
 	
 	/**
 	 * Generates feed links based on current page
@@ -1762,31 +1805,35 @@ class Cornerstone extends CNR_Base {
 	 * Adds custom query variables
 	 * @return array Array of query variables
 	 * @param array $query_vars WP-built list of query variables
-	 */
+	 * @deprecated 2010-05-04: Moved to CNR_Structure
+	 
 	function query_vars($query_vars) {
 		$query_vars[] = $this->_qry_var;
 		return $query_vars;
 	}
+	*/
 	
 	/**
 	 * Resets certain query properties before post retrieval
 	 * @return void
-	 * @param object $query_obj WP_Query object reference to <tt>$wp_query</tt> variable
-	 */
-	function pre_get_posts($query_obj) {
-		if (!isset($query_obj->query_vars[$this->_qry_var])) {
+	 * @param WP_Query $q Reference to global <tt>$wp_query</tt> variable
+	 * @deprecated 2010-05-04: Moved to CNR_Structure
+	 
+	function pre_get_posts($q) {
+		
+		if (!isset($q->query_vars[$this->_qry_var])) {
 			return;
 		}
 		
-		//$query_obj = new WP_Query;
-		if (!isset($query_obj->queried_object_id) || !$query_obj->queried_object_id) {
-			$query_obj->query_vars['name'] = sanitize_title(basename($query_obj->query_vars['pagename']));
+		if (!isset($q->queried_object_id) || !$q->queried_object_id) {
+			$q->query_vars['name'] = sanitize_title(basename($q->query_vars['pagename']));
 			//Remove pagename variable from query
-			unset($query_obj->query_vars['pagename']);
+			unset($q->query_vars['pagename']);
 			//Reparse query variables
-			$query_obj->parse_query($query_obj->query_vars);
+			$q->parse_query($q->query_vars);
 		}
 	}
+	*/
 	
 	/**
 	 * Fetches posts before actual post query
@@ -1874,7 +1921,8 @@ class Cornerstone extends CNR_Base {
 	 * Adds custom URL rewrite rules
 	 * @return array Rewrite Rules
 	 * @param array $rewrite_rules_array Original rewrite rules array generated by WP
-	 */
+	 * @deprecated 2010-05-04: Moved to CNR_Structure
+	
 	function rewrite_rules_array($rewrite_rules_array) {
 		global $wp_rewrite;
 		//$this->debug->print_message('Rewrite Rules', $rewrite_rules_array);
@@ -1896,6 +1944,7 @@ class Cornerstone extends CNR_Base {
 		//Return rules with new rules added
 		return $rewrite_rules_array;
 	}
+	 */
 	
 	/*-** Feeds **-*/
 	

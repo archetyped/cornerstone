@@ -1941,6 +1941,12 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Populate administration page for content type
 	 */
 	function admin_page() {
+		$rr = get_option('rewrite_rules');
+		$count = 0;
+		foreach ( $rr as $rule => $red ) {
+			printf('%d: <code>%s</code> = <code>%s</code><br />', $count, $rule, $red);
+			$count++;
+		}
 		$prefix = $this->add_prefix('post_type_');
 		if ( strpos($_GET['page'], $prefix) !== 0 )
 			return false;
