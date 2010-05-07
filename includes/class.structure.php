@@ -14,13 +14,6 @@ class CNR_Structure extends CNR_Base {
 	/* Properties */
 	
 	/**
-	 * Variable to use in custom queries to redirect requests
-	 * Value will be prefixed with class prefix (e.g. 'cnr_postname')
-	 * @var string
-	 */
-	var $query_var = 'postname';
-	
-	/**
 	 * Custom post permalink structure 
 	 * @var string
 	 */
@@ -51,8 +44,6 @@ class CNR_Structure extends CNR_Base {
 	function register_hooks() {
 		//Request
 		add_filter('post_rewrite_rules', $this->m('post_rewrite_rules'));
-		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
-		add_filter('query_vars', $this->m('query_vars'));
 		
 		//Query
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
@@ -66,13 +57,29 @@ class CNR_Structure extends CNR_Base {
 	}
 	
 	/**
-	 * Returns formatted query variable for use in post requests, rewrite rules, etc.
+	 * Returns formatted query variable for use in post requests
 	 * @return string Custom query variable
+	 * 
+	 * @global WP_Rewrite $wp_rewrite
 	 */
 	function get_query_var() {
 		static $qvar = '';
-		if ( empty($qvar) )
-			$qvar = $this->add_prefix($this->query_var);
+		
+		//Retrieve query var used for page queries
+		if ( empty($qvar) ) {
+			global $wp_rewrite;
+			//Get page permastruct
+			$page_tag = $wp_rewrite->get_page_permastruct();
+			
+			//Extract tag for page
+			$page_tag = str_replace($wp_rewrite->index, '', $page_tag);
+			
+			//Get query var for tag
+			if (  ($idx = array_search($page_tag, $wp_rewrite->rewritecode)) !== false ) {
+				$qvar = trim($wp_rewrite->queryreplace[$idx], '=');
+			}
+		}
+		
 		return $qvar;
 	}
 	
@@ -82,7 +89,7 @@ class CNR_Structure extends CNR_Base {
 	 * 
 	 * @global WP_Rewrite $wp_rewrite
 	 */
-	function is_permalink_structure_activated() {
+	function using_post_permastruct() {
 		global $wp_rewrite;
 		return ( $wp_rewrite->using_permalinks() && get_option('permalink_structure') == $this->permalink_structure );
 	}
@@ -121,7 +128,7 @@ class CNR_Structure extends CNR_Base {
 		if ( is_object($post) && ( !$this->util->property_exists($post, 'post_name') || empty($post->post_name) ) )
 			return $permalink;
 		
-		if ( $this->is_permalink_structure_activated() ) {
+		if ( $this->using_post_permastruct() ) {
             
 			//Get base URL
 			$base = get_bloginfo('url');
@@ -148,58 +155,51 @@ class CNR_Structure extends CNR_Base {
 	
 	/**
 	 * Resets certain query properties before post retrieval
+	 * Checks if request is for a post (using value from pagename query var) and adjusts query to retrieve the post instead of a page
 	 * @return void
 	 * @param WP_Query $q Reference to global <tt>$wp_query</tt> variable
+	 * 
+	 * @global wpdb $wpdb
 	 */
 	function pre_get_posts($q) {
+		//Do not process query if custom post permastruct is not in use
+		if ( !$this->using_post_permastruct() )
+			return;
+			
 		$qvar = $this->get_query_var();
 		$qv =& $q->query_vars;
+
 		//Stop processing if custom query variable is not present in current query
-		if ( !isset($qv[$qvar]) ) {
+		if ( empty($qvar) || !isset($qv[$qvar]) || empty($qv[$qvar]) ) {
 			return;
 		}
 		
-		//$this->debug->print_message('Custom Query variable', $qvar, 'Query Vars', $qv);
-		
 		global $wpdb;
-		
+
 		$qval = $qv[$qvar];
+
 		//Get last segment
-		$slug = array_reverse(explode('/', $qval));
+		$slug = array_reverse( explode('/', $qval) );
 		if ( is_array($slug) && !empty($slug) )
 			$slug = $slug[0];
 		else
 			return;
 		
 		//Determine if query is for page or post
-		$type = $wpdb->get_var($wpdb->prepare("SELECT post_type FROM $wpdb->posts WHERE post_name = %s", $slug));
+		$type = $wpdb->get_var($wpdb->prepare("SELECT post_type FROM $wpdb->posts WHERE post_name = %s LIMIT 1", $slug));
 		if ( empty($type) )
 			return;
 			
-		if ( 'page' == $type ) {
-			$new_var = 'pagename';
-		} else {
+		//Adjust query if requested item is not a page 
+		if ( 'page' != $type ) {
 			$new_var = 'name';
 			$qval = $slug;
+			//Set new query var
+			$qv[$new_var] = $qval;
+			unset($qv[$qvar]);
+			//Reparse query variables
+			$q->parse_query($qv);
 		}
-		
-		//Set new query var
-		$qv[$new_var] = $qval;
-		unset($qv[$qvar]);
-		
-		//Reparse query variables
-		$q->parse_query($qv);
-	}
-	
-	/**
-	 * Adds custom query variables so that it will be passed to query
-	 * @param array $qv WP-built list of query variables
-	 * @return array Array of query variables
-	 */
-	function query_vars($qv) {
-		//Add custom query var to query vars array
-		$qv[] = $this->get_query_var();
-		return $qv;
 	}
 	
 	/**
@@ -207,42 +207,17 @@ class CNR_Structure extends CNR_Base {
 	 * Removes all post rewrite rules since we are modifying page rewrite rules to process the request
 	 * @param array $r Post rewrite rules from WP_Rewrite::rewrite_rules
 	 * @return array Modified post rewrite rules
-	 * 
-	 * @global WP_Rewrite $wp_rewrite
 	 */
 	function post_rewrite_rules($r) {
-		global $wp_rewrite;
-		if ( $this->is_permalink_structure_activated() )
+		if ( $this->using_post_permastruct() )
 			$r = array();
 		return $r;
 	}
 	
 	/**
-	 * Adds custom URL rewrite rules
-	 * @param array $rewrite_rules_array Original rewrite rules array generated by WP
-	 * @return array Modified Rewrite Rules array
+	 * Enqueues script to manage post permastruct to permalink admin options page
+	 * @param string $page Current page
 	 */
-	function rewrite_rules_array($rewrite_rules_array) {
-		$r =& $rewrite_rules_array;
-		
-		if ( $this->is_permalink_structure_activated() ) {
-			$wildcard = '(.+?)';
-			$var_page = 'pagename';
-			$var_new = $this->get_query_var();
-			$qv_page = "$var_page=$matches[1]";
-			$qv_new = str_replace($var_page, $var_new, $qv_page);
-			
-			//Replace all page rules with custom redirect so that we can process request before WP
-			foreach ( $r as $regex => $redirect ) {
-				if ( strpos($regex, $wildcard) === 0 && strpos($redirect, $qv_page) !== false ) {
-					$r[$regex] = str_replace($qv_page, $qv_new, $r[$regex]);
-				}
-			}
-		}
-		//Return rules array
-		return $r;
-	}
-	
 	function admin_enqueue_scripts($page) {
 		//Only continue processing on permalink options page
 		if ( 'options-permalink.php' != $page )
