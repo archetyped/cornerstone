@@ -860,6 +860,17 @@ class CNR_Field_Type extends CNR_Content_Base {
 	}
 	
 	/**
+	 * Checks if layout content is valid
+	 * Layouts need to have placeholders to be valid
+	 * @param string $layout_content Layout content (markup)
+	 * @return bool TRUE if layout is valid, FALSE otherwise
+	 */
+	function is_valid_layout($layout_content) {
+		$ph = $this->get_placeholder_defaults();
+		return preg_match($ph->pattern_general, $layout_content);
+	}
+	
+	/**
 	 * Parse field layout with a regular expression
 	 * @param string $layout Layout data
 	 * @param string $search Regular expression pattern to search layout for
@@ -943,6 +954,10 @@ class CNR_Field_Type extends CNR_Content_Base {
 		return $parse_result;
 	}
 	
+	/**
+	 * Retrieves default properties to use when evaluating layout placeholders
+	 * @return object Object with properties for evaluating layout placeholders
+	 */
 	function get_placeholder_defaults() {
 		$ph = new stdClass();
 		$ph->start = '{';
@@ -959,38 +974,43 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param array data Additional data for current field
 	 */
 	function build_layout($layout = 'form', $data = null) {
-		$out = '';
+		$out_default = '';
 
 		/* Layout */
 		
 		//Get base layout
 		$out = $this->get_layout($layout);
 		
-		//Parse Layout
-		$ph = $this->get_placeholder_defaults();
-		
-		//Search layout for placeholders
-		while ( $ph->match = $this->parse_layout($out, $ph->pattern_general) ) {
-			//Iterate through placeholders (tag, id, etc.)
-			foreach ($ph->match as $tag => $instances) {
-				//Iterate through instances of current placeholder
-				foreach ($instances as $instance) {
-					//Filter value based on placeholder name
-					$target_property = apply_filters('cnr_process_placeholder_' . $tag, '', $this, $instance, $layout, $data);
-					
-					//Filter value using general filters (if necessary)
-					if ( '' == $target_property ) {
-						$target_property = apply_filters('cnr_process_placeholder', $target_property, $this, $instance, $layout, $data);
+		//Only parse valid layouts
+		if ( $this->is_valid_layout($out) ) {
+			//Parse Layout
+			$ph = $this->get_placeholder_defaults();
+			
+			//Search layout for placeholders
+			while ( $ph->match = $this->parse_layout($out, $ph->pattern_general) ) {
+				//Iterate through placeholders (tag, id, etc.)
+				foreach ($ph->match as $tag => $instances) {
+					//Iterate through instances of current placeholder
+					foreach ($instances as $instance) {
+						//Filter value based on placeholder name
+						$target_property = apply_filters('cnr_process_placeholder_' . $tag, '', $this, $instance, $layout, $data);
+						
+						//Filter value using general filters (if necessary)
+						if ( '' == $target_property ) {
+							$target_property = apply_filters('cnr_process_placeholder', $target_property, $this, $instance, $layout, $data);
+						}
+						
+						//Clear value if value not a string
+						if ( !is_scalar($target_property) ) {
+							$target_property = '';
+						}
+						//Replace layout placeholder with retrieved item data
+						$out = str_replace($ph->start . $instance['match'] . $ph->end, $target_property, $out);
 					}
-					
-					//Clear value if value not a string
-					if ( !is_scalar($target_property) ) {
-						$target_property = '';
-					}
-					//Replace layout placeholder with retrieved item data
-					$out = str_replace($ph->start . $instance['match'] . $ph->end, $target_property, $out);
 				}
 			}
+		} else {
+			$out = $out_default;
 		}
 		
 		/* Return generated value */
@@ -1643,11 +1663,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		$ct = new CNR_Content_Type('post');
 		$ct->set_title('Post');
-		/*
 		$ct->add_group('subtitle', 'Subtitle');
 		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
 		$ct->add_to_group('subtitle', 'subtitle');
-		*/
 		
 		$cnr_content_types[$ct->id] =& $ct;
 		
@@ -2524,7 +2542,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 */
 	function get_item_data($item = null, $field = null, $layout = null, $default = '', $attr = null) {
 		$ret = $default;
-		
+
 		//Get item
 		$item = get_post($item);
 			
