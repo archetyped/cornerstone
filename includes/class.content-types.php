@@ -1568,115 +1568,12 @@ class CNR_Content_Type extends CNR_Content_Base {
  * @author SM
  */
 class CNR_Content_Utilities extends CNR_Base {
-
+	
 	/**
 	 * Initialize content type functionality
 	 */
 	function init() {
 		$this->register_hooks();
-	}
-	
-	/**
-	 * Initialize fields and content types
-	 */
-	function register_types() {
-		//Global variables
-		global $cnr_field_types, $cnr_content_types;
-		
-		/* Field Types */
-		$base = new CNR_Field_Type('base');
-		$base->set_description('Default Element');
-		$base->set_property('tag', 'span');
-		$base->set_property('class', '', 'attr');
-		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
-		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
-		$base->set_layout('display', '{data}');
-		$cnr_field_types[$base->id] =& $base;
-		
-		$base_closed = new CNR_Field_Type('base_closed');
-		$base_closed->set_parent('base');
-		$base_closed->set_description('Default Element (Closed Tag)');
-		$base_closed->set_property('value');
-		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_id}" {properties ref_base="root" group="attr"}>');
-		$base_closed->set_layout('form_end', '</{tag}>');
-		$base_closed->set_layout('form', '{form_start ref_base="layout"}{value}{form_end ref_base="layout"}');
-		$cnr_field_types[$base_closed->id] =& $base_closed;
-		
-		$input = new CNR_Field_Type('input');
-		$input->set_parent('base');
-		$input->set_description('Default Input Element');
-		$input->set_property('tag', 'input');
-		$input->set_property('type', 'text', 'attr');
-		$input->set_property('value', CNR_Field::uses_data(), 'attr');
-		$cnr_field_types[$input->id] =& $input;
-		
-		$text = new CNR_Field_Type('text', 'input');
-		$text->set_description('Text Box');
-		$text->set_property('size', 15, 'attr');
-		$text->set_property('label');
-		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
-		$cnr_field_types[$text->id] =& $text;
-		
-		$location = new CNR_Field_Type('location');
-		$location->set_description('Geographic Coordinates');
-		$location->set_element('latitude', 'text', array( 'size' => 3, 'label' => 'Latitude' ));
-		$location->set_element('longitude', 'text', array( 'size' => 3, 'label' => 'Longitude' ));
-		$location->set_layout('form', '<span>{latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>');
-		$cnr_field_types[$location->id] =& $location;
-		
-		$phone = new CNR_Field_Type('phone');
-		$phone->set_description('Phone Number');
-		$phone->set_element('area', 'text', array( 'size' => 3 ));
-		$phone->set_element('prefix', 'text', array( 'size' => 3 ));
-		$phone->set_element('suffix', 'text', array( 'size' => 4 ));
-		$phone->set_layout('form', '({area ref_base="elements"}) {prefix ref_base="elements"} - {suffix ref_base="elements"}');
-		$cnr_field_types[$phone->id] =& $phone;
-		
-		$hidden = new CNR_Field_Type('hidden');
-		$hidden->set_parent('input');
-		$hidden->set_description('Hidden Field');
-		$hidden->set_property('type', 'hidden');
-		$cnr_field_types[$hidden->id] =& $hidden;
-		
-		$span = new CNR_Field_Type('span');
-		$span->set_description('Inline wrapper');
-		$span->set_parent('base_closed');
-		$span->set_property('tag', 'span');
-		$span->set_property('value', 'Hello there!');
-		$cnr_field_types[$span->id] =& $span;
-		
-		$select = new CNR_Field_Type('select');
-		$select->set_description('Select tag');
-		$select->set_parent('base_closed');
-		$select->set_property('tag', 'select');
-		$select->set_property('tag_option', 'option');
-		$select->set_property('options', array());
-		$select->set_layout('form', '{label ref_base="layout"} {form_start ref_base="layout"}{loop data="properties.options" layout="option" layout_data="option_data"}{form_end ref_base="layout"}');
-		$select->set_layout('option', '<{tag_option} value="{data_ext id="option_value"}">{data_ext id="option_text"}</{tag_option}>');
-		$select->set_layout('option_data', '<{tag_option} value="{data_ext id="option_value"}" selected="selected">{data_ext id="option_text"}</{tag_option}>');		
-		$cnr_field_types[$select->id] =& $select;
-		
-		//Enable plugins to modify (add, remove, etc.) field types
-		do_action_ref_array('cnr_register_field_types', array(&$cnr_field_types));
-		
-		//Content Types
-		
-		$ct = new CNR_Content_Type('post');
-		$ct->set_title('Post');
-		$ct->add_group('subtitle', 'Subtitle');
-		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
-		$ct->add_to_group('subtitle', 'subtitle');
-		
-		$cnr_content_types[$ct->id] =& $ct;
-		
-		$proj = new CNR_Content_Type('project');
-		$proj->set_title('Project');
-		$cnr_content_types[$proj->id] =& $proj;
-		
-		//Enable plugins to add/remove content types
-		do_action_ref_array('cnr_register_content_types', array(&$cnr_content_types));
-		//Enable plugins to modify content types after they have all been registered
-		do_action_ref_array('cnr_post_register_content_types', array(&$cnr_content_types));
 	}
 	
 	/**
@@ -1705,6 +1602,161 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		//Modify post query for content type compatibility
 		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+	}
+	
+	/**
+	 * Initialize fields and content types
+	 */
+	function register_types() {
+		//Global variables
+		global $cnr_field_types, $cnr_content_types;
+		
+		/* Field Types */
+		
+		//Base
+		$base = new CNR_Field_Type('base');
+		$base->set_description('Default Element');
+		$base->set_property('tag', 'span');
+		$base->set_property('class', '', 'attr');
+		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
+		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
+		$base->set_layout('display', '{data}');
+		$this->register_field($base);
+		
+		//Base closed
+		$base_closed = new CNR_Field_Type('base_closed');
+		$base_closed->set_parent('base');
+		$base_closed->set_description('Default Element (Closed Tag)');
+		$base_closed->set_property('value');
+		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_id}" {properties ref_base="root" group="attr"}>');
+		$base_closed->set_layout('form_end', '</{tag}>');
+		$base_closed->set_layout('form', '{form_start ref_base="layout"}{value}{form_end ref_base="layout"}');
+		$this->register_field($base_closed);
+		
+		//Input
+		$input = new CNR_Field_Type('input');
+		$input->set_parent('base');
+		$input->set_description('Default Input Element');
+		$input->set_property('tag', 'input');
+		$input->set_property('type', 'text', 'attr');
+		$input->set_property('value', CNR_Field::uses_data(), 'attr');
+		$this->register_field($input);
+		
+		//Text input
+		$text = new CNR_Field_Type('text', 'input');
+		$text->set_description('Text Box');
+		$text->set_property('size', 15, 'attr');
+		$text->set_property('label');
+		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
+		$this->register_field($text);
+		
+		//Location
+		$location = new CNR_Field_Type('location');
+		$location->set_description('Geographic Coordinates');
+		$location->set_element('latitude', 'text', array( 'size' => 3, 'label' => 'Latitude' ));
+		$location->set_element('longitude', 'text', array( 'size' => 3, 'label' => 'Longitude' ));
+		$location->set_layout('form', '<span>{latitude ref_base="elements"}</span>, <span>{longitude ref_base="elements"}</span>');
+		$this->register_field($location);
+		
+		//Phone
+		$phone = new CNR_Field_Type('phone');
+		$phone->set_description('Phone Number');
+		$phone->set_element('area', 'text', array( 'size' => 3 ));
+		$phone->set_element('prefix', 'text', array( 'size' => 3 ));
+		$phone->set_element('suffix', 'text', array( 'size' => 4 ));
+		$phone->set_layout('form', '({area ref_base="elements"}) {prefix ref_base="elements"} - {suffix ref_base="elements"}');
+		$this->register_field($phone);
+		
+		//Hidden
+		$hidden = new CNR_Field_Type('hidden');
+		$hidden->set_parent('input');
+		$hidden->set_description('Hidden Field');
+		$hidden->set_property('type', 'hidden');
+		$this->register_field($hidden);
+		
+		//Span
+		$span = new CNR_Field_Type('span');
+		$span->set_description('Inline wrapper');
+		$span->set_parent('base_closed');
+		$span->set_property('tag', 'span');
+		$span->set_property('value', 'Hello there!');
+		$this->register_field($span);
+		
+		//Select
+		$select = new CNR_Field_Type('select');
+		$select->set_description('Select tag');
+		$select->set_parent('base_closed');
+		$select->set_property('tag', 'select');
+		$select->set_property('tag_option', 'option');
+		$select->set_property('options', array());
+		$select->set_layout('form', '{label ref_base="layout"} {form_start ref_base="layout"}{loop data="properties.options" layout="option" layout_data="option_data"}{form_end ref_base="layout"}');
+		$select->set_layout('option', '<{tag_option} value="{data_ext id="option_value"}">{data_ext id="option_text"}</{tag_option}>');
+		$select->set_layout('option_data', '<{tag_option} value="{data_ext id="option_value"}" selected="selected">{data_ext id="option_text"}</{tag_option}>');		
+		$this->register_field($select);
+		
+		//Enable plugins to modify (add, remove, etc.) field types
+		do_action_ref_array('cnr_register_field_types', array(&$cnr_field_types));
+		
+		//Content Types
+		
+		$ct = new CNR_Content_Type('post');
+		$ct->set_title('Post');
+		$ct->add_group('subtitle', 'Subtitle');
+		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
+		$ct->add_to_group('subtitle', 'subtitle');
+		$this->register_content_type($ct);
+		
+		//Enable plugins to add/remove content types
+		do_action_ref_array('cnr_register_content_types', array(&$cnr_content_types));
+		
+		//Enable plugins to modify content types after they have all been registered
+		do_action_ref_array('cnr_content_types_registered', array(&$cnr_content_types));
+	}
+	
+	/**
+	 * Add content type to global array of content types
+	 * @param CNR_Content_Type $ct Content type to register
+	 * 
+	 * @global array $cnr_content_types Content types array
+	 */
+	function register_content_type(&$ct) {
+		if ( $this->is_content_type($ct) && !empty($ct->id) ) {
+			global $cnr_content_types;
+			$cnr_content_types[$ct->id] =& $ct;
+		}
+	}
+	
+	/**
+	 * Add field type to global array of field types
+	 * @param CNR_Field_Type $field Field to register
+	 * 
+	 * @global array $cnr_field_types Field types array
+	 */
+	function register_field(&$field) {
+		if ( $this->is_field($field) && !empty($field->id) ) {
+			global $cnr_field_types;
+			$cnr_field_types[$field->id] =& $field;
+		}
+	}
+	
+	/*-** Helpers **-*/
+	
+	/**
+	 * Checks whether an object is a valid content type instance
+	 * @param obj $ct Object to evaluate
+	 * @return bool TRUE if object is a valid content type instance, FALSE otherwise
+	 */
+	function is_content_type(&$ct) {
+		return is_a($ct, 'cnr_content_type');
+	}
+	
+	/**
+	 * Checks whether an object is a valid field instance
+	 * @param obj $field Object to evaluate
+	 * @return bool TRUE if object is a valid field instance, FALSE otherwise
+	 */
+	function is_field(&$field) {
+		return is_a($field, 'cnr_field_type');
 	}
 	
 	/*-** Handlers **-*/
@@ -1959,12 +2011,6 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Populate administration page for content type
 	 */
 	function admin_page() {
-		$rr = get_option('rewrite_rules');
-		$count = 0;
-		foreach ( $rr as $rule => $red ) {
-			printf('%d: <code>%s</code> = <code>%s</code><br />', $count, $rule, $red);
-			$count++;
-		}
 		$prefix = $this->add_prefix('post_type_');
 		if ( strpos($_GET['page'], $prefix) !== 0 )
 			return false;

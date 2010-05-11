@@ -137,10 +137,18 @@ class CNR_Utilities {
 	 */
 	function &get_property(&$obj, $property) {
 		$property = trim($property);
+		//Object
 		if ( is_object($obj) )
 			return $obj->{$property};
+		//Array
 		if ( is_array($obj) )
 			return $obj[$property];
+		//Class
+		if ( is_string($obj) && class_exists($obj) ) {
+			$cvars = get_class_vars($obj);
+			if ( isset($cvars[$property]) )
+				return $cvars[$property];
+		}
 	}
 	
 	/**
