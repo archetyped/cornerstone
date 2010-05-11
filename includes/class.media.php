@@ -38,7 +38,7 @@ class CNR_Media extends CNR_Base {
 		add_action('cnr_register_field_types', $this->m('register_field_types'));
 		
 		//Register/Modify content types
-		add_action('cnr_post_register_content_types', $this->m('register_content_types'));
+		add_action('cnr_content_types_registered', $this->m('register_content_types'));
 		
 		//Register handler for custom media requests
 		add_action('media_upload_cnr_field_media', $this->m('field_upload_media'));
@@ -91,23 +91,22 @@ class CNR_Media extends CNR_Base {
 	
 	/**
 	 * Register media-specific content types
+	 * 
+	 * @global CNR_Content_Utilities $cnr_content_utilities
 	 */
 	function register_content_types($content_types) {
 		global $cnr_content_utilities;
 		
 		//Load post content type
-		foreach ( array('post', 'project') as $type ) {
-			unset($ct);
-			$ct =& $cnr_content_utilities->get_type($type);
+		$ct =& $cnr_content_utilities->get_type('post');
 			
-			//Add thumbnail image fields to post content type
-			$ct->add_group('image_thumbnail', 'Thumbnail Image');
-			$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
-			$ct->add_to_group('image_thumbnail', 'image_thumbnail');
-			$ct->add_group('image_header', 'Header Image');
-			$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
-			$ct->add_to_group('image_header', 'image_header');
-		}
+		//Add thumbnail image fields to post content type
+		$ct->add_group('image_thumbnail', 'Thumbnail Image');
+		$ct->add_field('image_thumbnail', 'image', array('title' => 'Select Thumbnail Image', 'set_as' => 'thumbnail {inherit}'));
+		$ct->add_to_group('image_thumbnail', 'image_thumbnail');
+		$ct->add_group('image_header', 'Header Image');
+		$ct->add_field('image_header', 'image', array('title' => 'Select Header Image', 'set_as' => 'header {inherit}'));
+		$ct->add_to_group('image_header', 'image_header');
 	}
 	
 	/**
