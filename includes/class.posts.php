@@ -4,10 +4,14 @@ include_once 'class.base.php';
 
 /**
  * @package Cornerstone
+ * @subpackage Posts
  * @author SM
+ * 
+ * Represents a collection of posts in a query
+ * Handles navigating through post collection, reporting status, etc.
  *
  */
-class CNR_Posts extends CNR_Base {
+class CNR_Post_Query extends CNR_Base {
 	
 	/*-** Variables **-*/
 	
@@ -46,7 +50,7 @@ class CNR_Posts extends CNR_Base {
 	 */
 	var $fetched;
 	
-	function CNR_Posts( $args = null ) {
+	function CNR_Post_Query( $args = null ) {
 		$this->__construct($args);
 	}
 	
@@ -246,6 +250,14 @@ class CNR_Posts extends CNR_Base {
 	}
 	
 	/**
+	 * Checks if current featured post is the last item in the post array
+	 * @return bool TRUE if item is the last featured item, FALSE otherwise
+	 */
+	function is_last() {
+		return ($this->current == $this->count - 1) ? true : false;
+	}
+	
+	/**
 	 * @param int $post (optional) ID of post to check for existence in the object's posts array (uses global $post object if no value passed)
 	 * @return bool TRUE if post is in posts array
 	 */
@@ -255,10 +267,13 @@ class CNR_Posts extends CNR_Base {
 			return false;
 		}
 		
-		return in_array($post->ID, $this->get_post_ids());
+		return in_array($post->ID, $this->get_ids());
 	}
 	
-	function get_post_ids() {
+	/**
+	 * Retrieve IDs of all retrieved posts
+	 */
+	function get_ids() {
 		if ( $this->has && empty($this->post_ids) ) {
 			//Build array of post ids in array
 			foreach ($this->posts as $post) {
@@ -268,6 +283,16 @@ class CNR_Posts extends CNR_Base {
 		
 		return $this->post_ids;
 	}
+	
+}
+
+/**
+ * @package Cornerstone
+ * @subpackage Posts
+ * @author SM
+ *
+ */
+class CNR_Post extends CNR_Base {
 	
 	/**
 	 * Gets entire parent tree of post as an array
@@ -305,6 +330,85 @@ class CNR_Posts extends CNR_Base {
 		//Reverse Array (to put top level parent at beginning of array)
 		$parents = array_reverse($parents);
 		return $parents;
+	}
+	
+	/*-** Children **-*/
+	
+	/**
+	 * Gets children posts of specified page and stores them for later use
+	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
+	 * @return array $posts Posts array (required by 'the_posts' filter) 
+	 * @param array $posts Array of Posts (@see WP_QUERY)
+	 */
+	function get_children($posts = '') {
+		//Global variables
+		global $wp_query, $wpdb;
+		if ( empty($posts) )
+			$posts = $wp_query->posts;
+		
+		//Stop here if post is not a page
+		if (!is_page() || $posts != $wp_query->posts) {
+			return $posts;
+		}
+		//Reset children post variables
+		//TODO Implement in CNR_Post
+		$this->post_children_init();
+		
+		//Get children posts of page
+		if ($wp_query->posts) {
+			$page = $wp_query->posts[0];
+			$limit = (is_feed()) ? get_option('posts_per_rss') : get_option('posts_per_page');
+			$offset = (is_paged()) ? ( (get_query_var('paged') - 1) * $limit ) : 0;
+			//Set arguments to retrieve children posts of current page
+			$c_args = array(
+							'post_parent'	=> $page->ID,
+							'numberposts'	=> $limit,
+							'offset'		=> $offset
+							);
+			//Set State
+			//TODO Implement in CNR_Post
+			$this->request_children_start();
+			//Get children posts
+			$children =& get_posts($c_args);
+			//Save any children posts in new variables in global wp_query object
+			//TODO Implement in CNR_Post
+			$this->post_children_save($children);
+			//Set State;
+			//TODO Implement in CNR_Post
+			$this->request_children_end();
+		}
+		
+		//Return posts (required by filter)
+		return $posts;
+	}
+	
+	/*-** Post Metadata **-*/
+	
+	/**
+	 * Retrieves the post's section data 
+	 * @return string post's section data 
+	 * @param string $type (optional) Type of data to return (Default: ID)
+	 * 	Possible values:
+	 * 	ID		Returns the ID of the section
+	 * 	name	Returns the name of the section
+	 */
+	function get_section($type = 'ID') {
+		global $post;
+		$retval = $post->post_parent;
+		
+		if ('title' == $type) {
+			$retval = get_post_field('post_title', $post->post_parent);
+		}
+		return $retval;
+	}
+	
+	/**
+	 * Prints the post's section data
+	 * @param string $type (optional) Type of data to return (Default: ID)
+	 * @see cnr_get_the_section()
+	 */
+	function the_section($type = 'ID') {
+		echo CNR_Post::get_section($type);
 	}
 }
 

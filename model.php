@@ -5,6 +5,7 @@ require_once 'includes/class.content-types.php';
 require_once 'includes/class.media.php';
 require_once 'includes/class.posts.php';
 require_once 'includes/class.structure.php';
+require_once 'includes/class.feeds.php';
 
 /**
  * @package Cornerstone
@@ -93,8 +94,9 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Whether or not there are any featured posts
 	 * @var bool
+	 * @deprecated
 	 */
-	var $posts_featured_has = false;
+	//var $posts_featured_has = false;
 	
 	/**
 	 * Featured post object currently loaded in global $post variable
@@ -110,7 +112,7 @@ class Cornerstone extends CNR_Base {
 	
 	/**
 	 * Featured posts container
-	 * @var CNR_Posts
+	 * @var CNR_Post_Query
 	 */
 	var $posts_featured = null;
 	
@@ -166,6 +168,12 @@ class Cornerstone extends CNR_Base {
 	 */
 	var $structure = null;
 	
+	/**
+	 * Feeds instance
+	 * @var CNR_Feeds
+	 */
+	var $feeds = null;
+	
 	/* Content Types */
 	
 	var $post_images = array(
@@ -190,7 +198,7 @@ class Cornerstone extends CNR_Base {
 		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
-		$this->posts_featured = new CNR_Posts( array( 'category' => $this->posts_featured_get_cat_id() ) );
+		$this->posts_featured = new CNR_Post_Query( array( 'category' => $this->posts_featured_get_cat_id() ) );
 		
 		$this->register_hooks();
 		
@@ -198,6 +206,9 @@ class Cornerstone extends CNR_Base {
 		
 		$this->structure = new CNR_Structure();
 		$this->structure->init();
+		
+		$this->feeds = new CNR_Feeds();
+		$this->feeds->init();
 	}
 	
 	function register_hooks() {
@@ -244,20 +255,6 @@ class Cornerstone extends CNR_Base {
 		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
 		add_action('admin_print_scripts', $this->m('admin_post_quicktags'));
 		
-		//Feeds
-		add_action('template_redirect', $this->m('feed_redirect'));
-		add_filter('get_wp_title_rss', $this->m('feed_title'));
-		add_filter('get_bloginfo_rss', $this->m('feed_description'), 10, 2);
-		add_filter('the_title_rss', $this->m('feed_item_title'), 9);
-		add_filter('the_content', $this->m('feed_item_description'));
-		add_filter('the_excerpt_rss', $this->m('feed_item_description'));
-		//Rewrite Rules
-		/**
-		 * @deprecated 2010-05-04: Moved to CNR_Structure
-		add_filter('query_vars', $this->m('query_vars'));
-		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
-		*/
-		
 		//Post Filtering
 		
 		//Initial request
@@ -267,16 +264,9 @@ class Cornerstone extends CNR_Base {
 		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
-		/* @deprecated (2010-05-04): Moved to CNR_Structure class 
-		add_filter('post_link', $this->m('post_link'), 10, 2);
-		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
-		*/
+
 		add_filter('wp_list_pages', $this->m('post_section_highlight'));
 		
-		//Item retrieval
-		//@deprecated 2010-05-04 - Moved to CNR_Structure: add_action('pre_get_posts', $this->m('pre_get_posts'));
-		//add_filter('posts_request', $this->m('posts_request'));
-
 		//Activate Shortcodes
 		$this->sc_activate();
 		
@@ -792,7 +782,7 @@ class Cornerstone extends CNR_Base {
 	 * @param int $post_id ID of current post
 	 */
 	function admin_manage_posts_custom_column($column_name, $post_id) {
-		$section_id = $this->post_get_section();
+		$section_id = CNR_Post::get_section();
 		$section = null;
 		if ($section_id > 0) 
 			$section = get_post($section_id);
@@ -901,7 +891,7 @@ class Cornerstone extends CNR_Base {
 		//Also make sure current page is not home page (no links should be marked as current)
 		if (is_singular() && $post && stripos($output, $class_current) === false) {
 			//Get all parents of current post
-			$parents = CNR_Posts::get_parents($post, 'id');
+			$parents = CNR_Post::get_parents($post, 'id');
 			
 			//Add current post to array
 			$parents[] = $post->ID;
@@ -1253,36 +1243,6 @@ class Cornerstone extends CNR_Base {
 		echo $out['script_start'] . $obj . $out['script_end'];
 	}
 	
-	/*-** Post Metadata **-*/
-	
-	/**
-	 * Retrieves the post's section data 
-	 * @return string post's section data 
-	 * @param string $type (optional) Type of data to return (Default: ID)
-	 * 	Possible values:
-	 * 	ID		Returns the ID of the section
-	 * 	name	Returns the name of the section
-	 */
-	function post_get_section($type = 'ID') {
-		global $post;
-		$retval = $post->post_parent;
-		
-		if ('title' == $type) {
-			$retval = get_post_field('post_title', $post->post_parent);
-		}
-		return $retval;
-	}
-	
-	/**
-	 * Prints the post's section data
-	 * @param string $type (optional) Type of data to return (Default: ID)
-	 * @see cnr_get_the_section()
-	 */
-	function post_the_section($type = 'ID') {
-		echo $this->post_get_section($type);
-	}
-	
-
 	/* Post Parts */
 	
 	/**
@@ -1374,7 +1334,7 @@ class Cornerstone extends CNR_Base {
 	 * @param int $limit (optional) Maximum number of featured posts to retrieve (Default: -1 = All Featured Posts)
 	 * @param int|bool $parent (optional) Section to get featured posts of (Defaults to current section).
 	 * 	FALSE if latest featured posts should be retrieved regardless of section
-	 * @todo Integrate into CNR_Posts
+	 * @todo Integrate into CNR_Post
 	 */
 	function posts_featured_get($limit = -1, $parent = null) {
 		//Global variables
@@ -1436,7 +1396,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Retrieves featured post category object
 	 * @return object Featured post category object
-	 * @todo integrate into CNR_Posts
+	 * @todo integrate into CNR_Post_Query
 	 */
 	function posts_featured_get_cat() {
 		static $cat = null;
@@ -1456,7 +1416,7 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * @todo integrate into CNR_Posts
+	 * @todo integrate into CNR_Post_Query
 	 */
 	function posts_featured_get_cat_id() {
 		static $id = '';
@@ -1469,130 +1429,13 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * Populates global wp_query variable with additional properties for managing featured posts
-	 * 
-	 * Featured post data is stored in the following $wp_query variables
-	 * --
-	 * featured_posts	array	Stores featured posts [Default: empty array]
-	 * has_featured		bool	Whether or not any featured posts were retrieved [Default: false]
-	 * current_featured	int		Featured post currently loaded in global $post variable [Default: -1]
-	 * featured_count	int		Number of featured posts [Default: 0]
-	 * 
-	 * @return void 
-	 * @param array $posts Featured posts
-	 * @deprecated
-	 */
-	function posts_featured_load($posts) {
-		
-		//Reset featured posts variables to default values
-		$this->posts_featured_init();
-		
-		if (!empty($posts)) {
-			//Save retrieved featured posts in newly created variables in global wp_query object
-			$this->posts_featured = $posts;
-			$this->posts_featured_has = true;
-			$this->posts_featured_count = count($this->posts_featured);
-		}
-	}
-	
-	/**
-	 * Resets featured post variables to default values
-	 * @return void
-	 * @deprecated
-	 */
-	function posts_featured_init() {
-		$this->posts_featured = array();
-		$this->posts_featured_has = false;
-		$this->posts_featured_current = -1;
-		$this->posts_featured_count = 0;
-	}
-	
-	/**
-	 * Checks whether featured posts are available in the current context
-	 * Note: featured posts should have already been retrieved (see @CNR::posts_featured_get())
-	 * 
-	 * If no accessible featured posts are found, current post (section) is set as global post variable
-	 * 
-	 * @see 'the_posts' filter
-	 * @see get_children()
-	 * @return boolean TRUE if section contains children, FALSE otherwise
-	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
-	 * @deprecated
-	 */
-	function posts_featured_has() {
-		global $wp_query, $post;
-		
-		//Check if any featured posts on current page were retrieved
-		//If featured posts are found, make sure there are more featured posts 
-		if ($this->posts_featured_count > 0 && $this->posts_featured_current < $this->posts_featured_count - 1) {
-			return true;
-		}
-		
-		//Reset current featured post position if all featured posts have been processed
-		$this->posts_featured_rewind(); 
-		
-		//If no featured posts were found (or the last featured post has been previously loaded),
-		//load previous post back into global post variable
-		if ($wp_query->current_post >= 0) {
-			$post = $wp_query->posts[$wp_query->current_post];
-			setup_postdata($post);
-		}
-		return false;
-	}
-	
-	/**
-	 * Loads next featured post into global post variable for use in the loop
-	 * @return void
-	 * @deprecated
-	 */
-	function posts_featured_next() {
-		global $post;
-		
-		if ($this->posts_featured_has()) {
-			//Increment featured post position
-			$this->posts_featured_current++;
-			//Load featured post into global post variable
-			$post = $this->posts_featured[$this->posts_featured_current];
-			
-			setup_postdata($post);
-		}
-	}
-	
-	/**
-	 * Resets position of current featured post
-	 * Allows for multiple loops over featured posts
-	 * @return void
-	 * @deprecated
-	 */
-	function posts_featured_rewind() {
-		$this->posts_featured_current = -1;
-	}
-	
-	/**
-	 * Gets index of current featured post
-	 * @return int Index position of current featured post
-	 * @deprecated
-	 */
-	function posts_featured_current() {
-		return $this->posts_featured_current;
-	}
-	
-	/**
-	 * Checks if current featured post is the first featured post
-	 * @return bool TRUE if current post is the first featured post, FALSE otherwise
-	 * @deprecated
-	 */
-	function posts_featured_is_first() {
-		return ($this->posts_featured_current() == 0) ? true : false;
-	}
-	
-	/**
 	 * Checks if current featured post is the last item in the post array
 	 * @return bool TRUE if item is the last featured item, FALSE otherwise
+	 * @deprecated Moved to CNR_Post_Query
 	 */
-	function posts_featured_is_last() {
-		return ($this->posts_featured_current == $this->posts_featured_count - 1) ? true : false;
-	}
+//	function posts_featured_is_last() {
+//		return ($this->posts_featured_current == $this->posts_featured_count - 1) ? true : false;
+//	}
 	
 	/**
 	 * Determines whether a post is classified as a "feature" or not
@@ -1630,134 +1473,10 @@ class Cornerstone extends CNR_Base {
 		return false;
 	}
 	
-	function post_get_subtitle($post = null) {
-		global $cnr_content_utilities;
-		$field = 'subtitle';
-		//Get post subtitle data
-		return $cnr_content_utilities->get_item_data($post, $field);
-	}
-	
-	function post_has_subtitle($post = null) {
-		/*
-		if (trim($this->post_get_subtitle($post)) != '')
-			return true;
-		return false;
-		*/
-		global $cnr_content_utilities;
-		$field = 'subtitle';
-		return $cnr_content_utilities->has_item_data($post, $field);
-	}
-	
-	function post_the_subtitle($post = null) {
-		echo $this->post_get_subtitle($post);
-	}
-	
-	/**
-	 * Modifies post permalink to reflect position of post in site structure
-	 * Example: baseurl/section-name/post-name/
-	 * 
-	 * @param string $permalink Current permalink url for post
-	 * @param object $post Post object
-	 * @return string
-	 * 
-	 * @global array $wp_rewrite
-	 * @global WP_Query $wp_query
-	 * @deprecated 2010-05-04: Moved to CNR_Structure
-	 
-	function post_link($permalink, $post = '') {
-		global $wp_rewrite, $wp_query;
-		
-		//Do not process further if $post has no name (e.g. drafts)
-		if ( is_object($post) && ( !$this->util->property_exists($post, 'post_name') || empty($post->post_name) ) )
-			return $permalink;
-		
-		if ($wp_rewrite->using_permalinks()) {
-            
-			//Get base URL
-			$base = get_bloginfo('url');
-			
-			//Canonical redirection usage
-			if (is_string($post)) {
-				//Only process single posts
-				if (is_single()) {
-					$post = $wp_query->get_queried_object();
-				} else {
-					//Stop processing for all other content (return control to redirect_canonical
-					return false;
-				}
-			}
-			
-			//Get post path
-			$path = $this->post_get_path($post);
-			
-			//Set permalink (Add trailing slash)
-			$permalink = $base . $path . $post->post_name . '/';
-		}
-		return $permalink;
-	}
-	*/
-	
-	/**
-	 * Gets entire parent tree of post as an array
-	 * 
-	 * Array order is from top level to immediate post parent
-	 * @param object $post Post to get path for
-	 * @param string $prop Property to retrieve from parents.  If specified, array will contain only this property from parents
-	 * @param $depth Unused
-	 * @return array of Post Objects/Properties
-	 * @deprecated 2010-05-04: Moved to CNR_Posts
-	 
-	function post_get_parents($post, $prop = '', $depth = '') {
-		$parents = get_post_ancestors($post = get_post($post, OBJECT, ''));
-		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
-			//Retrieve post data for parents if full data or property other than post ID is required
-			$args = array(
-						'include'		=> implode(',', $parents),
-						'post_type'		=> 'any',
-						);
-			$ancestors = get_posts($args);
-			//Sort array in ancestor order
-			$temp_parents = array();
-			foreach ($ancestors as $ancestor) {
-				//Get index of ancestor
-				$i = array_search($ancestor->ID, $parents);
-				if ( false === $i )
-					continue;
-				//Insert post at index
-				$temp_parents[$i] = $ancestor;
-			}
-			
-			if ( !empty($temp_parents) )
-				$parents = $temp_parents;
-		}
-		//Reverse Array (to put top level parent at beginning of array)
-		$parents = array_reverse($parents);
-		return $parents;
-	}
-	*/
-	
-	/**
-	 * Returns path to post based on site structure
-	 * @return string Path to post enclosed in '/' (forward slashes)
-	 * Example: /path/to/post/
-	 * @param object $post Post object
-	 * @deprecated 2010-05-04: Moved to CNR_Structure
-	 
-	function post_get_path($post) {
-		//Get post parents
-		$parents = $this->post_get_parents($post);
-		$sep = '/';
-		$path = $sep;
-		foreach ($parents as $post_parent) {
-			$path .= $post_parent->post_name . $sep;
-		}
-		return $path;
-	}
-	*/
-	
 	/**
 	 * Generates feed links based on current page
 	 * @return string Feed links
+	 * @todo Move to CNR_Feeds
 	 */
 	function feed_get_links() {
 		$text = array();
@@ -1794,111 +1513,13 @@ class Cornerstone extends CNR_Base {
 	 * Outputs feed links based on current page
 	 * @see feed_get_links()
 	 * @return void
+	 * @todo Move to CNR_Feeds
 	 */
 	function feed_the_links() {
 		echo $this->feed_get_links();
 	}
 	
 	/*-** Query **-*/
-	
-	/**
-	 * Adds custom query variables
-	 * @return array Array of query variables
-	 * @param array $query_vars WP-built list of query variables
-	 * @deprecated 2010-05-04: Moved to CNR_Structure
-	 
-	function query_vars($query_vars) {
-		$query_vars[] = $this->_qry_var;
-		return $query_vars;
-	}
-	*/
-	
-	/**
-	 * Resets certain query properties before post retrieval
-	 * @return void
-	 * @param WP_Query $q Reference to global <tt>$wp_query</tt> variable
-	 * @deprecated 2010-05-04: Moved to CNR_Structure
-	 
-	function pre_get_posts($q) {
-		
-		if (!isset($q->query_vars[$this->_qry_var])) {
-			return;
-		}
-		
-		if (!isset($q->queried_object_id) || !$q->queried_object_id) {
-			$q->query_vars['name'] = sanitize_title(basename($q->query_vars['pagename']));
-			//Remove pagename variable from query
-			unset($q->query_vars['pagename']);
-			//Reparse query variables
-			$q->parse_query($q->query_vars);
-		}
-	}
-	*/
-	
-	/**
-	 * Fetches posts before actual post query
-	 * Excludes retrieved posts from actual post query
-	 * @return void
-	 * @param object $query_obj WP_Query object reference to <tt>$wp_query</tt> variable
-	 * @deprecated
-	 */
-	function pre_get_posts_excluded(&$query_obj) {
-		//Featured posts
-		//Only get featured posts during initial (on home page) or child requests
-		if (!is_feed() && !is_paged() 
-			&& (((is_home()) && $this->state_init)		/* Initial Query on Home Page */
-				|| (is_page() && $this->state_children)				/* Children Query on Section Page */
-			)
-		) {
-			//Toggle states (to avoid issues with queries)
-			$this->toggle_state($this->state_init);
-			$this->toggle_state($this->state_children);
-			$this->posts_featured_get(4);
-			
-			//Toggle states back to original value (so that state can be used by other code)
-			$this->toggle_state($this->state_init);
-			$this->toggle_state($this->state_children);
-			
-			//Add retrieved posts to excluded variables
-			$this->posts_add_excluded($this->posts_featured, $query_obj);
-		}
-	}
-	
-	/**
-	 * Adds IDs of posts to excluded posts array for current query
-	 * Posts will not be retrieved in current array as a result
-	 * @return void
-	 * @param array $posts Array of Post objects
-	 * @param object $query_obj WP_Query object
-	 */
-	function posts_add_excluded($posts, &$query_obj) {
-		//Validate posts array
-		if (!is_array($posts) || count($posts) < 1)
-			return false;
-			
-		//Validate query object
-		if (!isset($query_obj)) {
-			if (!isset($GLOBALS['wp_query']))
-				return false;
-			$query_obj =& $GLOBALS['wp_query'];
-		}
-
-		if (!$this->util->property_exists($query_obj, 'query_vars'))
-			return false;
-		
-		//Query vars shorthand
-		$q =& $query_obj->query_vars;
-		
-		//Get array of Post IDs
-		$excluded = $this->posts_get_ids($posts);
-		
-		//Add to query variable in query object
-		if (!isset($q['post__not_in']) || !is_array($q['post__not_in'])) {
-			$q['post__not_in'] = array();
-		}
-		
-		$q['post__not_in'] = array_merge($q['post__not_in'], $excluded);
-	}
 	
 	/**
 	 * Filter posts request prior to querying DB for posts
@@ -1916,195 +1537,6 @@ class Cornerstone extends CNR_Base {
 		
 		return $request;
 	}
-	
-	/**
-	 * Adds custom URL rewrite rules
-	 * @return array Rewrite Rules
-	 * @param array $rewrite_rules_array Original rewrite rules array generated by WP
-	 * @deprecated 2010-05-04: Moved to CNR_Structure
-	
-	function rewrite_rules_array($rewrite_rules_array) {
-		global $wp_rewrite;
-		//$this->debug->print_message('Rewrite Rules', $rewrite_rules_array);
-		//Posts/Pages
-		//$rules_extra['([\/\w-]+)/([A-Za-z0-9-]+)$'] = $wp_rewrite->index . "?name=\$matches[2]";
-		//$rewrite_rules_array['(.+?)(/[0-9]+)?/?$'] = $wp_rewrite->index . "?pagename=\$matches[1]&" . $this->_qry_var . "=\$matches[1]";
-		
-		 //RSS FEEDS FOR TAGS IN SECTIONS
-		//$cms_rules[$section_prefix.'([\w-]+)/'.$utw_prefix.'/([\w-\/\s]+)/feed/?$'] = "$wp_rewrite->index?pagename=\$matches[1]&feed=feed&tags=\$matches[2]";
-		 //TAGS IN SECTIONS
-		//$cms_rules['([\w-]+)/'.$utw_prefix.'/([\w-\/\s]+)/?$'] = $wp_rewrite->index."?pagename=\$matches[1]&tags=\$matches[2]";
-		 //RSS FEEDS FOR CATEGORIES IN SECTIONS
-		//$cms_rules['([\w-]+)'.$category_prefix.'/([\w-\/\s]+)/feed/?$'] = "$wp_rewrite->index?pagename=\$matches[1]&feed=feed&cat=\$matches[2]";
-		//REWRITE RULES FOR CATEGORIES (IN SECTIONS)
-		//$cms_rules['([\w-]+)'.$category_prefix.'/([\w-\/\s]+)/?$']= $wp_rewrite->index."?pagename=\$matches[1]&cat=\$matches[2]";
-		//REWRITE RULES FOR MULTIPAGE POSTS
-		//$cms_rules_2['([\w-]+/?)([\w-]+)'.$post_extension.'/([0-9]+)/?$'] = $wp_rewrite->index."?name=\$matches[2]&page=\$matches[3]";
-
-		//Return rules with new rules added
-		return $rewrite_rules_array;
-	}
-	 */
-	
-	/*-** Feeds **-*/
-	
-	/**
-	 * Customizes feed to use for certain requests
-	 * Example: Pages (Sections) should load the normal feed template (instead of the comments feed template)
-	 */
-	function feed_redirect() {
-		if (is_page() && is_feed()) {
-			//Turn off comments feed for sections
-			global $wp_query;
-			$wp_query->is_comment_feed = false;
-			//Enable child content retrieval for section feeds
-			$m = $this->m('feed_section');
-			$feed = get_query_var('feed');
-			if ('feed' == $feed)
-				$feed = get_default_feed();
-			$hook = ('rdf' == $feed) ? 'rdf_header' : $feed . "_head"; 
-			add_action($hook, $m);
-		}
-	}
-	
-	/**
-	 * Retrieves a section's child content for output in a feed 
-	 */
-	function feed_section() {
-		if (is_page() && is_feed()) {
-			global $wp_query;
-			$this->post_children_get();
-			
-			//Set retrieved posts to global $wp_query object
-			$wp_query->posts = $this->post_children;
-			$wp_query->current_post = $this->post_children_current;
-			$wp_query->post_count = $this->post_children_count;
-		}
-	}
-	
-	/**
-	 * Sets feed title for sections
-	 * @param string $title Title passed from 'get_wp_title_rss' hook
-	 * @return string Updated title
-	 */
-	function feed_title($title) {
-		$sep = '&#8250;';
-		remove_filter('get_wp_title_rss', $this->m('feed_title'));
-		$title = get_wp_title_rss($sep);
-		add_filter('get_wp_title_rss', $this->m('feed_title'));
-		return $title;
-	}
-	
-	/**
-	 * Adds description to feed
-	 * Specifically, adds feed descriptions for sections
-	 * 
-	 * @param string $description Description passed from 'get_bloginfo_rss' hook
-	 * @param string $show Specifies data to retrieve
-	 * @see get_bloginfo() For the list of possible values to display.
-	 * @return string Modified feed description
-	 */
-	function feed_description($description, $show = '') {
-		global $post;
-		if ( is_feed() && is_page() && 'description' == $show && strlen($post->post_content) > 0 ) {
-			//Get section's own description (if exists)
-			$description = convert_chars($post->post_content);
-		}
-		return $description;
-	}
-	
-	/**
-	 * Sets title for feed items
-	 * Specifies what section an item is in if the feed is not specifically for that section
-	 * 
-	 * @param string $title Post title passed from 'the_title_rss' hook
-	 * @return string Updated post title
-	 */
-	function feed_item_title($title) {
-		if ( is_feed() && !is_page() ) {
-			//Get item's section
-			$section = $this->post_get_section('title');
-			$title = "$section &#8250; $title"; //Section precedes post title
-			//$title .= " [$section]"; //Section follows post title
-		}
-		return $title;
-	}
-	
-	/**
-	 * Inserts post subtitle into description field for feed items
-	 * @param string $content Post content
-	 * @return string Updated post content
-	 */
-	function feed_item_subtitle($content = '') {
-		$subtitle_format = '<p><em>%s</em></p>';
-		if ( is_feed() && in_the_loop() && ( $subtitle = $this->post_get_subtitle() ) && strlen($subtitle) > 0 ) {
-			$subtitle = sprintf($subtitle_format, $subtitle);
-			$content = $subtitle . $content;
-		}
-		
-		return $content;	
-	}
-	
-	/**
-	 * Inserts post image into description field for feed items
-	 * @param string $content Post content
-	 * @return string Updated post content
-	 */
-	function feed_item_image($content = '') {
-		$img_format = '<p>%s</p>';
-		//TODO Make method work with new item field data methodology (2010-04-19) 
-		return $content;
-		if ( is_feed() && in_the_loop() && ( $image = $this->post_get_image() ) && is_array($image) && !empty($image) && ( $image = $this->get_image_html($image) ) ) {
-			$image = sprintf($img_format, $image);
-			$content = $image . $content;
-		}
-		
-		return $content;
-	}
-	
-	/**
-	 * Adds site source text for feed items
-	 * Helpful in directing readers to original content source when feeds are scraped
-	 * @param string $content Post content
-	 * @return string Updated post content
-	 */
-	function feed_item_source($content) {
-		/* Conditions
-		 * > Request for feed
-		 * > Looping through posts
-		 * > Retrieving content (not excerpt)
-		 */
-		if ( is_feed() && in_the_loop() && ( 'get_the_excerpt' != current_filter() ) ) {
-			$source = '<p><a href="' . get_permalink() . '"> ' . get_the_title() . '</a> was originally published on <a href="' . get_bloginfo('url') . '">' . get_bloginfo() . '</a> on ' . get_the_time('F j, Y h:ia') . '</p>';
-			$content .= $source;
-		}
-		return $content;
-	}
-	
-	/**
-	 * Modifies post content/excerpt for feed items
-	 * @param string $content Post content
-	 * @return string Updated post content
-	 */
-	function feed_item_description($content = '') {
-		global $post, $wp_current_filter;
-		
-		//Skip processing in the following conditions
-		// > Request is not feed
-		// > Current post requires a password
-		// > Current filter is retrieving data for the excerpt and post has no actual excerpt (i.e. generating excerpt from post content)
-		if ( !is_feed() || post_password_required() || ( isset($wp_current_filter['get_the_excerpt']) && strlen($post->excerpt) == '' ) )
-			return $content;
-
-		//Process post content
-		$content = $this->feed_item_image($content);
-		$content = $this->feed_item_subtitle($content);
-		if ( 'the_content' == current_filter() )
-			$content = $this->feed_item_source($content);
-		
-		return $content;	
-	}
-	
 }
 
 class CNR_Page_Groups extends CNR_Base {

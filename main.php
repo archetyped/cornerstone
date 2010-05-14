@@ -113,7 +113,7 @@ function cnr_is_first_featured() {
 
 function cnr_is_last_featured() {
 	global $cnr;
-	return $cnr->posts_featured_is_last();
+	return $cnr->posts_featured->is_last();
 }
 
 function cnr_featured_count() {
@@ -246,8 +246,7 @@ function cnr_the_filesize($post = null, $formatted = true) {
  * 	name	Returns the name of the section
  */
 function cnr_get_the_section($type = 'ID') {
-	global $cnr;
-	return $cnr->post_get_section($type);
+	return CNR_Post::get_section($type);
 }
 
 /**
@@ -256,8 +255,7 @@ function cnr_get_the_section($type = 'ID') {
  * @see cnr_get_the_section()
  */
 function cnr_the_section($type = 'ID') {
-	global $cnr;
-	$cnr->post_the_section($type);
+	CNR_Post::the_section($type);
 }
 
 	/* Parts (Sections within a Post) */

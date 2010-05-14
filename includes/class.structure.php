@@ -102,7 +102,7 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function get_path($post) {
 		//Get post parents
-		$parents = CNR_Posts::get_parents($post);
+		$parents = CNR_Post::get_parents($post);
 		$sep = '/';
 		$path = $sep;
 		foreach ($parents as $post_parent) {
