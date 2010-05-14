@@ -80,7 +80,12 @@ class CNR_Post_Query extends CNR_Base {
 		$this->fetched = false;
 	}
 	
-	function set_arg( $prop, $value = null ) {
+	/**
+	 * Set argument value
+	 * @param string $arg Argument name
+	 * @param mixed $value Argument value
+	 */
+	function set_arg($arg, $value = null) {
 		if ( is_scalar($prop) ) { //Single argument (key/value) pair
 			$this->args[$prop] = $value;
 		} elseif ( is_array($prop) ) { //Multiple arguments
@@ -89,7 +94,20 @@ class CNR_Post_Query extends CNR_Base {
 	}
 	
 	/**
-	 * Gets posts matching parameters and stores them in global $wp_query variable
+	 * Retrieve argument value
+	 * @param string $arg Argument name
+	 * @return mixed Argument value
+	 */
+	function get_arg($arg) {
+		return ( $this->arg_isset($arg) ) ? $this->args[$arg] : null;
+	}
+	
+	function arg_isset($arg) {
+		return ( isset($this->args[$arg]) );
+	}
+	
+	/**
+	 * Gets posts matching parameters and stores them in object
 	 * 
 	 * @param int $limit (optional) Maximum number of posts to retrieve (Default: -1 = All matching posts)
 	 * @param array $args (optional) Additional arguments to use in post query
@@ -103,14 +121,17 @@ class CNR_Post_Query extends CNR_Base {
 		$this->unload();
 		
 		//Determine section
-		//TODO abstract parent selection code
-		if ($parent == null) {
-			if (count($wp_query->posts) == 1) {
+		$p_arg = 'post_parent';
+		if ( ! $this->arg_isset($p_arg) ) {
+			$parent = null;
+			if ( count($wp_query->posts) == 1 ) {
 				$parent = $wp_query->posts[0]->ID;
 			}
-			elseif ($wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID')) {
+			elseif ( $wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID') ) {
 				$parent = $GLOBALS['post']->ID;
 			}
+			if ( !! $parent )
+				$this->set_arg($p_arg, $parent);
 		}
 		
 		//Check if parent is valid post ID
@@ -126,7 +147,6 @@ class CNR_Post_Query extends CNR_Base {
 		//Set post limit
 		$limit = intval($limit);
 		
-		$this->set_arg('post_parent', $parent);
 		$this->set_arg('numberposts', $limit);
 		
 		//Retrieve featured posts
@@ -135,6 +155,7 @@ class CNR_Post_Query extends CNR_Base {
 		//Save retrieved posts to array
 		$this->load($_posts);
 		$this->fetched = true;
+
 		//Return retrieved posts so that array may be manipulated further if desired
 		return $this->posts;
 	}
@@ -337,25 +358,22 @@ class CNR_Post extends CNR_Base {
 	/**
 	 * Gets children posts of specified page and stores them for later use
 	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
-	 * @return array $posts Posts array (required by 'the_posts' filter) 
+	 * @return CNR_Post_Query $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
 	 */
-	function get_children($posts = '') {
+	function &get_children($posts = '') {
 		//Global variables
 		global $wp_query, $wpdb;
 		if ( empty($posts) )
 			$posts = $wp_query->posts;
 		
 		//Stop here if post is not a page
-		if (!is_page() || $posts != $wp_query->posts) {
+		if ( !is_page() || $posts != $wp_query->posts ) {
 			return $posts;
 		}
-		//Reset children post variables
-		//TODO Implement in CNR_Post
-		$this->post_children_init();
 		
 		//Get children posts of page
-		if ($wp_query->posts) {
+		if ( $wp_query->posts ) {
 			$page = $wp_query->posts[0];
 			$limit = (is_feed()) ? get_option('posts_per_rss') : get_option('posts_per_page');
 			$offset = (is_paged()) ? ( (get_query_var('paged') - 1) * $limit ) : 0;
@@ -365,17 +383,21 @@ class CNR_Post extends CNR_Base {
 							'numberposts'	=> $limit,
 							'offset'		=> $offset
 							);
+			
+			//Create post query object
+			$children =& new CNR_Post_Query($c_args);
+			
 			//Set State
-			//TODO Implement in CNR_Post
-			$this->request_children_start();
+			//$this->request_children_start();
+
 			//Get children posts
-			$children =& get_posts($c_args);
+			$children->get();
+			
 			//Save any children posts in new variables in global wp_query object
-			//TODO Implement in CNR_Post
-			$this->post_children_save($children);
+			//$this->post_children_save($children);
 			//Set State;
-			//TODO Implement in CNR_Post
-			$this->request_children_end();
+			//$this->request_children_end();
+			return $children;
 		}
 		
 		//Return posts (required by filter)

@@ -1014,6 +1014,7 @@ class Cornerstone extends CNR_Base {
 	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
 	 * @return array $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
+	 * @todo Modify to work with CNR_Post::get_children() method
 	 */
 	function post_children_get($posts = '') {
 		//Global variables
