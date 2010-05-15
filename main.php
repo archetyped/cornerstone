@@ -34,7 +34,7 @@ function cnr_page_title($args = '') {
  */
 function cnr_has_children() {
 	global $cnr;
-	return $cnr->post_children_has();
+	return $cnr->post_children_collection->has();
 }
 
 /**
@@ -44,19 +44,21 @@ function cnr_has_children() {
  */
 function cnr_next_child() {
 	global $cnr;
-	$cnr->post_children_get_next();
+	$cnr->post_children_collection->next();
 }
 
 function cnr_children_count() {
 	global $cnr;
-	return $cnr->post_children_count();	
+	return $cnr->post_children_collection->count();	
 }
 
+//TODO Migrate to CNR_Post_Query
 function cnr_children_found() {
 	global $cnr;
 	return $cnr->post_children_found();
 }
 
+//TODO Migrate to CNR_Post_Query
 function cnr_children_max_num_pages() {
 	global $cnr;
 	return $cnr->post_children_max_num_pages();
@@ -64,12 +66,12 @@ function cnr_children_max_num_pages() {
 
 function cnr_is_first_child() {
 	global $cnr;
-	return $cnr->post_children_is_first();
+	return $cnr->post_children_collection->is_first();
 }
 
 function cnr_is_last_child() {
 	global $cnr;
-	return $cnr->post_children_is_last();
+	return $cnr->post_children_collection->is_last();
 }
 
 /*-** Featured Content **-*/
@@ -118,7 +120,7 @@ function cnr_is_last_featured() {
 
 function cnr_featured_count() {
 	global $cnr;
-	return $cnr->posts_featured->count;
+	return $cnr->posts_featured->count();
 }
 
 /**
@@ -146,77 +148,6 @@ function cnr_has_content($post = null) {
 
 	/* Images */
 
-function cnr_is_lightbox_enabled() {
-	global $cnr;
-	return $cnr->lightbox_is_enabled();
-}
-
-function cnr_lightbox_initialize() {
-	global $cnr;
-	$cnr->lightbox_initialize();
-}
-
-/**
- * Gets Image associated with post
- * 
- * @return array|bool Source image data (url, width, height), or false if no image is available
- * @param int $post_id (optional) Post ID. Defaults to current post
- * @deprecated (2010-04-19) Removed inner method
-function cnr_get_post_image_src($post_id = 0) {
-	global $cnr;
-	return $cnr->post_get_image_src($post_id);
-}
-*/
-
-/**
- * @deprecated (2010-04-19) Removed inner method
-function cnr_has_subtitle() {
-	global $cnr;
-	return $cnr->post_has_subtitle();
-}
-*/
-
-/**
- * Prints the post's subtitle text
- * @deprecated (2010-04-19) Removed inner method
-function cnr_the_subtitle() {
-	global $cnr;
-	$cnr->post_the_subtitle();
-}
-*/
-
-/**
- * @deprecated (2010-04-19) Removed inner method
-function cnr_has_image($image_type = 'header') {
-	global $cnr;
-	return $cnr->post_has_image(null, $image_type);
-}
-*/
-
-/**
- * @deprecated (2010-04-19) Changed methodology for storing post images
-function cnr_get_image($image_type = 'header') {
-	global $cnr;
-	return $cnr->post_get_image(null, $image_type);
-}
-*/
-
-/**
- * @param $image_type
-function cnr_the_image($image_type = 'header') {
-	global $cnr;
-	$cnr->post_the_image(null, $image_type);
-}
-*/
-
-/**
- * @deprecated (2010-04-19)
-function cnr_the_image_data($data = 'src', $image_type = 'header') {
-	global $cnr;
-	$cnr->post_the_image_data($data, $image_type);
-}
-*/
-
 function cnr_get_attachments($post = null) {
 	$m = new CNR_Media();
 	return $m->post_get_attachments($post);
@@ -226,14 +157,6 @@ function cnr_get_filesize($post = null, $formatted = true) {
 	$m = new CNR_Media();
 	return $m->get_attachment_filesize($post, $formatted);
 }
-
-/**
- * @deprecated (2010-04-19) inner method moved to media class 
-function cnr_the_filesize($post = null, $formatted = true) {
-	global $cnr;
-	$cnr->the_attachment_filesize($post, $formatted);
-}
-*/
 
 	/* Section */
 	
@@ -304,22 +227,6 @@ function cnr_list_page_group($group, $wrap_list = true) {
 function cnr_the_feed_links() {
 	global $cnr;
 	$cnr->feed_the_links();
-}
-
-/*-** Debug functions **-*/
-
-function add_line($text = '') {
-//	echo $text . "<br />";
-}
-
-function pre_dump($title = '', $obj = '') {
-	if (func_num_args() == 1) {
-		$obj = $title;
-		$title = 'unknown variable';
-	}
-	echo '<pre class="debug">Dumping: ' . $title . '<br />';
-	var_dump($obj);
-	echo '</pre>';
 }
 
 ?>

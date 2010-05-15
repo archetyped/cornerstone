@@ -131,6 +131,12 @@ class Cornerstone extends CNR_Base {
 	var $post_children = null;
 	
 	/**
+	 * Children posts
+	 * @var CNR_Post_Query
+	 */
+	var $post_children_collection = null;
+	
+	/**
 	 * ID of Page that children were retrieved for
 	 * @var int
 	 */
@@ -198,8 +204,8 @@ class Cornerstone extends CNR_Base {
 		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
 		$this->path = str_replace('\\', '/', $this->path);
 		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
-		$this->posts_featured = new CNR_Post_Query( array( 'category' => $this->posts_featured_get_cat_id() ) );
-		
+		$this->posts_featured =& new CNR_Post_Query( array( 'category' => $this->posts_featured_get_cat_id(), 'numberposts' => 4 ) );
+		$this->post_children_collection =& new CNR_Post_Query();
 		$this->register_hooks();
 		
 		//Init class instances
@@ -228,17 +234,6 @@ class Cornerstone extends CNR_Base {
 			//Menus
 		add_action('admin_menu', $this->m('admin_menu'));
 		add_action('admin_menu', $this->m('admin_post_sidebar'));
-		//add_action('admin_menu', $this->m('admin_post_edit'));
-			//Dynamically built function call (media_upload_$type)
-		//add_action('media_upload_post_image', $this->m('admin_media_upload_post_image'));
-			//Attachments
-		/*
-		add_filter('attachment_fields_to_edit', $this->m('attachment_fields_to_edit'), 11, 2);
-		add_action('pre-html-upload-ui', $this->m('attachment_html_upload_ui'));
-		add_filter('media_meta', $this->m('media_meta'), 10, 2);
-		add_filter('admin_url', $this->m('media_upload_url'), 10, 2);
-		add_action('save_post', $this->m('post_save'), 10, 2);
-		*/
 		
 			//Management
 		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
@@ -259,12 +254,10 @@ class Cornerstone extends CNR_Base {
 		
 		//Initial request
 		add_action('parse_request', $this->m('request_init_start'));
-		//add_action('pre_get_posts', $this->m('pre_get_posts_excluded'));
 		add_action('wp', $this->m('request_init_end'));
 		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
-
 		add_filter('wp_list_pages', $this->m('post_section_highlight'));
 		
 		//Activate Shortcodes
@@ -325,110 +318,12 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function admin_init() {
-		$this->admin_settings_lightbox();
 		$this->admin_register_scripts();
 	}
 	
 	function admin_register_scripts() {
-		wp_register_script( $this->add_prefix('script_admin'), $this->util->get_file_url('cnr_admin.js'), array('jquery') );
+		wp_register_script( $this->add_prefix('script_admin'), $this->util->get_file_url('js/cnr_admin.js'), array('jquery') );
 		wp_register_script( $this->add_prefix('inline-edit-post'), $this->util->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
-	}
-	
-	/**
-	 * Adds settings section for Lightbox functionality
-	 * Section is added to Settings > Media Admin menu
-	 * @return void
-	 */
-	function admin_settings_lightbox() {
-		$page = 'media';
-		$section = 'cnr_lb';
-		//Section
-		add_settings_section($section, 'Lightbox Settings', $this->m('admin_lb_section'), $page);
-		//Fields
-		$fields = array(
-						'enabled'			=>	'Enable Lightbox Functionality',
-						'autostart'			=>	'Automatically Start Slideshow',
-						'duration'			=>	'Slide Duration (Seconds)',
-						'loop'				=>	'Loop through images',
-						'overlay_opacity'	=>	'Overlay Opacity (0 - 1)'
-						);
-		foreach ($fields as $key => $title) {
-			$id = 'cnr_lb_' . $key;
-			$callback = $this->m('admin_lb_' . $key);
-			add_settings_field($id, $title, $callback, $page, $section, array('label_for' => $id));
-			register_setting('media', $id);
-		}
-	}
-	
-	/**
-	 * Placeholder function for lightbox admin settings
-	 * @return void
-	 */
-	function admin_lb_section() { }
-	
-	/**
-	 * Lightbox setting - Enabled/Disabled
-	 * @return void
-	 */
-	function admin_lb_enabled() {
-		$checked = '';
-		$id = 'cnr_lb_enabled';
-		if (get_option($id))
-			$checked = ' checked="checked" ';
-		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
-		echo sprintf($format, $checked, $id);
-	}
-	
-	/**
-	 * Lightbox setting - Slideshow autostart
-	 * @return void
-	 */
-	function admin_lb_autostart() {
-		$checked = '';
-		$id = 'cnr_lb_autostart';
-		if (get_option($id))
-			$checked = ' checked="checked" ';
-		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
-		echo sprintf($format, $checked, $id);
-	}
-	
-	/**
-	 * Lightbox setting - Slide duration
-	 * @return void
-	 */
-	function admin_lb_duration() {
-		$val = 6;
-		$id = 'cnr_lb_duration';
-		$opt = get_option($id); 
-		if ($opt) $val = $opt;
-		$format = '<input type="text" size="3" maxlength="3" value="%1$s" id="%2$s" name="%2$s" class="code" /> (Default: 6)';
-		echo sprintf($format, $val, $id);
-	}
-	
-	/**
-	 * Lightbox setting - Looping
-	 * @return void
-	 */
-	function admin_lb_loop() {
-		$checked = '';
-		$id = 'cnr_lb_loop';
-		if (get_option($id))
-			$checked = ' checked="checked" ';
-		$format = '<input type="checkbox" %1$s id="%2$s" name="%2$s" class="code" /> (Default: Yes)';
-		echo sprintf($format, $checked, $id);
-	}
-	
-	/**
-	 * Lightbox setting - Overlay Opacity
-	 * @return void
-	 */
-	function admin_lb_overlay_opacity() {
-		$val = 0.8;
-		$id = 'cnr_lb_overlay_opacity';
-		$opt = get_option($id); 
-		if ($opt) $val = $opt;
-		$format = '<input type="text" size="3" maxlength="5" value="%1$s" id="%2$s" name="%2$s" class="code" /> (Default: 0.8)';
-		echo sprintf($format, $val, $id);
 	}
 	
 	/**
@@ -437,9 +332,6 @@ class Cornerstone extends CNR_Base {
 	 */
 	function admin_menu() {
 		global $menu, $submenu;
-		//Content Types
-		//add_menu_page('Content Types', 'Content Types', 8, $this->file_content_types, $this->m('menu_content_types'));
-		//add_submenu_page($this->file_content_types, 'Manage Content Types', 'Manage', 8, $this->file_content_types . '_manage', $this->m('menu_content_types_manage'));
 		
 		//Page Groups
 		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('menu_page_groups'));
@@ -460,14 +352,6 @@ class Cornerstone extends CNR_Base {
 		*/
 	}
 
-	/**
-	 * Content to display for Content Types Admin Menu
-	 * @return void
-	 */
-	function menu_content_types() {
-		echo '<div class="wrap"><h2>Content Types</h2></div>';
-	}
-	
 	/**
 	 * Replacement content for default edit pages admin menu
 	 * @return void
@@ -530,19 +414,11 @@ class Cornerstone extends CNR_Base {
 		<?php
 	}
 	
-	/**
-	 * Content to display for Content Types Management Admin Submenu
-	 * @return string
-	 */
-	function menu_content_types_manage() {
-		echo '<div class="wrap"><h2>Manage Content Types</h2></div>';
-	}
-	
 	function admin_add_styles() {
 		//Define file properties
 		$file_base = 'admin_styles';
 		$handle = $this->_prefix . $file_base;
-		$file_url = $this->util->get_file_url($file_base . '.css');
+		$file_url = $this->util->get_file_url('css/' . $file_base . '.css');
 		
 		//Add to page
 		wp_register_style($handle, $file_url);
@@ -560,7 +436,7 @@ class Cornerstone extends CNR_Base {
 			wp_enqueue_script('jquery-ui-draggable');
 			wp_enqueue_script('jquery-ui-effects', $this->util->get_file_url('effects.core.js'));
 			wp_enqueue_script($this->_prefix . 'script-ns', $this->util->get_file_url('jtree.js'));
-			wp_enqueue_script($this->_prefix . 'script', $this->util->get_file_url('cnr.js'));
+			wp_enqueue_script($this->_prefix . 'script', $this->util->get_file_url('js/cnr.js'));
 		}
 		//Edit Posts
 		if ( 'edit.php' == basename($_SERVER['SCRIPT_NAME']) ) {
@@ -581,136 +457,8 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	/**
-	 * Add content to post edit form
-	 * @return void
+	 * Adds meta box for section selection on post edit form
 	 */
-	function admin_post_edit() {
-		foreach ($this->post_images as $img) {
-			add_meta_box($this->_prefix . 'image_' . $img, 'Post ' . ucwords(strtolower($img)), $this->m('admin_post_box_image_' . $img), 'post');
-		}
-	}
-	
-	function admin_post_box_image_thumbnail($post) {
-		$this->admin_post_box_image($post, 'thumbnail');
-	}
-	
-	function admin_post_box_image_header($post) {
-		$this->admin_post_box_image($post, 'header');
-	}
-	
-	/**
-	 * Add Post Image meta box to Post edit form
-	 * @param object $post Post Object
-	 * @return void
-	 */
-	function admin_post_box_image($post, $img) {
-		global $post_ID, $temp_ID;
-		$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
-		$media_upload_iframe_src = "media-upload.php?post_id=$uploading_iframe_ID";
-		$image_upload_iframe_src = apply_filters('image_upload_iframe_src', "$media_upload_iframe_src&amp;type=post_image&amp;cnr_action=post_image&amp;cnr_image_type=$img");
-		$image_name = $this->post_meta_get_key('image', $img);
-		$image_title = __('Set Post ' . ucwords(strtolower($img)));
-		
-		$post_image = $this->post_meta_get($post_ID, $image_name, TRUE);
-		//Get Attachment Image URL
-		$post_image_src = ( ((int) $post_image) > 0 ) ? wp_get_attachment_image_src($post_image, '') : FALSE;
-		if (!$post_image_src)
-			$post_image = false;
-		else
-			$post_image_src = $post_image_src[0];
-		
-		//Start output
-		ob_start();
-?>
-		<div id="<?php echo "$image_name-wrap" ?>" class="container">
-	<?php
-		if ($post_image) { 
-	?>
-			<img id="<?php echo "$image_name-frame"?>" src="<?php echo $post_image_src ?>" class="image_frame" />
-			<input type="hidden" name="<?php echo "$image_name"?>" id="<?php echo "$image_name"?>" value="<?php echo $post_image ?>" />
-	<?php
-		}
-	?>
-			<div class="buttons">
-				<a href="<?php echo "{$image_upload_iframe_src}&amp;TB_iframe=true" ?>" id="<?php echo "$image_name-lnk"?>" class="thickbox button" title="<?php echo $image_title ?>" onclick="return false;">Select Image</a>
-				<span id="<?php echo "$image_name-options"?>" class="options <?php if (!$post_image) : ?> options-default <?php endif; ?>">
-				or <a href="#" title="Remove Image" class="del-link" id="<?php echo "$image_name-option_remove"?>" onclick="postImageAction(this); return false;">Remove Image</a>
-				 <span id="<?php echo "$image_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$image_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$image_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
-				</span>
-			</div>
-		</div>
-	<?php
-		//Output content
-		ob_end_flush();
-	}
-	
-	/**
-	 * Executed whenever a post is saved
-	 * @param int $post_id ID of post being saved
-	 * @param object $post Post data
-	 * @return void
-	 */
-	function post_save($post_id, $post) {
-		//$this->post_save_image($post_id, $post);
-	}
-	
-	/**
-	 * Saves image to meta data for post
-	 * @param int $post_id ID of post being saved
-	 * @param object $post Post data
-	 * @return void
-	 */
-	function post_save_image($post_id, $post) {
-		//Check for existence of post variable ('cnr_post_image_id')
-		foreach ($this->post_images as $img) {
-			$img_id = $this->post_meta_get_key('image', $img);
-			if ( !isset($_POST[$img_id]) )
-				continue;
-			//Set Image ID as meta data for post
-			$img_data = intval($_POST[$img_id]);
-			//Remove meta data from post if no image is set
-			if ($img_data <= 0)
-				delete_post_meta($post_id, $img_id);
-			else
-				$this->post_meta_update($post_id, $img_id, $img_data);
-		}
-	}
-	
-	/**
-	 * Handles upload of Post image on post edit form
-	 * @return 
-	 */
-	function admin_media_upload_post_image() {
-		$errors = array();
-		$id = 0;
-		if (!isset($_POST['setimage'])) {
-			wp_iframe( 'media_upload_type_form', 'post_image', $errors, $id );
-		} else { /* Send image data to main post edit form and close popup */
-			//Get Attachment ID
-			$attachment_id = array_keys($_POST['setimage']);
-			$attachment_id = array_shift($attachment_id); 
-		 	//Get Attachment Image URL
-			$src = wp_get_attachment_image_src($attachment_id, '');
-			if (!$src)
-				$src = '';
-			else
-				$src = $src[0];
-			//Build JS Arguments string
-			$args = "'$attachment_id', '$src'";
-			if (isset($_POST['attachments'][$attachment_id]['cnr_image_type']))
-				$args .= ", '" . $_REQUEST['attachments'][$attachment_id]['cnr_image_type'] . "'";
-		?>
-		<script type="text/javascript">
-		/* <![CDATA[ */
-		var win = window.dialogArguments || opener || parent || top;
-		win.setPostImage(<?php echo $args; ?>);
-		/* ]]> */
-		</script>
-		<?php
-		exit;
-		}
-	}
-	
 	function admin_post_sidebar() {
 		add_meta_box($this->_prefix . 'section', 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
 	}
@@ -977,27 +725,29 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Resets object variables for child content
 	 * @return void
+	 * @deprecated (2010-05-14) Handled by CNR_Post_Query
 	 */
-	function post_children_init() {
-		$this->post_children = null;
-		$this->post_children_has = false;
-		$this->post_children_current = -1;
-		$this->post_children_count = 0;
-		$this->post_children_total = 0;
-	}
+//	function post_children_init() {
+//		$this->post_children = null;
+//		$this->post_children_has = false;
+//		$this->post_children_current = -1;
+//		$this->post_children_count = 0;
+//		$this->post_children_total = 0;
+//	}
 	
 	/**
 	 * Saves the retrieved children posts to object variables
 	 * @return void
 	 * @param array $children Children posts
+	 * @deprecated (2010-05-14) Handled by CNR_Post_Query
 	 */
-	function post_children_save($children) {
-		if ( !empty($children) ) {
-			$this->post_children = $children;
-			$this->post_children_has = true;
-			$this->post_children_count = count($children);
-		}
-	}
+//	function post_children_save($children) {
+//		if ( !empty($children) ) {
+//			$this->post_children = $children;
+//			$this->post_children_has = true;
+//			$this->post_children_count = count($children);
+//		}
+//	}
 	
 	/**
 	 * Sets total number of children
@@ -1014,22 +764,21 @@ class Cornerstone extends CNR_Base {
 	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
 	 * @return array $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
-	 * @todo Modify to work with CNR_Post::get_children() method
+	 * @todo Modify to work with CNR_Post::get_children() method (2010-05-14)
 	 */
-	function post_children_get($posts = '') {
+	function post_children_get($posts) {
 		//Global variables
-		global $wp_query, $wpdb;
-		if ( empty($posts) )
-			$posts = $wp_query->posts;
+		global $wp_query;
+		
+		//Reset post children collection
+		$this->post_children_collection->init();
 		
 		//Stop here if post is not a page
-		if (!is_page() || $posts != $wp_query->posts) {
+		if ( ! is_page() || empty($posts) )
 			return $posts;
-		}
-		//Reset children post variables
-		$this->post_children_init();
-		
+
 		//Get children posts of page
+		/*
 		if ($wp_query->posts) {
 			$page = $wp_query->posts[0];
 			$limit = (is_feed()) ? get_option('posts_per_rss') : get_option('posts_per_page');
@@ -1040,15 +789,19 @@ class Cornerstone extends CNR_Base {
 							'numberposts'	=> $limit,
 							'offset'		=> $offset
 							);
-			//Set State
-			$this->request_children_start();
-			//Get children posts
-			$children =& get_posts($c_args);
-			//Save any children posts in new variables in global wp_query object
-			$this->post_children_save($children);
-			//Set State;
-			$this->request_children_end();
-		}
+		*/
+		//Set State
+		$this->request_children_start();
+
+		//Get children posts
+		$post =& $posts[0];
+		$this->post_children_collection =& CNR_Post::get_children($post);
+		//Save any children posts in new variables in global wp_query object
+		//$this->post_children_save();
+		
+		//Set State;
+		$this->request_children_end();
+		//}
 		
 		//Return posts (required by filter)
 		return $posts;
@@ -1089,7 +842,7 @@ class Cornerstone extends CNR_Base {
 	 * @return int Number of children posts
 	 */
 	function post_children_count() {
-		return $this->post_children_count;
+		return $this->post_children_collection->count;
 	}
 	
 	/**
@@ -1100,6 +853,10 @@ class Cornerstone extends CNR_Base {
 		return $this->post_children_found;
 	}
 	
+	/**
+	 * Determines the total number of pages required to display all children items
+	 * @return int Total number of pages
+	 */
 	function post_children_max_num_pages() {
 		return ceil( $this->post_children_found / get_option('posts_per_page') );
 	}
@@ -1110,7 +867,7 @@ class Cornerstone extends CNR_Base {
 	 */
 	function post_children_get_next() {
 		global $post;
-		if ($this->post_children_has()) {
+		if ($this->post_children_collection->has()) {
 			$this->post_children_current++;
 			$post = $this->post_children[$this->post_children_current];
 			setup_postdata($post);
@@ -1205,43 +962,6 @@ class Cornerstone extends CNR_Base {
 	 */
 	function page_title($args = '') {
 		echo $this->page_title_get($args);
-	}
-	
-	/**
-	 * Checks whether lightbox is currently enabled/disabled
-	 * @return bool TRUE if lightbox is currently enabled, FALSE otherwise
-	 */
-	function lightbox_is_enabled() {
-		if (get_option('cnr_lb_enabled'))
-			return true;
-		return false;
-	}
-	
-	/**
-	 * Sets options/settings to initialize lightbox functionality on page load
-	 * @return void
-	 */
-	function lightbox_initialize() {
-		$options = array();
-		$out = array();
-		$out['script_start'] = '<script type="text/javascript">Event.observe(window,"load",function(){ Lightbox.initialize(';
-		$out['script_end'] = '); });</script>';
-		//Get options
-		$options['autoPlay'] = get_option('cnr_lb_autostart');
-		$options['slideTime'] = get_option('cnr_lb_duration');
-		$options['loop'] = get_option('cnr_lb_loop');
-		$options['overlayOpacity'] = get_option('cnr_lb_overlay_opacity');
-		$obj = '{';
-		foreach ($options as $option => $val) {
-			if ($val === TRUE || $val == 'on')
-				$val = 'true';
-			elseif ($val === FALSE || empty($val))
-				$val = 'false';
-			$obj .= "'{$option}': {$val},";
-		}
-		$obj = rtrim($obj, ',');
-		$obj .= '}';
-		echo $out['script_start'] . $obj . $out['script_end'];
 	}
 	
 	/* Post Parts */
@@ -1428,15 +1148,6 @@ class Cornerstone extends CNR_Base {
 		}
 		return $id;
 	}
-	
-	/**
-	 * Checks if current featured post is the last item in the post array
-	 * @return bool TRUE if item is the last featured item, FALSE otherwise
-	 * @deprecated Moved to CNR_Post_Query
-	 */
-//	function posts_featured_is_last() {
-//		return ($this->posts_featured_current == $this->posts_featured_count - 1) ? true : false;
-//	}
 	
 	/**
 	 * Determines whether a post is classified as a "feature" or not
@@ -2236,11 +1947,4 @@ class CNR_Page_Group extends CNR_Base {
 	}
 }
 
-/**
- * Class for creating Admin Menus
- * @package Cornerstone
- */
-class CNR_Admin_Menu {
-	
-}
 ?>
