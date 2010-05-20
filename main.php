@@ -52,16 +52,14 @@ function cnr_children_count() {
 	return $cnr->post_children_collection->count();	
 }
 
-//TODO Migrate to CNR_Post_Query
 function cnr_children_found() {
 	global $cnr;
-	return $cnr->post_children_found();
+	return $cnr->post_children_collection->found();
 }
 
-//TODO Migrate to CNR_Post_Query
 function cnr_children_max_num_pages() {
 	global $cnr;
-	return $cnr->post_children_max_num_pages();
+	return $cnr->post_children_collection->max_num_pages();
 }
 
 function cnr_is_first_child() {

@@ -16,37 +16,51 @@ class CNR_Post_Query extends CNR_Base {
 	/*-** Variables **-*/
 	
 	/**
-	 * @var array Holds posts
+	 * Holds posts
+	 * @var array
 	 */
 	var $posts;
 	
 	/**
-	 * @var array IDs of posts in $posts
+	 * IDs of posts in $posts
+	 * @var array
 	 */
 	var $post_ids;
 	
 	/**
-	 * @var bool whether or not object contains posts
+	 * whether or not object contains posts
+	 * @var bool
 	 */
 	var $has;
 	
 	/**
-	 * @var int Index of post in current iteration
+	 * Index of post in current iteration
+	 * @var int
 	 */
 	var $current;
 	
 	/**
-	 * @var int Total number of posts in object
+	 * Total number of posts in object
+	 * @var int
 	 */
 	var $count;
 	
 	/**
-	 * @var array Query arguments
+	 * Total number of matching posts found in DB
+	 * All found posts may not have been returned in current query though (paging, etc.) 
+	 * @var int
+	 */
+	var $found = 0;
+	
+	/**
+	 * Query arguments
+	 * @var array
 	 */
 	var $args;
 	
 	/**
-	 * @var bool TRUE if posts have been fetched, FALSE otherwise
+	 * TRUE if posts have been fetched, FALSE otherwise
+	 * @var bool
 	 */
 	var $fetched;
 	
@@ -76,6 +90,7 @@ class CNR_Post_Query extends CNR_Base {
 		$this->has = false;
 		$this->current = -1;
 		$this->count = 0;
+		$this->found = 0;
 		$this->args = array();
 		$this->fetched = false;
 	}
@@ -102,6 +117,11 @@ class CNR_Post_Query extends CNR_Base {
 		return ( $this->arg_isset($arg) ) ? $this->args[$arg] : null;
 	}
 	
+	/**
+	 * Checks if an argument is set in the object
+	 * @param string $arg Argument name
+	 * @return bool TRUE if argument is set, FALSE otherwise
+	 */
 	function arg_isset($arg) {
 		return ( isset($this->args[$arg]) );
 	}
@@ -155,7 +175,13 @@ class CNR_Post_Query extends CNR_Base {
 		}
 		
 		//Retrieve featured posts
+		$callback = $this->m('set_found');
+		$filter = 'found_posts';
+		//Add filter to populate found property during query
+		add_filter($filter, $callback);
+		//Remove filter after query has completed
 		$posts =& get_posts($this->args);
+		remove_filter($filter, $callback);
 		
 		//Save retrieved posts to array
 		$this->load($posts);
@@ -192,6 +218,23 @@ class CNR_Post_Query extends CNR_Base {
 		
 		//Restore persistent properties
 		$this->args = $_args;
+	}
+	
+	/**
+	 * Sets number of found posts in object's query
+	 * @param int $num_found 
+	 */
+	function set_found($num_found) {
+		$this->found = $num_found;
+	}
+	
+	/**
+	 * Returns number of matching posts found in DB
+	 * May not necessarily match number of posts contained in object (due to post limits, pagination, etc.)
+	 * @return int Number of posts found
+	 */
+	function found() {
+		return $this->found;
 	}
 	
 	/**
@@ -281,6 +324,17 @@ class CNR_Post_Query extends CNR_Base {
 	 */
 	function count() {
 		return $this->count;
+	}
+	
+	/**
+	 * Gets the number of pages needed to list all found posts
+	 * @return int Total number of pages
+	 */
+	function max_num_pages() {
+		$posts_per_page = $this->get_arg('numberposts');
+		if ( ! $posts_per_page )
+			$posts_per_page = get_option('posts_per_page');
+		return ceil( $this->found / $posts_per_page );
 	}
 	
 	/**

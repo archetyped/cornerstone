@@ -163,6 +163,7 @@ class Cornerstone extends CNR_Base {
 	/**
 	 * Total number of children posts in database
 	 * @var int
+	 * @deprecated
 	 */
 	var $post_children_found = 0;
 	
@@ -617,12 +618,18 @@ class Cornerstone extends CNR_Base {
 		$this->state_init = false;
 	}
 	
+	/**
+	 * @deprecated
+	 */
 	function request_children_start() {
 		$this->state_children = true;
 		$this->request_init_end();
 		add_filter('found_posts', $this->m('post_children_set_found'));
 	}
 	
+	/**
+	 * @deprecated 
+	 */
 	function request_children_end() {
 		$this->state_children = false;
 		remove_filter('found_posts', $this->m('post_children_set_found'));
@@ -764,7 +771,6 @@ class Cornerstone extends CNR_Base {
 	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
 	 * @return array $posts Posts array (required by 'the_posts' filter) 
 	 * @param array $posts Array of Posts (@see WP_QUERY)
-	 * @todo Modify to work with CNR_Post::get_children() method (2010-05-14)
 	 */
 	function post_children_get($posts) {
 		//Global variables
@@ -777,31 +783,9 @@ class Cornerstone extends CNR_Base {
 		if ( ! is_page() || empty($posts) )
 			return $posts;
 
-		//Get children posts of page
-		/*
-		if ($wp_query->posts) {
-			$page = $wp_query->posts[0];
-			$limit = (is_feed()) ? get_option('posts_per_rss') : get_option('posts_per_page');
-			$offset = (is_paged()) ? ( (get_query_var('paged') - 1) * $limit ) : 0;
-			//Set arguments to retrieve children posts of current page
-			$c_args = array(
-							'post_parent'	=> $page->ID,
-							'numberposts'	=> $limit,
-							'offset'		=> $offset
-							);
-		*/
-		//Set State
-		$this->request_children_start();
-
 		//Get children posts
 		$post =& $posts[0];
 		$this->post_children_collection =& CNR_Post::get_children($post);
-		//Save any children posts in new variables in global wp_query object
-		//$this->post_children_save();
-		
-		//Set State;
-		$this->request_children_end();
-		//}
 		
 		//Return posts (required by filter)
 		return $posts;
@@ -850,7 +834,7 @@ class Cornerstone extends CNR_Base {
 	 * @return int Number of children posts in DB
 	 */
 	function post_children_found() {
-		return $this->post_children_found;
+		return $this->post_children_collection->found;
 	}
 	
 	/**
@@ -858,7 +842,7 @@ class Cornerstone extends CNR_Base {
 	 * @return int Total number of pages
 	 */
 	function post_children_max_num_pages() {
-		return ceil( $this->post_children_found / get_option('posts_per_page') );
+		return ceil( $this->post_children_collection->found / get_option('posts_per_page') );
 	}
 	
 	/**
