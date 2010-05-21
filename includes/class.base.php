@@ -48,6 +48,17 @@ class CNR_Base {
 	 */
 	function init() {}
 	
+	function register_hooks() {
+		//Activation
+		$func_activate = 'activate';
+		if ( method_exists($this, $func_activate) )
+			register_activation_hook($this->util->get_plugin_base_file(), $this->m($func_activate));
+		//Deactivation
+		$func_deactivate = 'deactivate';
+		if ( method_exists($this, $func_deactivate) )
+			register_deactivation_hook($this->util->get_plugin_base_file(), $this->m($func_deactivate));
+	}
+	
 	/**
 	 * Returns callback to instance method
 	 * @param string $method Method name

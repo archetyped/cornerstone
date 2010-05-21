@@ -428,6 +428,17 @@ class CNR_Post extends CNR_Base {
 		return $parents;
 	}
 	
+	/**
+	 * Get the IDs of a collection of posts
+	 * @return array IDs of Posts passed to function
+	 * @param array $posts Array of Post objects 
+	 */
+	function get_ids($posts) {
+		$callback = create_function('$post', 'return $post->ID;');
+		$arr_ids = array_map($callback, $posts);
+		return $arr_ids;
+	}
+	
 	/*-** Children **-*/
 	
 	/**

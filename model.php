@@ -14,94 +14,26 @@ class Cornerstone extends CNR_Base {
 	/* Variables */
 	
 	/**
-	 * Path to calling file
-	 * @var string
-	 */
-	var $_caller;
-	
-	/**
-	 * Prefix base for elements created by plugin
-	 * @var string
-	 * @static
-	 */
-	var $_prefix = 'cnr_';
-	
-	/**
-	 * Prefix for elements created by plugin
-	 * @var string
-	 */
-	var $_prefix_db = '';
-	
-	/**
-	 * Variable to add to queries to indicate that the plugin has modified the query
-	 * @var string
-	 */
-	var $_qry_var = 'var';
-	
-	/**
 	 * Name of property to store post parts under
 	 * @var string
+	 * @todo move to separate class/plugin
 	 */
 	var $_post_parts_var = 'parts';
-	
-	/**
-	 * Path to plugin
-	 * @var string
-	 */
-	var $path = __FILE__;
-	
-	
-	/* State Variables */
-	
-	/**
-	 * Whether the current request is occuring during WP initialization
-	 * @var bool
-	 */
-	var $state_init = false;
-	
-	/**
-	 * Whether the current request is occuring during section children request
-	 * @var bool
-	 */
-	var $state_children = false;
-	
-	/**
-	 * Current section post object (or 0 if not in a section)
-	 * @var object|int
-	 */
-	var $section_current = null;
 	
 	/* Featured Content variables */
 	
 	/**
 	 * @var string Category slug value that denotes a "featured" post
 	 * @see posts_featured_cat()
+	 * @todo Remove need for this property
 	 */
 	var $posts_featured_cat = "feature";
-	
-	/**
-	 * Featured post object currently loaded in global $post variable
-	 * @var object
-	 */
-	var $posts_featured_current = -1;
-	
-	/**
-	 * Total number of featured posts
-	 * @var int
-	 */
-	var $posts_featured_count = 0;
 	
 	/**
 	 * Featured posts container
 	 * @var CNR_Post_Query
 	 */
 	var $posts_featured = null;
-	
-	/**
-	 * Key used to store post subtitle
-	 * @var string
-	 */
-	var $post_subtitle_field = "_cnr_subtitle";
 	
 	/* Children Content Variables */
 	
@@ -125,36 +57,27 @@ class Cornerstone extends CNR_Base {
 	 */
 	var $feeds = null;
 	
-	/* Content Types */
-	
-	var $post_images = array(
-							'thumbnail',
-							'header'
-							);
-	
 	/* Constructor */
 	
-	function Cornerstone($caller)  {
-		$this->__construct($caller);
+	function Cornerstone()  {
+		$this->__construct();
 	}
 							
-	function __construct($caller) {
+	function __construct() {
 		//Parent Constructor
 		parent::__construct();
 		
 		//Set Properties
-		$this->_caller = $caller;
-		$this->_prefix_db = $this->get_db_prefix();
-		$this->_qry_var = $this->_prefix . $this->_qry_var;
-		$this->_post_parts_var = $this->_prefix . $this->_post_parts_var;
-		$this->path = str_replace('\\', '/', $this->path);
-		$this->url_base = dirname(WP_PLUGIN_URL . str_replace(str_replace('\\', '/', WP_PLUGIN_DIR), '', $this->path));
+		$this->_post_parts_var = $this->add_prefix($this->_post_parts_var);
+		
+		//Special Queries
 		$this->posts_featured =& new CNR_Post_Query( array( 'category' => $this->posts_featured_get_cat_id(), 'numberposts' => 4 ) );
 		$this->post_children_collection =& new CNR_Post_Query();
+		
+		//Register hooks
 		$this->register_hooks();
 		
 		//Init class instances
-		
 		$this->structure = new CNR_Structure();
 		$this->structure->init();
 		
@@ -163,43 +86,21 @@ class Cornerstone extends CNR_Base {
 	}
 	
 	function register_hooks() {
-		//Initialization
-		
-		register_activation_hook($this->_caller, $this->m('activate'));
-		
 		/* Register Hooks */
+		parent::register_hooks();
 		
 		//Admin
 			//Initialization
 		add_action('admin_init', $this->m('admin_init'));
 			//Head
-		//add_action('admin_head', $this->m('admin_add_styles'));
-		add_action('admin_print_scripts', $this->m('admin_add_scripts'));
-		add_action('admin_print_styles', $this->m('admin_add_styles'));
-			//Menus
-		add_action('admin_menu', $this->m('admin_menu'));
-		add_action('admin_menu', $this->m('admin_post_sidebar'));
-		
-			//Management
-		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
-		add_action('parse_query', $this->m('admin_manage_posts_filter_section'));
-		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
-		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
-		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
-		add_action('bulk_edit_custom_box', $this->m('admin_bulk_edit_custom_box'), 10, 2);
-
+		add_action('admin_enqueue_scripts', $this->m('admin_add_styles'));
+		add_action('admin_enqueue_scripts', $this->m('admin_add_scripts'));
 			//TinyMCE
 		//add_action('init', $this->m('admin_mce_register'));
 		add_filter('tiny_mce_before_init', $this->m('admin_mce_before_init'));
 		add_filter('mce_buttons', $this->m('admin_mce_buttons'));
 		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
-		add_action('admin_print_scripts', $this->m('admin_post_quicktags'));
-		
-		//Post Filtering
-		
-		//Initial request
-		add_action('parse_request', $this->m('request_init_start'));
-		add_action('wp', $this->m('request_init_end'));
+		add_action('admin_enqueue_scripts', $this->m('admin_post_quicktags'));
 		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
@@ -207,54 +108,9 @@ class Cornerstone extends CNR_Base {
 		
 		//Activate Shortcodes
 		$this->sc_activate();
-		
-		//Register Hooks for other classes
-		//Page Group
-		CNR_Page_Group::register_hooks();
 	}
 	
 	/* Methods */
-	
-	/*-** Helpers **-*/
-	
-	/**
-	 * Get the IDs of a collection of posts
-	 * @return array IDs of Posts passed to function
-	 * @param array $posts Array of Post objects 
-	 */
-	function posts_get_ids($posts) {
-		$callback = create_function('$post', 'return $post->ID;');
-		$arr_ids = array_map($callback, $posts);
-		return $arr_ids;
-	}
-	
-	/*-** Activation **-*/
-	
-	function activate() {
-		global $wpdb, $wp_rewrite;
-		//Create DB Tables (if not yet created)
-		//Setup table definitions
-		$tables = array(
-						$this->_prefix_db . 'page_groups' => 'CREATE TABLE ' . $this->_prefix_db . 'page_groups (
-												group_id int(5) unsigned NOT NULL auto_increment,
-												group_title varchar(90) NOT NULL,
-												group_name varchar(90) NOT NULL,
-												group_pages text,
-												PRIMARY KEY (group_id) 
-											)'
-						);
-		//Check tables and create/modify if necessary
-		foreach ($tables as $key => $val)
-		{
-			if ($wpdb->get_var("SHOW TABLES LIKE '" . $key . "'") != $key) {
-		        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-		        dbDelta($val);
-			}
-		}
-		
-		//Rebuild URL Rewrite rules
-		$wp_rewrite->flush_rules();
-	}
 
 	/*-** Admin **-*/
 	
@@ -271,103 +127,14 @@ class Cornerstone extends CNR_Base {
 		wp_register_script( $this->add_prefix('inline-edit-post'), $this->util->get_file_url('js/inline-edit-post.js'), array('jquery', 'inline-edit-post') );
 	}
 	
-	/**
-	 * Sets up Admin menus
-	 * @return void
-	 */
-	function admin_menu() {
-		global $menu, $submenu;
-		
-		//Page Groups
-		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('menu_page_groups'));
-		
-		/**
-		 * TODO Enable Site Pages replacement
-		 */
-		/*
-		//Replace default Pages content
-		$edit_pages = 'edit-pages';
-		$edit_pages_file = $edit_pages . '.php';
-		$edit_pages_level = 'edit_pages';
-		$submenu[$edit_pages_file][5] = array( __('Edit'), $edit_pages_level, $edit_pages_file . '?page=' . $edit_pages);
-		$hookname = get_plugin_page_hookname($edit_pages, $edit_pages_file);
-		$function = $this->m('menu_pages_edit');
-		if (!empty ( $function ) && !empty ( $hookname ))
-			add_action( $hookname, $function );
-		*/
-	}
-
-	/**
-	 * Replacement content for default edit pages admin menu
-	 * @return void
-	 */
-	function menu_pages_edit() {
-		?>
-		<div class="wrap edit-pages">
-			<?php screen_icon(); ?>
-			<h2>Edit Pages</h2>
-			<ul class="site-pages"><li>
-				<?php wp_list_pages('title_li='); ?>
-				<div class="actions actions-commit">
-					<input type="button" value="Save" class="action save button-primary" />  <input type="button" value="Cancel" class="action reset button-secondary" />
-				</div>
-			</ul>
-		</div>
-		<?php
-	}
-	
-	/**
-	 * Content to display for Page Groups Admin Menu
-	 * @return void
-	 */
-	function menu_page_groups() {
-		?>
-		<div class="wrap">
-			<?php screen_icon() ?>
-			<h2>Page Groups</h2>
-			<table class="widefat page fixed" cellspacing="0">
-				<thead>
-					<tr>
-					<!--?php print_column_headers('edit-pages'); ?-->
-						<th>Name</th>
-						<th class="column-rel">Code</th>
-						<th class="column-rel">Pages</th>
-					</tr>
-				</thead>
-				
-				<tfoot>
-					<tr>
-					<!--?php print_column_headers('edit-pages', false); ?-->
-						<th>Name</th>
-						<th>Code</th>
-						<th>Pages</th>
-					</tr>
-				</tfoot>
-				
-				<tbody class="page-groups_wrap">
-					<!--?php page_rows($posts, $pagenum, $per_page); ?-->
-					<?php CNR_Page_Groups::rows(); ?>
-				</tbody>
-			</table>
-			<div class="tablenav">
-				<div class="alignleft actions">
-					<a href="#" class="page-group_new button-secondary">Add Page Group</a>
-				</div>
-			</div>
-		</div>
-		
-		<?php
-	}
-	
 	function admin_add_styles() {
 		//Define file properties
 		$file_base = 'admin_styles';
-		$handle = $this->_prefix . $file_base;
+		$handle = $this->add_prefix($file_base);
 		$file_url = $this->util->get_file_url('css/' . $file_base . '.css');
 		
-		//Add to page
-		wp_register_style($handle, $file_url);
-		wp_print_styles($handle);
+		//Enqueue style
+		wp_enqueue_style($handle,$file_url);
 	}
 	
 	/**
@@ -375,14 +142,6 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function admin_add_scripts() {
-		//Page Groups
-		if (strpos($_SERVER['QUERY_STRING'], 'page=page-groups') !== false) {
-			wp_enqueue_script('jquery-ui-sortable');
-			wp_enqueue_script('jquery-ui-draggable');
-			wp_enqueue_script('jquery-ui-effects', $this->util->get_file_url('effects.core.js'));
-			wp_enqueue_script($this->_prefix . 'script-ns', $this->util->get_file_url('jtree.js'));
-			wp_enqueue_script($this->_prefix . 'script', $this->util->get_file_url('js/cnr.js'));
-		}
 		//Edit Posts
 		if ( 'edit.php' == basename($_SERVER['SCRIPT_NAME']) ) {
 			wp_enqueue_script( $this->add_prefix('inline-edit-post') );
@@ -396,126 +155,10 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function admin_post_quicktags() {
-		if (strpos($_SERVER['REQUEST_URI'], 'page-new.php') !== false || strpos($_SERVER['REQUEST_URI'], 'post-new.php') !== false) {
-			wp_enqueue_script('cnr_quicktags', plugin_dir_url($this->path) . 'js/cnr_quicktags.js', array('quicktags'));
+		$inc = array('page-new', 'post-new', 'page', 'post');
+		if ( in_array(basename($_SERVER['SCRIPT_NAME'], '.php'), $inc) ) {
+			wp_enqueue_script('cnr_quicktags', $this->util->get_file_url('js/cnr_quicktags.js'), array('quicktags'));
 		}
-	}
-	
-	/**
-	 * Adds meta box for section selection on post edit form
-	 */
-	function admin_post_sidebar() {
-		add_meta_box($this->_prefix . 'section', 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
-	}
-	
-	/**
-	 * Adds Section selection box to post sidebar
-	 * @return void
-	 * @param object $post Post Object
-	 */
-	function admin_post_sidebar_section($post) {
-		wp_dropdown_pages(array('exclude_tree' => $post->ID,
-								'selected' => $post->post_parent,
-								'name' => 'parent_id',
-								'show_option_none' => __('- No Section -'),
-								'sort_column'=> 'menu_order, post_title'));
-	}
-	
-	/**
-	 * Adds additional options to filter posts
-	 */
-	function admin_restrict_manage_posts() {
-		//Add to post edit only
-		$section_param = 'cnr_section';
-		if ( $this->admin_is_management_page() ) {
-			$selected = ( isset($_GET[$section_param]) && is_numeric($_GET[$section_param]) ) ? $_GET[$section_param] : 0;
-			//Add post statuses
-			$options = array('name'				=> $section_param,
-							 'selected'			=> $selected,
-							 'show_option_none'	=> __( 'View all sections' ),
-							 'sort_column'		=> 'menu_order, post_title');
-			wp_dropdown_pages($options);
-		}
-	}
-	
-	function admin_is_management_page() {
-		return ( is_admin() && ( $this->util->is_file('edit.php') || ( $this->util->is_file('admin.php') && isset($_GET['page']) && strpos($_GET['page'], 'cnr') === 0 ) ) );
-	}
-	
-	/**
-	 * Filters posts by specified section on the Manage Posts admin page
-	 * Hooks into 'request' filter
-	 * @see WP::parse_request()
-	 * @param array $query_vars Parsed query variables
-	 * @return array Modified query variables
-	 */
-	function admin_manage_posts_filter_section($q) {
-		//Determine if request is coming from manage posts admin page
-		if ( $this->admin_is_management_page()
-			&& isset($_GET['cnr_section'])
-			&& is_numeric($_GET['cnr_section']) 
-			) {
-				$q->query_vars['post_parent'] = intval($_GET['cnr_section']);
-		}
-	}
-	
-	/**
-	 * Modifies the columns that are displayed on the Post Management Admin Page
-	 * @param array $columns Array of columns for displaying post data on each post's row
-	 * @return array Modified columns array
-	 */
-	function admin_manage_posts_columns($columns) {
-		$columns['section'] = __('Section');
-		return $columns;
-	}
-	
-	/**
-	 * Adds section name that post belongs to in custom column on Post Management admin page
-	 * @param string $column_name Name of current custom column
-	 * @param int $post_id ID of current post
-	 */
-	function admin_manage_posts_custom_column($column_name, $post_id) {
-		$section_id = CNR_Post::get_section();
-		$section = null;
-		if ($section_id > 0) 
-			$section = get_post($section_id);
-		if (!empty($section)) {
-			echo $section->post_title;
-			echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section_id . '};</script>'; 
-		} else
-			echo 'None';
-	}
-	
-	/**
-	 * Adds field for Section selection on the Quick Edit form for posts
-	 * @param string $column_name Name of custom column 
-	 * @param string $type Type of current item (post, page, etc.)
-	 */
-	function admin_quick_edit_custom_box($column_name, $type, $bulk = false) {
-		global $post;
-		if ($column_name == 'section' && $type == 'post') :
-		?>
-		<fieldset class="inline-edit-col-right">
-			<div class="inline-edit-col">
-				<div class="inline-edit-group">
-					<label><span class="title">Section</span></label>
-					<?php
-					$options = array('exclude_tree'				=> $post->ID, 
-									 'name'						=> 'post_parent',
-									 'show_option_none'			=> __('- No Section -'),
-									 'option_none_value'		=> 0,
-									 'show_option_no_change'	=> ($bulk) ? __('- No Change -') : '',
-									 'sort_column'				=> 'menu_order, post_title');
-					wp_dropdown_pages($options);
-					?>
-				</div>
-			</div>
-		</fieldset>
-		<?php endif;
-	}
-	
-	function admin_bulk_edit_custom_box($column_name, $type) {
-		$this->admin_quick_edit_custom_box($column_name, $type, true);
 	}
 	
 	function admin_mce_before_init($initArray) {
@@ -546,21 +189,9 @@ class Cornerstone extends CNR_Base {
 	
 	/*-** State Settings **-*/
 	
-	function toggle_state(&$state_var) {
-		$state_var = !$state_var;
-	}
-	
 	/*-** Content **-*/
 	
 	/*-** Request **-*/
-	
-	function request_init_start() {
-		$this->state_init = true;
-	}
-	
-	function request_init_end() {
-		$this->state_init = false;
-	}
 	
 	function post_section_highlight($output) {
 
@@ -895,7 +526,7 @@ class Cornerstone extends CNR_Base {
 			$args['numberposts'] = $limit - count($featured);
 			
 			//Exclude posts already fetched
-			$args['post__not_in'] = $this->posts_get_ids($featured);
+			$args['post__not_in'] = CNR_Post::get_ids($featured);
 			
 			//Get more posts
 			$additional = get_posts($args);
@@ -1025,25 +656,6 @@ class Cornerstone extends CNR_Base {
 	function feed_the_links() {
 		echo $this->feed_get_links();
 	}
-	
-	/*-** Query **-*/
-	
-	/**
-	 * Filter posts request prior to querying DB for posts
-	 * 
-	 * Operations:
-	 * If query is for the home page
-	 * - Clear request so no posts are retrieved from DB
-	 *  
-	 * @return string Updated posts request
-	 * @param string $request Posts request
-	 */
-	function posts_request($request) {
-		if (is_home())
-			$request = '';
-		
-		return $request;
-	}
 }
 
 class CNR_Page_Groups extends CNR_Base {
@@ -1069,6 +681,105 @@ class CNR_Page_Groups extends CNR_Base {
 	
 	function __construct() {
 		parent::__construct();
+	}
+	
+	/*-** Initialization **-*/
+	
+	function register_hooks() {
+		//Menus
+		add_action('admin_menu', $this->m('admin_menu'));
+	}
+	
+	function activate() {
+		global $wpdb;
+		//Create DB Tables (if not yet created)
+		//Setup table definitions
+		$tables = array(
+						$this->get_db_prefix() . 'page_groups' => 'CREATE TABLE ' . $this->get_db_prefix() . 'page_groups (
+												group_id int(5) unsigned NOT NULL auto_increment,
+												group_title varchar(90) NOT NULL,
+												group_name varchar(90) NOT NULL,
+												group_pages text,
+												PRIMARY KEY (group_id) 
+											)'
+						);
+		//Check tables and create/modify if necessary
+		foreach ($tables as $key => $val)
+		{
+			if ($wpdb->get_var("SHOW TABLES LIKE '" . $key . "'") != $key) {
+		        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+		        dbDelta($val);
+			}
+		}
+	}
+	
+	/**
+	 * Adds external javascript files to admin header
+	 * @return void
+	 */
+	function admin_add_scripts() {
+		//Page Groups
+		if ( isset($_GET['page']) && 'page-groups' == $_GET['page'] ) {
+			wp_enqueue_script('jquery-ui-sortable');
+			wp_enqueue_script('jquery-ui-draggable');
+			wp_enqueue_script('jquery-ui-effects', $this->util->get_file_url('effects.core.js'));
+			wp_enqueue_script($this->add_prefix('script-ns'), $this->util->get_file_url('jtree.js'));
+			wp_enqueue_script($this->add_prefix('script'), $this->util->get_file_url('js/cnr.js'));
+		}
+	}
+	
+	/**
+	 * Sets up Admin menus
+	 * @return void
+	 */
+	function admin_menu() {
+		global $menu, $submenu;
+		
+		//Page Groups
+		add_pages_page('Page Groups', 'Groups', 8, 'page-groups', $this->m('admin_menu_page_groups'));
+	}
+	
+	/**
+	 * Content to display for Page Groups Admin Menu
+	 * @return void
+	 */
+	function admin_menu_page_groups() {
+		?>-->
+		<div class="wrap">
+			<?php screen_icon() ?>
+			<h2>Page Groups</h2>
+			<table class="widefat page fixed" cellspacing="0">
+				<thead>
+					<tr>
+					<!--?php print_column_headers('edit-pages'); ?-->
+						<th>Name</th>
+						<th class="column-rel">Code</th>
+						<th class="column-rel">Pages</th>
+					</tr>
+				</thead>
+				
+				<tfoot>
+					<tr>
+					<!--?php print_column_headers('edit-pages', false); ?-->
+						<th>Name</th>
+						<th>Code</th>
+						<th>Pages</th>
+					</tr>
+				</tfoot>
+				
+				<tbody class="page-groups_wrap">
+					<!--?php page_rows($posts, $pagenum, $per_page); ?-->
+					<?php CNR_Page_Groups::rows(); ?>
+				</tbody>
+			</table>
+			<div class="tablenav">
+				<div class="alignleft actions">
+					<a href="#" class="page-group_new button-secondary">Add Page Group</a>
+				</div>
+			</div>
+		</div>
+		
+		<?php
 	}
 	
 	/**

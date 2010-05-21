@@ -42,6 +42,8 @@ class CNR_Structure extends CNR_Base {
 	}
 	
 	function register_hooks() {
+		parent::register_hooks();
+		
 		//Request
 		add_filter('post_rewrite_rules', $this->m('post_rewrite_rules'));
 		
@@ -54,6 +56,32 @@ class CNR_Structure extends CNR_Base {
 		
 		//Admin
 		add_filter('admin_enqueue_scripts', $this->m('admin_enqueue_scripts'));
+			//Edit
+		add_action('do_meta_boxes', $this->m('admin_post_sidebar'), 1, 3);
+			//Management
+		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
+		add_action('parse_query', $this->m('admin_manage_posts_filter_section'));
+		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
+		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
+		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
+		add_action('bulk_edit_custom_box', $this->m('admin_bulk_edit_custom_box'), 10, 2);
+	}
+	
+	/**
+	 * Plugin activation routines
+	 * @global WP_Rewrite $wp_rewrite
+	 */
+	function activate() {
+		global $wp_rewrite;
+		//Rebuild URL Rewrite rules
+		$wp_rewrite->flush_rules();
+	}
+	
+	/**
+	 * Plugin deactivation routines
+	 */
+	function deactivate() {
+		$this->activate();
 	}
 	
 	/**
@@ -236,6 +264,123 @@ class CNR_Structure extends CNR_Base {
 		};
 		</script>
 		<?php
+	}
+	
+	/*-** Admin **-*/
+	
+	/**
+	 * Adds meta box for section selection on post edit form
+	 */
+	function admin_post_sidebar($type, $context = null, $post = null) {
+		if ( 'post' == $type && 'side' == $context )
+			add_meta_box($this->add_prefix('section'), 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
+	}
+	
+	/**
+	 * Adds Section selection box to post sidebar
+	 * @return void
+	 * @param object $post Post Object
+	 */
+	function admin_post_sidebar_section($post) {
+		wp_dropdown_pages(array('exclude_tree' => $post->ID,
+								'selected' => $post->post_parent,
+								'name' => 'parent_id',
+								'show_option_none' => __('- No Section -'),
+								'sort_column'=> 'menu_order, post_title'));
+	}
+	
+	/**
+	 * Adds additional options to filter posts
+	 */
+	function admin_restrict_manage_posts() {
+		//Add to post edit only
+		$section_param = 'cnr_section';
+		if ( $this->util->is_admin_management_page() ) {
+			$selected = ( isset($_GET[$section_param]) && is_numeric($_GET[$section_param]) ) ? $_GET[$section_param] : 0;
+			//Add post statuses
+			$options = array('name'				=> $section_param,
+							 'selected'			=> $selected,
+							 'show_option_none'	=> __( 'View all sections' ),
+							 'sort_column'		=> 'menu_order, post_title');
+			wp_dropdown_pages($options);
+		}
+	}
+	
+	/**
+	 * Filters posts by specified section on the Manage Posts admin page
+	 * Hooks into 'request' filter
+	 * @see WP::parse_request()
+	 * @param array $query_vars Parsed query variables
+	 * @return array Modified query variables
+	 */
+	function admin_manage_posts_filter_section($q) {
+		//Determine if request is coming from manage posts admin page
+		//TODO Modify condition to work in this class
+		if ( $this->util->is_admin_management_page()
+			&& isset($_GET['cnr_section'])
+			&& is_numeric($_GET['cnr_section']) 
+			) {
+				$q->query_vars['post_parent'] = intval($_GET['cnr_section']);
+		}
+	}
+	
+	/**
+	 * Modifies the columns that are displayed on the Post Management Admin Page
+	 * @param array $columns Array of columns for displaying post data on each post's row
+	 * @return array Modified columns array
+	 */
+	function admin_manage_posts_columns($columns) {
+		$columns['section'] = __('Section');
+		return $columns;
+	}
+	
+	/**
+	 * Adds section name that post belongs to in custom column on Post Management admin page
+	 * @param string $column_name Name of current custom column
+	 * @param int $post_id ID of current post
+	 */
+	function admin_manage_posts_custom_column($column_name, $post_id) {
+		$section_id = CNR_Post::get_section();
+		$section = null;
+		if ($section_id > 0) 
+			$section = get_post($section_id);
+		if (!empty($section)) {
+			echo $section->post_title;
+			echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section_id . '};</script>'; 
+		} else
+			echo 'None';
+	}
+	
+	/**
+	 * Adds field for Section selection on the Quick Edit form for posts
+	 * @param string $column_name Name of custom column 
+	 * @param string $type Type of current item (post, page, etc.)
+	 */
+	function admin_quick_edit_custom_box($column_name, $type, $bulk = false) {
+		global $post;
+		if ($column_name == 'section' && $type == 'post') :
+		?>
+		<fieldset class="inline-edit-col-right">
+			<div class="inline-edit-col">
+				<div class="inline-edit-group">
+					<label><span class="title">Section</span></label>
+					<?php
+					$options = array('exclude_tree'				=> $post->ID, 
+									 'name'						=> 'post_parent',
+									 'show_option_none'			=> __('- No Section -'),
+									 'option_none_value'		=> 0,
+									 'show_option_no_change'	=> ($bulk) ? __('- No Change -') : '',
+									 'sort_column'				=> 'menu_order, post_title');
+					wp_dropdown_pages($options);
+					?>
+				</div>
+			</div>
+		</fieldset>
+		<?php endif;
+	}
+	
+	function admin_bulk_edit_custom_box($column_name, $type) {
+		$this->admin_quick_edit_custom_box($column_name, $type, true);
 	}
 }
 ?>

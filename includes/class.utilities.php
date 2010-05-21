@@ -63,9 +63,24 @@ class CNR_Utilities {
 	/**
 	 * Checks $_SERVER['SCRIPT_NAME'] to see if file base name matches specified file name
 	 * @param string $filename Filename to check for
+	 * @return bool TRUE if current page matches specified filename, FALSE otherwise
 	 */
 	function is_file( $filename ) {
 		return ( $filename == basename( $_SERVER['SCRIPT_NAME'] ) );
+	}
+	
+	/**
+	 * Checks whether the current page is a management page
+	 * @return bool TRUE if current page is a management page, FALSE otherwise
+	 */
+	function is_admin_management_page() {
+		return ( is_admin()
+				 && ( $this->is_file('edit.php')
+				 	|| ( $this->is_file('admin.php')
+				 		&& isset($_GET['page'])
+				 		&& strpos($_GET['page'], 'cnr') === 0 )
+				 	)
+				 );
 	}
 	
 	/**
@@ -94,6 +109,23 @@ class CNR_Utilities {
 			$url_base = str_replace($sl_b, $sl_f, WP_PLUGIN_URL . $plugin_dir);
 		}
 		return $url_base;
+	}
+	
+	function get_path_base() {
+		static $path_base = '';
+		if ( '' == $path_base ) {
+			$sl_f = '/';
+			$sl_b = '\\';
+			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', str_replace($sl_f, $sl_b, dirname(dirname(__FILE__))));
+			$path_base = str_replace($sl_b, $sl_f, WP_PLUGIN_DIR . $plugin_dir);
+		}
+		
+		return $path_base;
+	}
+	
+	function get_plugin_base_file() {
+		$file = 'main.php';
+		return $this->get_path_base() . '/' . $file;
 	}
 	
 	/**
