@@ -45,12 +45,6 @@ class Cornerstone extends CNR_Base {
 	var $_post_parts_var = 'parts';
 	
 	/**
-	 * Base name for Content Type Admin Menus
-	 * @var string
-	 */
-	var $file_content_types = 'content-types';
-	
-	/**
 	 * Path to plugin
 	 * @var string
 	 */
@@ -86,19 +80,6 @@ class Cornerstone extends CNR_Base {
 	var $posts_featured_cat = "feature";
 	
 	/**
-	 * Stores featured posts
-	 * @var array
-	 */
-	//var $posts_featured = array();
-	
-	/**
-	 * Whether or not there are any featured posts
-	 * @var bool
-	 * @deprecated
-	 */
-	//var $posts_featured_has = false;
-	
-	/**
 	 * Featured post object currently loaded in global $post variable
 	 * @var object
 	 */
@@ -125,47 +106,10 @@ class Cornerstone extends CNR_Base {
 	/* Children Content Variables */
 	
 	/**
-	 * Children posts of current post
-	 * @var array
-	 */
-	var $post_children = null;
-	
-	/**
 	 * Children posts
 	 * @var CNR_Post_Query
 	 */
 	var $post_children_collection = null;
-	
-	/**
-	 * ID of Page that children were retrieved for
-	 * @var int
-	 */
-	var $post_children_parent = null;
-	
-	/**
-	 * Whether or not post has children
-	 * @var bool
-	 */
-	var $post_children_has = false;
-	
-	/**
-	 * Child post currently loaded in global $post variable
-	 * @var object
-	 */
-	var $post_children_current = -1;
-	
-	/**
-	 * Total number of children posts (in current request)
-	 * @var int
-	 */
-	var $post_children_count = 0;
-	
-	/**
-	 * Total number of children posts in database
-	 * @var int
-	 * @deprecated
-	 */
-	var $post_children_found = 0;
 	
 	/* Instance Variables */
 	
@@ -618,23 +562,6 @@ class Cornerstone extends CNR_Base {
 		$this->state_init = false;
 	}
 	
-	/**
-	 * @deprecated
-	 */
-	function request_children_start() {
-		$this->state_children = true;
-		$this->request_init_end();
-		add_filter('found_posts', $this->m('post_children_set_found'));
-	}
-	
-	/**
-	 * @deprecated 
-	 */
-	function request_children_end() {
-		$this->state_children = false;
-		remove_filter('found_posts', $this->m('post_children_set_found'));
-	}
-	
 	function post_section_highlight($output) {
 
 		$class_current = 'current_page_item';
@@ -730,43 +657,6 @@ class Cornerstone extends CNR_Base {
 	/*-** Child Content **-*/
 	
 	/**
-	 * Resets object variables for child content
-	 * @return void
-	 * @deprecated (2010-05-14) Handled by CNR_Post_Query
-	 */
-//	function post_children_init() {
-//		$this->post_children = null;
-//		$this->post_children_has = false;
-//		$this->post_children_current = -1;
-//		$this->post_children_count = 0;
-//		$this->post_children_total = 0;
-//	}
-	
-	/**
-	 * Saves the retrieved children posts to object variables
-	 * @return void
-	 * @param array $children Children posts
-	 * @deprecated (2010-05-14) Handled by CNR_Post_Query
-	 */
-//	function post_children_save($children) {
-//		if ( !empty($children) ) {
-//			$this->post_children = $children;
-//			$this->post_children_has = true;
-//			$this->post_children_count = count($children);
-//		}
-//	}
-	
-	/**
-	 * Sets total number of children
-	 * Hooks into 'found_posts' filter
-	 * @param int $children_total Total number of children
-	 */
-	function post_children_set_found($children_found) {
-		$this->post_children_found = $children_found;
-		return $children_found;
-	}
-	
-	/**
 	 * Gets children posts of specified page and stores them for later use
 	 * This method hooks into 'the_posts' filter to retrieve child posts for any single page retrieved by WP
 	 * @return array $posts Posts array (required by 'the_posts' filter) 
@@ -789,85 +679,6 @@ class Cornerstone extends CNR_Base {
 		
 		//Return posts (required by filter)
 		return $posts;
-	}
-	
-	/**
-	 * Checks whether post has children
-	 * Children posts should have already been retrieved
-	 * 
-	 * If no accessible children are found, current post (section) is set as global post variable
-	 * 
-	 * @see 'the_posts' filter
-	 * @see post_children_get()
-	 * @return boolean TRUE if section contains children, FALSE otherwise
-	 * Note: Will also return FALSE if section contains children, but all children have been previously accessed
-	 */
-	function post_children_has() {
-		global $wp_query, $post;
-		
-		//Check if any children on current page were retrieved
-		//If children are found, make sure there are more children
-		 
-		if ($this->post_children_count > 0 && $this->post_children_current < ($this->post_children_count - 1)) {
-			return true;
-		}
-		
-		//If no children were found (or the last child has been previously loaded),
-		//load parent post back into global post variable
-		if ( !empty($wp_query->post) ) {
-			$post = $wp_query->post;
-			setup_postdata($post);
-		}
-		return false;
-	}
-	
-	/**
-	 * Returns the total number of children posts in current request
-	 * @return int Number of children posts
-	 */
-	function post_children_count() {
-		return $this->post_children_collection->count;
-	}
-	
-	/**
-	 * Returns total total number of children posts in DB
-	 * @return int Number of children posts in DB
-	 */
-	function post_children_found() {
-		return $this->post_children_collection->found;
-	}
-	
-	/**
-	 * Determines the total number of pages required to display all children items
-	 * @return int Total number of pages
-	 */
-	function post_children_max_num_pages() {
-		return ceil( $this->post_children_collection->found / get_option('posts_per_page') );
-	}
-	
-	/**
-	 * Loads next child post into global post variable for use in the loop
-	 * @return void
-	 */
-	function post_children_get_next() {
-		global $post;
-		if ($this->post_children_collection->has()) {
-			$this->post_children_current++;
-			$post = $this->post_children[$this->post_children_current];
-			setup_postdata($post);
-		}
-	}
-	
-	function post_children_is_first() {
-		if ($this->post_children_current == 0)
-			return true;
-		return false;
-	}
-	
-	function post_children_is_last() {
-		if ($this->post_children_current == ($this->post_children_count - 1))
-			return true;
-		return false;
 	}
 	
 	/*-** Template **-*/
