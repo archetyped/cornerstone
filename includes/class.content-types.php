@@ -1383,24 +1383,31 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * Adds field to a group in the content type
 	 * Group is created if it does not already exist
 	 * @param string $group ID of group to add field to
-	 * @param string $field ID of field to add to group
+	 * @param string|array $fields Name or array of field(s) to add to group
 	 */
-	function add_to_group($group, $field) {
+	function add_to_group($group, $fields) {
 		//Validate parameters
 		$group = trim(strval($group));
-		if ( empty($group) || !$this->has_field($field) )
+		if ( empty($group) || empty($fields) )
 			return false;
-		$field =& $this->get_field($field);
 		//Create group if it doesn't exist
 		if ( !$this->group_exists($group) )
 			$this->add_group($group);
-		//Remove field from any other group it's in (fields can only be in one group)
-		foreach ( array_keys($this->groups) as $group_id ) {
-			if ( isset($this->groups[$group_id]->fields[$field->id]) )
-				unset($this->groups[$group_id]->fields[$field->id]);
+		if ( ! is_array($fields) )
+			$fields = array($fields);
+		foreach ( $fields as $field ) {
+			unset($fref);
+			if ( ! $this->has_field($field) )
+				continue;
+			$fref =& $this->get_field($field);
+			//Remove field from any other group it's in (fields can only be in one group)
+			foreach ( array_keys($this->groups) as $group_id ) {
+				if ( isset($this->groups[$group_id]->fields[$fref->id]) )
+					unset($this->groups[$group_id]->fields[$fref->id]);
+			}
+			//Add reference to field in group
+			$this->groups[$group]->fields[$fref->id] =& $fref;
 		}
-		//Add reference to field in group
-		$this->groups[$group]->fields[$field->id] =& $field;
 	}
 	
 	/**
@@ -1649,6 +1656,13 @@ class CNR_Content_Utilities extends CNR_Base {
 		$text->set_property('label');
 		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
 		$this->register_field($text);
+		
+		//Textarea
+		$ta = new CNR_Field_Type('textarea', 'base_closed');
+		$ta->set_property('tag', 'textarea');
+		$ta->set_property('cols', 40, 'attr');
+		$ta->set_property('rows', 3, 'attr');
+		$this->register_field($ta);
 		
 		//Location
 		$location = new CNR_Field_Type('location');
@@ -1958,6 +1972,7 @@ class CNR_Content_Utilities extends CNR_Base {
 				wp_enqueue_script('word-count');
 				add_action( 'admin_print_footer_scripts', 'wp_tiny_mce', 25 );
 				wp_enqueue_script('quicktags');
+				wp_enqueue_script($this->add_prefix('edit_form'), $this->util->get_file_url('js/admin_edit_form.js'), array('jquery', 'postbox'), false, true);
 				break;
 			default		:
 				wp_enqueue_script( $this->add_prefix('inline-edit-post') );
@@ -2374,7 +2389,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Adds hidden field declaring content type on post edit form
 	 */
 	function admin_page_edit_form() {
-		global $post;
+		global $post, $plugin_page;
 		if ( empty($post) || !$post->ID ) {
 			$type = $this->get_type($post);
 			if ( ! empty($type) && ! empty($type->id) ) {
