@@ -70,6 +70,12 @@ class CNR_Content_Base extends CNR_Base {
 	var $id = '';
 	
 	/**
+	 * Reference to parent object that current instance inherits from
+	 * @var object
+	 */
+	var $parent = null;
+	
+	/**
 	 * Title
 	 * @var string
 	 */
@@ -111,17 +117,18 @@ class CNR_Content_Base extends CNR_Base {
 	/**
 	 * Legacy Constructor
 	 */
-	function CNR_Content_Base($id = '') {
-		$this->__construct($id);
+	function CNR_Content_Base($id = '', $parent = null) {
+		$this->__construct($id, $parent);
 	}
 	
 	/**
 	 * Constructor
 	 */
-	function __construct($id = '') {
+	function __construct($id = '', $parent = null) {
 		parent::__construct();
 		$id = trim($id);
 		$this->id = $id;
+		$this->set_parent($parent);
 	}
 	
 	/* Getters/Setters */
@@ -170,6 +177,17 @@ class CNR_Content_Base extends CNR_Base {
 			}
 		}
 		return $ret;
+	}
+	
+	/**
+	 * Search for specified member value in field type ancestors
+	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
+	 * @param string $name Value to retrieve from member
+	 * @return mixed Member value if found (Default: empty string)
+	 */
+	function get_parent_value($member, $name = '', $default = '') {
+		$parent =& $this->get_parent();
+		return $this->get_object_value($parent, $member, $name, $default, 'parent');
 	}
 	
 	/**
@@ -334,6 +352,40 @@ class CNR_Content_Base extends CNR_Base {
 	function set_data($value, $name = '') {
 		$ref =& $this->get_path_value('data', $name);
 		$ref = $value;
+	}
+	
+	/**
+	 * Sets parent object of current instance
+	 * Parent objects must be the same object type as current instance
+	 * @param string|object $parent Parent ID or reference
+	 */
+	function set_parent($parent) {
+		//Validate parent object
+		if ( is_array($parent) && !empty($parent) )
+			$parent =& $parent[0];
+			
+		//Retrieve reference object if ID was supplied
+		if ( is_string($parent) ) {
+			$parent = trim($parent);
+			//Check for existence of parent
+			$lookup = $this->base_class . 's';
+			if ( isset($GLOBALS[$lookup][$parent]) ) {
+				//Get reference to parent
+				$parent =& $GLOBALS[$lookup][$parent];
+			}
+		}
+		//Set reference to parent field type
+		if ( !empty($parent) && is_a($parent, $this->base_class) ) {
+			$this->parent =& $parent;
+		}
+	}
+	
+	/**
+	 * Retrieve field type parent
+	 * @return CNR_Field_Type Reference to parent field
+	 */
+	function &get_parent() {
+		return $this->parent;
 	}
 	
 	/**
@@ -549,17 +601,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 	/* Getters/Setters */
 	
 	/**
-	 * Search for specified member value in field type ancestors
-	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
-	 * @param string $name Value to retrieve from member
-	 * @return mixed Member value if found (Default: empty string)
-	 */
-	function get_parent_value($member, $name = '', $default = '') {
-		$parent =& $this->get_parent();
-		return $this->get_object_value($parent, $member, $name, $default, 'parent');
-	}
-	
-	/**
 	 * Search for specified member value in field's container object (if exists)
 	 * @param string $member Name of object member to search (e.g. properties, layout, etc.)
 	 * @param string $name Value to retrieve from member
@@ -737,9 +778,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 */
 	function get_property($name) {
 		$val = $this->get_member_value('properties', $name);
-		/*if ( isset($val['value']) )
-			$val = $val['value'];
-		*/
 		return $val;
 	}
 	
@@ -1054,7 +1092,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param array $placeholder Current placeholder
 	 * @see CNR_Field::parse_layout for structure of $placeholder array
 	 * @param string $layout Layout to build
-	 * @param array $data Extended data for field (Default: null)
+	 * @param array $data Extended data for field
 	 * @return string Value to use in place of current placeholder
 	 */
 	function process_placeholder_default($ph_output, $field, $placeholder, $layout, $data) {
@@ -1133,8 +1171,15 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 */
 	function process_placeholder_data($ph_output, $field, $placeholder, $layout) {
 		$val = $field->get_data();
-		if ( !is_null($val) )
+		if ( !is_null($val) ) {
 			$ph_output = $val;
+			$attr =& $placeholder['attributes'];
+			//Get specific member in value (e.g. value from a specific field element)
+			if ( isset($attr['element']) && is_array($ph_output) && ( $el = $attr['element'] ) && isset($ph_output[$el]) )
+				$ph_output = $ph_output[$el];
+			if ( isset($attr['format']) && 'display' == $attr['format'] )
+				$ph_output = nl2br($ph_output);
+		}
 		
 		//Return data
 		return $ph_output;
@@ -1243,7 +1288,8 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @param string $id Content type ID
 	 */
 	function CNR_Content_Type($id) {
-		$this->__construct($id);
+		$args = func_get_args();
+		call_user_func_array(array(&$this, '__construct'), $args);
 	}
 	
 	/**
@@ -1251,10 +1297,31 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @param string $id Conten type ID
 	 */
 	function __construct($id = '') {
-		parent::__construct($id);
-		//Set title
-		$this->set_title($id);
-		//TODO Register custom post type
+		$args = array();
+		$args_default = func_get_args();
+		$args_num = count($args_default);
+		$arg_members = array('id', 'parent');
+		//Feed default arguments into arguments array
+		for ( $x = 0; $x < count($arg_members); $x++ ) {
+			//Do not merge last argument if it is an array (contains params for multiple properties)
+			if ( $x == $args_num - 1 && is_array($args_default[$x]) ) {
+				$args = wp_parse_args($args, $args_default[$args_num - 1]);
+				break;
+			}
+			$args[$arg_members[$x]] = $args_default[$x];
+		}
+		if ( ( $args_num = count($args) ) < ( $members_num = count($arg_members) ) ) {
+			for ( $x = $args_num; $x < $members_num; $x++ ) {
+				$args[$arg_members[$x]] = null;
+			}
+		}
+		parent::__construct($args['id'], $args['parent']);
+		unset($args['id']);
+		unset($args['parent']);
+		//Set properties
+		//TODO Iterate through additional arguments and set instance properties
+		
+		//TODO Register custom wp post type
 	}
 	
 	/* Getters/Setters */
@@ -1312,7 +1379,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 	function group_exists($id) {
 		$id = trim($id);
 		//Check if group exists in content type
-		return ( array_key_exists($id, $this->groups) );
+		return ( !is_null($this->get_member_value('groups', $id, null)) );
 	}
 	
 	/**
@@ -1363,7 +1430,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 	function &get_field($field) {
 		if ( $this->has_field($field) ) {
 			$field = trim($field);
-			return $this->fields[$field];
+			return $this->get_member_value('fields', $field);
 		}
 		//Return empty field if no field exists
 		$field =& new CNR_Field('');
@@ -1376,7 +1443,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @return bool TRUE if field exists, FALSE otherwise
 	 */
 	function has_field($field) {
-		return ( !is_string($field) || empty($field) || !isset($this->fields[$field]) ) ? false : true;
+		return ( !is_string($field) || empty($field) || is_null($this->get_member_value('fields', $field, null)) ) ? false : true;
 	}
 	
 	/**
@@ -1446,10 +1513,10 @@ class CNR_Content_Type extends CNR_Content_Base {
 	function &get_group($group) {
 		$group = trim($group);
 		//Create group if it doesn't already exist
-		if ( !$this->group_exists($group) )
+		if ( ! $this->group_exists($group) )
 			$this->add_group($group);
 		
-		return $this->groups[$group];
+		return $this->get_member_value('groups', $group);
 	}
 	
 	/**
@@ -1457,19 +1524,20 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @return array Reference to group objects
 	 */
 	function &get_groups() {
-		return $this->groups;
+		return $this->get_member_value('groups');
 	}
 	
 	/**
 	 * Output fields in a group
-	 * @param string $group Group to output
+	 * @param string $group ID of Group to output
 	 * @return string Group output
 	 */
 	function build_group($group) {
 		$out = array();
 		//Stop execution if group does not exist
 		if ( $this->group_exists($group) && $group =& $this->get_group($group) ) {
-			$out[] = '<div class="cnr_attributes_wrap">'; //Wrap all fields in group
+			$classname = array('cnr_attributes_wrap', ( count($group->fields) > 1 ) ? 'multi_field' : 'single_field');
+			$out[] = '<div class="' . implode(' ', $classname) . '">'; //Wrap all fields in group
 
 			//Build layout for each field in group
 			foreach ( $group->fields as $field ) {
@@ -1627,17 +1695,17 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base->set_property('class', '', 'attr');
 		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
 		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
-		$base->set_layout('display', '{data}');
+		$base->set_layout('display', '{data format="display"}');
 		$this->register_field($base);
 		
 		//Base closed
 		$base_closed = new CNR_Field_Type('base_closed');
 		$base_closed->set_parent('base');
 		$base_closed->set_description('Default Element (Closed Tag)');
-		$base_closed->set_property('value');
+		//$base_closed->set_property('value');
 		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_id}" {properties ref_base="root" group="attr"}>');
 		$base_closed->set_layout('form_end', '</{tag}>');
-		$base_closed->set_layout('form', '{form_start ref_base="layout"}{value}{form_end ref_base="layout"}');
+		$base_closed->set_layout('form', '{form_start ref_base="layout"}{data}{form_end ref_base="layout"}');
 		$this->register_field($base_closed);
 		
 		//Input
@@ -1961,6 +2029,7 @@ class CNR_Content_Utilities extends CNR_Base {
 					wp_set_post_lock($post->ID);
 					$locked = true;
 				}
+				//Continue on to add case
 			case 'add'	:
 				$editing = true;
 				wp_enqueue_script('autosave');

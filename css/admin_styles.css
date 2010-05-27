@@ -117,7 +117,28 @@ ul.empty {
 	display: block;
 }
 
+.cnr_attribute_wrap .actions {
+	margin-top: 1em;
+}
+
+.cnr_attribute_wrap .media_frame,
+.cnr_attribute_wrap .media_link {
+	clear: both;
+	display: block;
+}
+
 .cnr_attribute_wrap  .media_frame {
 	margin-bottom: 1em;
 	border: 1px solid #F5F5F5;
+}
+
+	/* Single Field Groups */
+	
+.cnr_group_wrap .single_field textarea,
+.cnr_group_wrap .single_field input[type=text] {
+	width: 98%;
+}
+
+.cnr_group_wrap .single_field label {
+	display: none;
 }

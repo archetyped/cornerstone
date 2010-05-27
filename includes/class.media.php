@@ -1,5 +1,4 @@
 <?php
-
 require_once 'class.base.php';
 require_once 'class.content-types.php';
 
@@ -14,6 +13,10 @@ $cnr_media->register_hooks();
  */
 class CNR_Media extends CNR_Base {
 	
+	var $var_field = 'field';
+	
+	var $var_action = 'action';
+	
 	/**
 	 * Legacy Constructor
 	 */
@@ -26,6 +29,8 @@ class CNR_Media extends CNR_Base {
 	 */
 	function __construct() {
 		parent::__construct();
+		$this->var_field = $this->add_prefix($this->var_field);
+		$this->var_action = $this->add_prefix($this->var_action);
 	}
 	
 	/* Methods */
@@ -38,7 +43,7 @@ class CNR_Media extends CNR_Base {
 		add_action('cnr_register_field_types', $this->m('register_field_types'));
 		
 		//Register/Modify content types
-		add_action('cnr_content_types_registered', $this->m('register_content_types'));
+		add_action('cnr_register_content_types', $this->m('register_content_types'));
 		
 		//Register handler for custom media requests
 		add_action('media_upload_cnr_field_media', $this->m('field_upload_media'));
@@ -76,7 +81,7 @@ class CNR_Media extends CNR_Base {
 		$media->set_layout('form', '{media}');
 		$media->set_layout('display', '{media format="display"}');
 		$media->set_layout('display_url', '{media format="display" type="url"}');
-		$media->add_script( array('add', 'edit', 'post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
+		$media->add_script( array('add', 'edit-item', 'post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/media.js'), array($this->add_prefix('script_admin')));
 		$field_types[$media->id] =& $media;
 		
 		$image = new CNR_Field_Type('image');
@@ -134,9 +139,9 @@ class CNR_Media extends CNR_Base {
 				$media_name = $media_id;
 				$query = array (
 								'post_id'			=> $uploading_iframe_ID,
-								'type'				=> 'cnr_field_media',
-								'cnr_action'		=> 'true',
-								'cnr_field'			=> $media_id,
+								'type'				=> $this->add_prefix('field_media'),
+								$this->var_action	=> 'true',
+								$this->var_field	=> $media_id,
 								'cnr_set_as'		=> $field->get_property('set_as'),
 								'TB_iframe'			=> 'true'
 								);
@@ -149,21 +154,26 @@ class CNR_Media extends CNR_Base {
 				//Start output
 				ob_start();
 			?>
+			<div id="<?php echo "$media_name-data"; ?>" class="media_data">
 			<?php
 				if ($post_media_valid) {
 					//Add media preview 
 			?>
-					{media format="display" id="<?php echo "$media_name-frame"?>" class="media_frame"}
+					{media format="display" id="<?php echo "$media_name-frame"; ?>" class="media_frame"}
+					{media format="display" type="link" target="_blank" id="<?php echo "$media_name-link"; ?>" class="media_link"}
 					<input type="hidden" name="<?php echo "$media_name"?>" id="<?php echo "$media_name"?>" value="<?php echo $post_media ?>" />
 			<?php
 				}
+			?>
+			</div>
+			<?php
 				//Add media action options (upload, remove, etc.)
 			?>
-					<div class="buttons">
+					<div class="actions buttons">
 						<a href="<?php echo "$media_upload_iframe_src" ?>" id="<?php echo "$media_name-lnk"?>" class="thickbox button" title="{title}" onclick="return false;">{button}</a>
 						<span id="<?php echo "$media_name-options"?>" class="options <?php if (!$post_media_valid) : ?> options-default <?php endif; ?>">
-						or <a href="#" title="Remove media" class="del-link" id="<?php echo "$media_name-option_remove"?>" onclick="postImageAction(this); return false;">{remove}</a>
-						 <span id="<?php echo "$media_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$media_name-remove"?>" class="delete" onclick="return postImageAction(this);">Remove</a> or <a href="#" id="<?php echo "$media_name-remove_cancel"?>" onclick="return postImageAction(this);">Cancel</a></span>
+						or <a href="#" title="Remove media" class="del-link" id="<?php echo "$media_name-option_remove"?>" onclick="cnr.media.doAction(this); return false;">{remove}</a>
+						 <span id="<?php echo "$media_name-remove_confirmation"?>" class="confirmation remove-confirmation confirmation-default">Are you sure? <a href="#" id="<?php echo "$media_name-remove"?>" class="delete" onclick="return cnr.media.doAction(this);">Remove</a> or <a href="#" id="<?php echo "$media_name-remove_cancel"?>" onclick="return cnr.media.doAction(this);">Cancel</a></span>
 						</span>
 					</div>
 			<?php
@@ -194,32 +204,39 @@ class CNR_Media extends CNR_Base {
 		$errors = array();
 		$id = 0;
 		
-		//Process image selection
-		if ( isset($_POST['setimage']) ) {
+		//Process media selection
+		if ( isset($_POST['setmedia']) ) {
 			/* Send image data to main post edit form and close popup */
 			//Get Attachment ID
-			$attachment_id = array_keys($_POST['setimage']);
-			$attachment_id = array_shift($attachment_id); 
-		 	//Get Attachment Image URL
-			$src = wp_get_attachment_image_src($attachment_id, '');
-			if (!$src)
-				$src = '';
-			else
-				$src = $src[0];
+			$field_var = $this->add_prefix('field');
+			$args = new stdClass();
+			$args->id = array_shift( array_keys($_POST['setmedia']) );
+			$args->field = '';
+			if ( isset($_REQUEST['attachments'][$args->id][$this->var_field]) )
+				$args->field = $_REQUEST['attachments'][$args->id][$this->var_field];
+			elseif ( isset($_REQUEST[$this->var_field]) )
+				$args->field = $_REQUEST[$this->var_field];
+			$a =& get_post($args->id);
+			if ( ! empty($a) ) {
+				$args->url = wp_get_attachment_url($a->ID);
+				$args->type = get_post_mime_type($a->ID);
+				$icon = !wp_attachment_is_image($a->ID);
+				$args->preview = wp_get_attachment_image_src($a->ID, '', $icon);
+				$args->preview = ( ! $args->preview ) ? '' : $args->preview[0];
+			}
 			//Build JS Arguments string
-			$args = "'$attachment_id', '$src'";
-			$type = '';
-			if ( isset($_REQUEST['attachments'][$attachment_id]['cnr_field']) )
-				$type = $_REQUEST['attachments'][$attachment_id]['cnr_field'];
-			elseif ( isset($_REQUEST['cnr_field']) )
-				$type = $_REQUEST['cnr_field'];
-			$type = ( !empty($type) ) ? ", '" . $type . "'" : '';
-			$args .= $type;
+			$arg_string = '';
+			foreach ( (array)$args as $key => $val ) {
+				if ( ! empty($arg_string) )
+					$arg_string .= ',';
+				$arg_string .= "'$key':'$val'";
+			}
+			$arg_string = '{' . $arg_string . '}';
 			?>
 			<script type="text/javascript">
 			/* <![CDATA[ */
 			var win = window.dialogArguments || opener || parent || top;
-			win.setPostImage(<?php echo $args; ?>);
+			win.cnr.media.setPostMedia(<?php echo $arg_string; ?>);
 			/* ]]> */
 			</script>
 			<?php
@@ -261,41 +278,50 @@ class CNR_Media extends CNR_Base {
 	 */
 	function attachment_fields_to_edit($form_fields, $attachment) {
 		
-		if ($this->is_custom_media()) {
+		if ( $this->is_custom_media() ) {
 			$post =& get_post($attachment);
 			//Clear all form fields
 			$form_fields = array();
-			if ( substr($post->post_mime_type, 0, 5) == 'image' ) {
-				$set_as = 'media';
-				$qvar = 'cnr_set_as';
-				//Get set as text from request
-				if ( isset($_REQUEST[$qvar]) && !empty($_REQUEST[$qvar]) )
-					$set_as = $_REQUEST[$qvar];
-				elseif ( ( strpos($_SERVER['PHP_SELF'], 'async-upload.php') !== false || isset($_POST['html-upload']) ) && ($ref = wp_get_referer()) && strpos($ref, $qvar) !== false && ($ref = parse_url($ref)) && isset($ref['query']) ) {
-					//Get set as text from referer (for async uploads)
-					$qs = array();
-					parse_str($ref['query'], $qs);
-					if ( isset($qs[$qvar]) )
-						$set_as = $qs[$qvar];
-				}
-				//Add "Set as Image" button to form fields array
-				$set_as = 'Set as ' . $set_as;
+			//TODO Display custom buttons based on mime type defined in content type's field
+			$set_as = 'media';
+			$qvar = 'cnr_set_as';
+			//Get set as text from request
+			if ( isset($_REQUEST[$qvar]) && !empty($_REQUEST[$qvar]) )
+				$set_as = $_REQUEST[$qvar];
+			elseif ( ( strpos($_SERVER['PHP_SELF'], 'async-upload.php') !== false || isset($_POST['html-upload']) ) && ($ref = wp_get_referer()) && strpos($ref, $qvar) !== false && ($ref = parse_url($ref)) && isset($ref['query']) ) {
+				//Get set as text from referer (for async uploads)
+				$qs = array();
+				parse_str($ref['query'], $qs);
+				if ( isset($qs[$qvar]) )
+					$set_as = $qs[$qvar];
+			}
+			//Add "Set as Image" button to form fields array
+			$set_as = 'Set as ' . $set_as;
+			$field = array(
+							'input'		=> 'html',
+							'html'		=> '<input type="submit" class="button" value="' . $set_as . '" name="setmedia[' . $post->ID . ']" />'
+							);
+			$form_fields['buttons'] = $field;
+			//Add field ID value as hidden field (if set)
+			if ( isset($_REQUEST[$this->var_field]) ) {
 				$field = array(
-								'input'		=> 'html',
-								'html'		=> '<input type="submit" class="button" value="' . $set_as . '" name="setimage[' . $post->ID . ']" />'
-								);
-				$form_fields['buttons'] = $field;
-				//Add field ID value as hidden field (if set)
-				if (isset($_REQUEST['cnr_field'])) {
-					$field = array(
-									'input'	=> 'hidden',
-									'value'	=> $_REQUEST['cnr_field']
-									);
-					$form_fields['cnr_field'] = $field;
-				}
+							'input'	=> 'hidden',
+							'value'	=> $_REQUEST[$this->var_field]
+							);
+				$form_fields[$this->var_field] = $field;
 			}
 		}
 		return $form_fields;
+	}
+	
+	/**
+	 * Checks if value represents a valid media item
+	 * @param int|object $media Attachment ID or Object to check
+	 * @return bool TRUE if item is media, FALSE otherwise
+	 */
+	function is_media($media) {
+		$media =& get_post($media);
+		return ( ! empty($media) && 'attachment' == $media->post_type );	
 	}
 	
 	/**
@@ -303,7 +329,7 @@ class CNR_Media extends CNR_Base {
 	 */
 	function is_custom_media() {
 		$ret = false;
-		$action = 'cnr_action';
+		$action = $this->var_action;
 		$upload = false;
 		if (isset($_REQUEST[$action]))
 			$ret = true;
@@ -324,7 +350,7 @@ class CNR_Media extends CNR_Base {
 	 * @return void
 	 */
 	function attachment_html_upload_ui() {
-		$vars = array ('cnr_action', 'cnr_field');
+		$vars = array ($this->var_action, $this->var_field);
 		foreach ( $vars as $var ) {
 			if ( isset($_REQUEST[$var]) )
 				echo '<input type="hidden" name="' . $var . '" id="' . $var . '" value="' . esc_attr($_REQUEST[$var]) . '" />';
@@ -506,20 +532,26 @@ class CNR_Media extends CNR_Base {
 	function get_media_output($media, $type = 'url', $attr = array()) {
 		$ret = '';
 		$media =& get_post($media);
-		if ( !!$media || 'attachment' != $media->post_type ) {
+		//Continue processing valid media items
+		if ( $this->is_media($media) ) {
 			//URL - Same for all attachments
 			if ( 'url' == $type ) {
 				$ret = wp_get_attachment_url($media->ID);
+			} elseif ( 'link' == $type ) {
+				$ret = $this->get_link($media, $attr);
 			} else {
 				//Determine media type
 				$mime = get_post_mime_type($media);
 				$mime_main = substr($mime, 0, strpos($mime, '/'));
-				$mime_sub = substr($mime, strpos($mime, '/') + 1);
 				
 				//Pass to handler for media type + output type
 				$handler = implode('_', array('get', $mime_main, 'output'));
 				if ( method_exists($this, $handler))
 					$ret = $this->{$handler}($media, $type, $attr);
+				else {
+					//Default output if no handler exists
+					$ret = $this->get_image_output($media, $type, $attr);
+				}
 			}
 		}
 		
@@ -538,6 +570,21 @@ class CNR_Media extends CNR_Base {
 		return $out;
 	}
 	
+	function get_link($media, $attr = array()) {
+		$ret = '';
+		$media =& get_post($media);
+		if ( $this->is_media($media) ) {
+			$attr['href'] = wp_get_attachment_url($media->ID);
+			$text = ( isset($attr['text']) ) ? $attr['text'] : basename($attr['href']);
+			unset($attr['text']);
+			//Build attribute string
+			$attr = wp_parse_args($attr, array('href' => ''));
+			$attr_string = $this->util->build_attribute_string($attr);
+			$ret = '<a ' . $attr_string . '>' . $text . '</a>';
+		}
+		return $ret;
+	}
+	
 	/**
 	 * Builds output for image attachments
 	 * @param int|obj $media Media object or ID
@@ -546,21 +593,16 @@ class CNR_Media extends CNR_Base {
 	 */
 	function get_image_output($media, $type = 'html', $attr = array()) {
 		$ret = '';
-		if ( !wp_attachment_is_image($media->ID) )
-			return $ret;
+		$icon = !wp_attachment_is_image($media->ID);
 		
 		//Get image properties
 		$attr = wp_parse_args($attr, array('alt' => trim(strip_tags( $media->post_excerpt ))));
-		list($attr['src'], $attribs['width'], $attribs['height']) = wp_get_attachment_image_src($media->ID, '');
+		list($attr['src'], $attribs['width'], $attribs['height']) = wp_get_attachment_image_src($media->ID, '', $icon);
 			
 		switch ( $type ) {
 			case 'html' :
-				array_map('esc_attr', $attr);
-				$attr_str = '';
-				foreach ( $attr as $key => $val ) {
-					$attr_str .= ' ' . $key . '="' . $val . '"';
-				}
-				$ret = '<img' . $attr_str . ' />';
+				$attr_str = $this->util->build_attribute_string($attr);
+				$ret = '<img ' . $attr_str . ' />';
 				break;
 		}
 		
