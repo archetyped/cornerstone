@@ -645,9 +645,6 @@ class CNR_Media extends CNR_Base {
 		global $cnr_content_utilities;
 		$u =& $cnr_content_utilities;
 		
-		if ( 'project' != $type->id )
-			return false;
-			
 		//Add Menu
 		$parent_page = $u->get_admin_page_file($type->id);
 		$menu_page = $u->get_admin_page_file($type->id, 'extra');
