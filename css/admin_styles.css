@@ -139,6 +139,7 @@ ul.empty {
 	width: 98%;
 }
 
-.cnr_group_wrap .single_field label {
+.cnr_group_wrap .single_field label,
+.cnr_group_wrap .single_field_has_elements legend {
 	display: none;
 }
