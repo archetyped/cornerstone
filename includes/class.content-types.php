@@ -132,7 +132,7 @@ class CNR_Content_Base extends CNR_Base {
 	}
 
 	/* Getters/Setters */
-
+	
 	/**
 	 * Checks if the specified path exists in the object
 	 * @param array $path Path to check for
@@ -352,7 +352,22 @@ class CNR_Content_Base extends CNR_Base {
 		$ref =& $this->get_path_value('data', $name);
 		$ref = $value;
 	}
-
+	
+	/**
+	 * Retrieve base_class property
+	 * @return string base_class property of current class/instance object
+	 */
+	function get_base_class() {
+		$ret = '';
+		if ( isset($this) )
+			$ret = $this->base_class;
+		else {
+			$ret = CNR_Utilities::get_property(__CLASS__, 'base_class');
+		}
+		
+		return $ret;
+	}
+	
 	/**
 	 * Sets parent object of current instance
 	 * Parent objects must be the same object type as current instance
@@ -398,7 +413,7 @@ class CNR_Content_Base extends CNR_Base {
 			$field =& $this;
 		}
 
-		if ( is_a($field, 'cnr_field_type') )
+		if ( is_a($field, CNR_Field_Type::get_base_class()) )
 			$id = $field->id;
 
 		if ( is_string($id) )
@@ -414,7 +429,7 @@ class CNR_Content_Base extends CNR_Base {
 			);
 			while ( !!$c ) {
 				//Add ID of current field to array
-				if ( isset($c->id) && is_a(c, $this->base_class) )
+				if ( isset($c->id) && is_a($c, $this->base_class) )
 					$field_id[] = $c->id;
 				$c = ( method_exists($c, 'get_caller') ) ? $c->get_caller() : null;
 			}
