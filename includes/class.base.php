@@ -46,7 +46,13 @@ class CNR_Base {
 	 * Default initialization method
 	 * To be overriden by child classes
 	 */
-	function init() {}
+	function init() {
+		$func = 'register_hooks';
+		if ( isset($this) ) {
+			if ( method_exists($this, $func) )
+				call_user_method($func, $this);
+		}
+	}
 	
 	function register_hooks() {
 		//Activation

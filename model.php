@@ -52,6 +52,12 @@ class Cornerstone extends CNR_Base {
 	var $structure = null;
 	
 	/**
+	 * Post class instance
+	 * @var CNR_Post
+	 */
+	var $post = null;
+	
+	/**
 	 * Feeds instance
 	 * @var CNR_Feeds
 	 */
@@ -81,6 +87,9 @@ class Cornerstone extends CNR_Base {
 		$this->structure = new CNR_Structure();
 		$this->structure->init();
 		
+		$this->post = new CNR_Post();
+		$this->post->init();
+		
 		$this->feeds = new CNR_Feeds();
 		$this->feeds->init();
 	}
@@ -95,19 +104,10 @@ class Cornerstone extends CNR_Base {
 			//Head
 		add_action('admin_enqueue_scripts', $this->m('admin_add_styles'));
 		add_action('admin_enqueue_scripts', $this->m('admin_add_scripts'));
-			//TinyMCE
-		//add_action('init', $this->m('admin_mce_register'));
-		add_filter('tiny_mce_before_init', $this->m('admin_mce_before_init'));
-		add_filter('mce_buttons', $this->m('admin_mce_buttons'));
-		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
-		add_action('admin_enqueue_scripts', $this->m('admin_post_quicktags'));
 		
 		//Posts
 		add_filter('the_posts', $this->m('post_children_get'));
 		add_filter('wp_list_pages', $this->m('post_section_highlight'));
-		
-		//Activate Shortcodes
-		$this->sc_activate();
 	}
 	
 	/* Methods */
@@ -150,43 +150,6 @@ class Cornerstone extends CNR_Base {
 		wp_enqueue_script($this->add_prefix('script_admin'));
 	}
 	
-	/**
-	 * Adds quicktags to post edit form
-	 * @return void
-	 */
-	function admin_post_quicktags() {
-		$actions = array('edit-item', 'add');
-		if ( in_array($this->util->get_action(), $actions) ) {
-			wp_enqueue_script('cnr_quicktags', $this->util->get_file_url('js/cnr_quicktags.js'), array('quicktags'));
-		}
-	}
-	
-	function admin_mce_before_init($initArray) {
-		$initArray['content_css'] = $this->util->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
-		return $initArray;
-	}
-	
-	function admin_mce_external_plugins($plugin_array) {
-		$plugin_array['cnr_inturl'] = $this->util->get_file_url('mce/plugins/inturl/editor_plugin.js');
-		return $plugin_array;
-	}
-	
-	function admin_mce_buttons($buttons) {
-		//Find Link button
-		$pos = array_search('unlink', $buttons);
-		if ($pos !== false)
-			$pos += 1;
-		else
-			$pos = count($buttons);
-		
-		//Insert button into buttons array
-		$start = array_slice($buttons, 0, $pos);
-		$end = array_slice($buttons, $pos);
-		$start[] = 'cnr_inturl';
-		$buttons = array_merge($start, $end);
-		return $buttons;
-	}
-	
 	/*-** State Settings **-*/
 	
 	/*-** Content **-*/
@@ -220,69 +183,6 @@ class Cornerstone extends CNR_Base {
 		}
 
 		return $output;
-	}
-	
-	/*-** Shortcodes **-*/
-	
-	/**
-	 * Shortcode activation
-	 * @return void
-	 */
-	function sc_activate() {
-		add_shortcode("inturl", $this->m('sc_inturl'));
-	}
-	
-	/**
-	 * Internal URL Shortcode
-	 * 
-	 * Creates links to internal content based on the current permalink structure
-	 * @return string Output for shortcode
-	 */
-	function sc_inturl($atts, $content = null) {
-		$ret = '';
-		$url_default = '#';
-		$format = '<a href="%1$s" title="%2$s">%3$s</a>';
-		$defaults = array(
-						 'id'		=>	0,
-						 'type'		=>	'post',
-						 'title'	=>	'',
-						 'anchor'	=>	''
-						 );
-		
-		extract(shortcode_atts($defaults, $atts));
-		
-		$anchor = trim($anchor);
-		if (!empty($anchor))
-			$anchor = $url_default . $anchor;
-		
-		//Get URL/Permalink
-		if ($type == 'post') {
-			$id = (is_numeric($id)) ? (int) $id : 0;
-			if ($id != 0) {
-				$url = get_permalink($id);
-				if (!$url)
-					$url = $url_default;
-			}
-			else
-				$url = $url_default;
-			
-			//Add anchor to URL
-			if ($url != $url_default)
-				$url .= $anchor;
-			
-			//Link Title
-			$title = trim($title);
-			if ($title == '' && $url != $url_default)
-				$title = get_post_field('post_title', $id);
-			$title = attribute_escape($title);
-		
-			if (empty($content) && $url != $url_default)
-				$content = $url;
-				
-			$ret = sprintf($format, $url, $title, $content);
-		}
-		
-		return $ret;
 	}
 	
 	/*-** Child Content **-*/
