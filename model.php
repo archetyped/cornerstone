@@ -155,8 +155,8 @@ class Cornerstone extends CNR_Base {
 	 * @return void
 	 */
 	function admin_post_quicktags() {
-		$inc = array('page-new', 'post-new', 'page', 'post');
-		if ( in_array(basename($_SERVER['SCRIPT_NAME'], '.php'), $inc) ) {
+		$actions = array('edit-item', 'add');
+		if ( in_array($this->util->get_action(), $actions) ) {
 			wp_enqueue_script('cnr_quicktags', $this->util->get_file_url('js/cnr_quicktags.js'), array('quicktags'));
 		}
 	}
