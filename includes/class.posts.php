@@ -280,7 +280,7 @@ class CNR_Post_Query extends CNR_Base {
 		return false;
 	}
 	
-/**
+	/**
 	 * Loads next post into global $post variable for use in the loop
 	 * Allows use of WP template tags
 	 * @return void

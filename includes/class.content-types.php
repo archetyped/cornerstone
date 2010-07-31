@@ -466,9 +466,9 @@ class CNR_Content_Base extends CNR_Base {
 		//Plural
 		$title = $this->get_member_value('title_plural', '', '', $dir);
 		if ( empty($title) ) {
-			//Use singular description for plural base
+			//Use singular title for plural base
 			$title = $this->get_member_value('title', '', '', $dir);
-			//Determine technique for making description plural
+			//Determine technique for making title plural
 			//Get last letter
 			if ( !empty($title) ) {
 				$tail = substr($title, -1);
@@ -497,9 +497,9 @@ class CNR_Content_Base extends CNR_Base {
 
 	/**
 	 * Retrieve object description
-	 * @param bool $plural TRUE if plural description should be retrieved, FALSE otherwise (Default: FALSE)
+	 * @return string Object description
 	 */
-	function get_description($plural = false) {
+	function get_description() {
 		$dir = 'current';
 		return $this->get_member_value('description', '','', $dir);
 		return $desc;
@@ -1631,13 +1631,13 @@ class CNR_Content_Utilities extends CNR_Base {
 		add_action('init', $this->m('register_types'));
 
 		//Add menus
-		add_action('admin_menu', $this->m('admin_menu'));
+		//add_action('admin_menu', $this->m('admin_menu'));
 
 		//Build UI on post edit form
 		add_action('do_meta_boxes', $this->m('admin_do_meta_boxes'), 10, 3);
 
 		//Get edit link for items
-		add_filter('get_edit_post_link', $this->m('get_edit_item_url'), 10, 3);
+		//add_filter('get_edit_post_link', $this->m('get_edit_item_url'), 10, 3);
 
 		add_action('edit_form_advanced', $this->m('admin_page_edit_form'));
 
@@ -1648,7 +1648,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
 
 		//Modify post query for content type compatibility
-		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+		//add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
 	}
 
 	/**
@@ -1778,6 +1778,70 @@ class CNR_Content_Utilities extends CNR_Base {
 			global $cnr_content_types;
 			$cnr_content_types[$ct->id] =& $ct;
 		}
+		//WP Post Type Registration
+		global $wp_post_types;
+		if ( !isset($wp_post_types[$ct->id]) )
+			register_post_type($ct->id, $this->build_post_type_args($ct));
+	}
+	
+	/**
+	 * Generates arguments array for WP Post Type Registration
+	 * @param CNR_Content_Type $ct Content type being registered
+	 * @return array Arguments array
+	 */
+	function build_post_type_args(&$ct) {
+		//Setup labels
+		
+		
+		//Build labels
+		$labels = array (
+			'name'				=> _( $ct->get_title(true) ),
+			'singular_name'		=> _( $ct->get_title(false) ),
+		);
+		
+		//Action labels
+		$item_actions = array(
+			'add_new'	=> 'Add new %s',
+			'edit'		=> 'Edit %s',
+			'new'		=> 'New %s',
+			'view'		=> 'View %s',
+			'search'	=> array('Search %s', true),
+			'not_found'	=> array('No %s found', true, false),
+			'not_found_in_trash'	=> array('No %s found in Trash', true, false)	
+		);
+
+		foreach ( $item_actions as $key => $val ) {
+			$excluded = false;
+			$plural = false;
+			if ( is_array($val) ) {
+				if ( count($val) > 1 && true == $val[1] ) {
+					$plural = true;
+				}
+				if ( count($val) > 2 && false == $val[2] )
+					$excluded = true;
+				$val = $val[0];
+			}
+			$title = ( $plural ) ? $labels['name'] : $labels['singular_name'];
+			if ( $excluded )
+				$item = $key;
+			else {
+				$item = $key . '_item' . ( ( $plural ) ? 's' : '' );
+			}
+			$labels[$item] = sprintf($val, $title);
+		}
+		
+		//Setup args
+		$args = array (
+			'labels'				=> $labels,
+			'description'			=> $ct->get_description(),
+			'public'				=> true,
+			'capability_type'		=> 'post',
+			'hierarchical'			=> false,
+			'menu_position'			=> 5,
+			'supports'				=> array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'trackbacks', 'custom-fields', 'comments', 'revisions')
+		);
+		
+		return $args;
 	}
 
 	/**
@@ -1822,6 +1886,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param WP_Query $q Reference to WP_Query object being used to perform posts query
 	 * @see WP_Query for reference
 	 * @todo Make compabitible with WP 3.0 custom post types (stored in posts table instead of postmeta table)
+	 * @deprecated No longer needed w/3.0+
 	 */
 	function pre_get_posts($q) {
 		$qv =& $q->query_vars;
@@ -1923,6 +1988,7 @@ class CNR_Content_Utilities extends CNR_Base {
 
 	/**
 	 * Add admin menus for content types
+	 * @deprecated Not needed for 3.0+
 	 */
 	function admin_menu() {
 		global $cnr_content_types;
@@ -2609,7 +2675,16 @@ class CNR_Content_Utilities extends CNR_Base {
 	 */
 	function has_item_data($item = null, $field = null) {
 		$ret = $this->get_item_data($item, $field, 'raw', null);
-		return ( !empty($ret) || $ret === 0 );
+		if ( is_scalar($ret) )
+			return ( !empty($ret) || $ret === 0 );
+		if ( is_array($ret) ) {
+			foreach ( $ret as $key => $val ) {
+				if ( !empty($val) || $ret === 0 )
+					return true;
+			}
+		}
+		
+		return false;
 	}
 
 	/**
