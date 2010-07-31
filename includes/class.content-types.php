@@ -1625,6 +1625,7 @@ class CNR_Content_Utilities extends CNR_Base {
 
 	/**
 	 * Registers hooks for content types
+	 * @todo 2010-07-30: Check hooks for 3.0 compatibility
 	 */
 	function register_hooks() {
 		//Register types
@@ -1648,7 +1649,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
 
 		//Modify post query for content type compatibility
-		//add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
 	}
 
 	/**
@@ -1774,6 +1775,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @global array $cnr_content_types Content types array
 	 */
 	function register_content_type(&$ct) {
+		//Add content type to CNR array
 		if ( $this->is_content_type($ct) && !empty($ct->id) ) {
 			global $cnr_content_types;
 			$cnr_content_types[$ct->id] =& $ct;
@@ -1880,61 +1882,40 @@ class CNR_Content_Utilities extends CNR_Base {
 	/*-** Handlers **-*/
 
 	/**
-	 * Modifies query parameters to be compatible with custom content types
-	 * If a custom content type is specified in the 'post_type' query variable,
-	 * query parameters will be modified to include posts of this type in the query
+	 * Modifies query parameters to include custom content types
+	 * Adds custom content types to default post query so these items are retrieved as well
 	 * @param WP_Query $q Reference to WP_Query object being used to perform posts query
 	 * @see WP_Query for reference
-	 * @todo Make compabitible with WP 3.0 custom post types (stored in posts table instead of postmeta table)
-	 * @deprecated No longer needed w/3.0+
 	 */
 	function pre_get_posts($q) {
 		$qv =& $q->query_vars;
 		$pt =& $qv['post_type'];
 		$default_types = $this->get_default_post_types();
-
-		//Unwrap array if only one post type is set within
-		if ( is_array($pt) && count($pt) == 1 )
-			$pt = implode($pt);
-		//Use meta key/value for single custom post types
-		if ( is_scalar($pt) && ! $this->is_default_post_type($pt) && 'any' != $pt && $this->type_exists($pt) ) {
-			$qv['meta_key'] = $this->get_type_meta_key();
-			$qv['meta_value'] = serialize(array($pt));
-			//Reset post type variable
-			$pt = 'post';
-		} elseif ( is_array($pt) && ( $custom_types = array_diff($pt, $default_types) ) && !empty($custom_types) ) {
-			//Multiple post types specified
-			global $wpdb;
-			$compare = '{compare}';
-			$compare_ids = '{ids}';
-			$operator = 'IN';
-			$id_query = "SELECT DISTINCT post_id from $wpdb->postmeta WHERE meta_key = %s AND meta_value $compare $compare_ids";
-			//Check if only custom types are supplied
-			if ( count($custom_types) == count($pt) ) {
-				/* Query contains ONLY custom post types (use Inclusion - post__in) */
-				$id_var = 'post__in';
-			} else {
-				/* Query contains default AND custom post types (use Exclusion - post__not_in) */
-				$id_var = 'post__not_in';
-				$operator = 'NOT IN';
-			}
-
-			$serialized = array();
-			foreach ( $custom_types as $type ) {
-				if ( $this->type_exists($type) ) {
-					//Wrap type in array and serialize
-					$serialized[] = serialize(array($type));
-				}
-			}
-			$serialized = "('" . implode("','", $serialized) . "')";
-			//Get matching post IDs
-			$id_query = str_replace($compare_ids, $serialized, str_replace($compare, $operator, $id_query));
-			$id_query = $wpdb->prepare($id_query, $this->get_type_meta_key());
-			$ids = $wpdb->get_col($id_query);
-			//Add IDs to appropriate query variable
-			if ( is_array($qv[$id_var]) )
-				$ids = array_unique( array_merge($ids, $qv[$id_var]) );
-			$qv[$id_var] = $ids;
+		/* Do not continue processing if:
+		 * > In admin section
+		 * > More than one post type is already specified
+		 * > Post type other than 'post' is supplied
+		 */
+		if ( is_admin()
+		|| ( is_array($pt)
+			&& ( count($pt) > 1 
+				|| 'post' != $pt[0] )
+			)
+		|| !in_array($pt, array('post', null))
+		) {
+			return false;
+		}
+		$custom_types = array_diff(array_keys($this->get_types()), $default_types);
+		if ( !count($custom_types) )
+			return false;
+		//Wrap post type in array
+		if ( empty($pt) || is_null($pt) )
+			$pt = array('post');
+		if ( !is_array($pt) )
+			$pt = array($pt);
+		//Add custom types to query
+		foreach ( $custom_types as $type ) {
+			$pt[] = $type;
 		}
 	}
 
@@ -2568,7 +2549,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @return array Default post types
 	 */
 	function get_default_post_types() {
-		return array('post', 'page', 'attachment', 'revision');
+		return array('post', 'page', 'attachment', 'revision', 'nav_menu');
 	}
 
 	/**
@@ -2649,6 +2630,14 @@ class CNR_Content_Utilities extends CNR_Base {
 		}
 
 		return $type;
+	}
+	
+	/**
+	 * Retrieve content types
+	 * @return Reference to content types array
+	 */
+	function &get_types() {
+		return $GLOBALS['cnr_content_types'];
 	}
 
 	/**
