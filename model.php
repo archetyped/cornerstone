@@ -482,6 +482,9 @@ class Cornerstone extends CNR_Base {
 	}
 }
 
+/**
+ * @deprecated No longer needed in WP 3.0
+ */
 class CNR_Page_Groups extends CNR_Base {
 	
 	/**
@@ -714,6 +717,7 @@ class CNR_Page_Groups extends CNR_Base {
 /**
  * Class for managing a Page Group
  * @package Cornerstone
+ * @deprecated No longer needed in WP 3.0+
  */
 class CNR_Page_Group extends CNR_Base {
 	

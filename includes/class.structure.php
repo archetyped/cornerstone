@@ -52,6 +52,7 @@ class CNR_Structure extends CNR_Base {
 		
 		//Permalink
 		add_filter('post_link', $this->m('post_link'), 10, 2);
+		add_filter('post_type_link', $this->m('post_link'), 10, 2);
 		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
 		
 		//Admin
@@ -144,40 +145,48 @@ class CNR_Structure extends CNR_Base {
 	 * Example: baseurl/section-name/post-name/
 	 * 
 	 * @param string $permalink Current permalink url for post
-	 * @param object $post Post object
+	 * @param object|int $post Post object or Post ID
+	 * @param bool $leavename Whether to leave post name 
 	 * @return string
 	 * 
 	 * @global WP_Rewrite $wp_rewrite
 	 * @global WP_Query $wp_query
+	 * 
+	 * @see get_permalink
+	 * @see get_post_permalink
 	 */
-	function post_link($permalink, $post = '') {
+	function post_link($permalink, $post, $leavename = false) {
 		global $wp_query;
-		//Do not process further if $post has no name (e.g. drafts)
-		if ( is_object($post) && ( !$this->util->property_exists($post, 'post_name') || empty($post->post_name) ) )
-			return $permalink;
 		
-		if ( $this->using_post_permastruct() ) {
+		/* Stop processing immediately if:
+		 * Custom permalink structure is not activated by user
+		 * Post data is not a valid post
+		 * Post has no name (e.g. drafts)
+		 * Post has no parent (e.g. not in a section)
+		 */
+		if ( !$this->using_post_permastruct() || ( !$this->util->check_post($post) ) || !$this->util->property_exists($post, 'post_name') || empty($post->post_name) || !$this->util->property_exists($post, 'post_parent') || 0 == $post->post_parent )
+			return $permalink;
             
-			//Get base URL
-			$base = get_bloginfo('url');
-			
-			//Canonical redirection usage
-			if (is_string($post)) {
-				//Only process single posts
-				if (is_single()) {
-					$post = $wp_query->get_queried_object();
-				} else {
-					//Stop processing for all other content (return control to redirect_canonical
-					return false;
-				}
+		//Get base URL
+		$base = get_bloginfo('url');
+		
+		//Canonical redirection usage
+		if (is_string($post)) {
+			//Only process single posts
+			if (is_single()) {
+				$post = $wp_query->get_queried_object();
+			} else {
+				//Stop processing for all other content (return control to redirect_canonical
+				return false;
 			}
-			
-			//Get post path
-			$path = $this->get_path($post);
-			
-			//Set permalink (Add trailing slash)
-			$permalink = $base . $path . $post->post_name . '/';
 		}
+		
+		//Get post path
+		$path = $this->get_path($post);
+		
+		//Set permalink (Add trailing slash)
+		$permalink = $base . $path . $post->post_name . '/';
+
 		return $permalink;
 	}
 	
@@ -272,8 +281,12 @@ class CNR_Structure extends CNR_Base {
 	 * Adds meta box for section selection on post edit form
 	 */
 	function admin_post_sidebar($type, $context = null, $post = null) {
-		if ( 'post' == $type && 'side' == $context )
-			add_meta_box($this->add_prefix('section'), 'Section', $this->m('admin_post_sidebar_section'), 'post', 'side', 'high');
+		$child_types = get_post_types(array('show_ui' => true, '_builtin' => false));
+		$child_types[] = 'post';
+		$side_context = 'side';
+		$priority = 'high';
+		if ( in_array($type, $child_types) && $side_context == $context )
+			add_meta_box($this->add_prefix('section'), __('Section'), $this->m('admin_post_sidebar_section'), $type, $context, $priority);
 	}
 	
 	/**
@@ -358,7 +371,9 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function admin_quick_edit_custom_box($column_name, $type, $bulk = false) {
 		global $post;
-		if ($column_name == 'section' && $type == 'post') :
+		$child_types = get_post_types(array('show_ui' => true, '_builtin' => false));
+		$child_types[] = 'post';
+		if ( $column_name == 'section' && in_array($type, $child_types) ) :
 		?>
 		<fieldset class="inline-edit-col-right">
 			<div class="inline-edit-col">

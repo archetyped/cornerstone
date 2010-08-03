@@ -1411,17 +1411,20 @@ class CNR_Content_Type extends CNR_Content_Base {
 	/**
 	 * Adds field to a group in the content type
 	 * Group is created if it does not already exist
-	 * @param string $group ID of group to add field to
+	 * @param string|array $group ID of group (or group parameters if new group) to add field to
 	 * @param string|array $fields Name or array of field(s) to add to group
 	 */
 	function add_to_group($group, $fields) {
 		//Validate parameters
+		$group_title = '';
+		if ( is_array($group) )
+			list($group, $group_title) = $group;
 		$group = trim(strval($group));
 		if ( empty($group) || empty($fields) )
 			return false;
 		//Create group if it doesn't exist
 		if ( !$this->group_exists($group) )
-			$this->add_group($group);
+			$this->add_group($group, $group_title);
 		if ( ! is_array($fields) )
 			$fields = array($fields);
 		foreach ( $fields as $field ) {
@@ -1640,7 +1643,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Get edit link for items
 		//add_filter('get_edit_post_link', $this->m('get_edit_item_url'), 10, 3);
 
-		add_action('edit_form_advanced', $this->m('admin_page_edit_form'));
+		//add_action('edit_form_advanced', $this->m('admin_page_edit_form'));
 
 		//Save Field data/Content type
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
@@ -1790,6 +1793,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * Generates arguments array for WP Post Type Registration
 	 * @param CNR_Content_Type $ct Content type being registered
 	 * @return array Arguments array
+	 * @todo Enable custom taxonomies
 	 */
 	function build_post_type_args(&$ct) {
 		//Setup labels
@@ -1840,7 +1844,8 @@ class CNR_Content_Utilities extends CNR_Base {
 			'capability_type'		=> 'post',
 			'hierarchical'			=> false,
 			'menu_position'			=> 5,
-			'supports'				=> array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'trackbacks', 'custom-fields', 'comments', 'revisions')
+			'supports'				=> array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'trackbacks', 'custom-fields', 'comments', 'revisions'),
+			'taxonomies'			=> get_object_taxonomies('post')
 		);
 		
 		return $args;
@@ -2475,6 +2480,7 @@ class CNR_Content_Utilities extends CNR_Base {
 
 	/**
 	 * Adds hidden field declaring content type on post edit form
+	 * @deprecated no longer needed for WP 3.0+
 	 */
 	function admin_page_edit_form() {
 		global $post, $plugin_page;
@@ -2496,8 +2502,8 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param object $post Post object
 	 */
 	function admin_do_meta_boxes($type, $context, $post) {
-		//Validate $type. Should be 'post' or 'page' for our purposes
-		if ( in_array($type, array('post', 'page')) ) {
+		//Validate $type. Should be 'post','page', or a custom post type for our purposes
+		if ( in_array($type, array_merge(array_keys($this->get_types()), array('post', 'page'))) ) {
 			//Get content type definition
 			$ct =& $this->get_type($post);
 			//Pass processing to content type instance
@@ -2605,17 +2611,14 @@ class CNR_Content_Utilities extends CNR_Base {
 			$post = $item;
 
 			//Check if $item is a post (object or ID)
-			if ( ( is_object($post) || is_numeric($post) ) && ( $post = get_post($post) ) && isset($post->post_type) ) {
+			if ( $this->util->check_post($post) && isset($post->post_type) ) {
 				$type = $post->post_type;
-				if ( $post->ID > 0 && $this->is_default_post_type($type) && ( $type_meta = get_post_meta($post->ID, $this->get_type_meta_key(), true) ) && !empty($type_meta) ) {
-					//Check for post_type in meta data if item type is standard type
-					$type = ( is_array($type_meta) ) ? implode($type_meta) : $type_meta;
-				}
 			}
-
+			/*
 			if ( ( $type_page = $this->get_page_type() ) && ( empty($type) || $this->is_default_post_type($type) ) ) {
 				$type = $type_page;
 			}
+			*/
 		}
 		global $cnr_content_types;
 		if ( $this->type_exists($type) ) {
