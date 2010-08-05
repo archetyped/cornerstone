@@ -466,7 +466,7 @@ class CNR_Post extends CNR_Base {
 		//Global variables
 		global $wp_query;
 		$children =& new CNR_Post_Query();
-		if ( empty($post) && count($wp_query->posts) )
+		if ( empty($post) && !empty($wp_query->posts) )
 			$post = $wp_query->posts[0];
 		
 		if ( is_object($post) )

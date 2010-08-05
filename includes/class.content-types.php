@@ -1893,9 +1893,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @see WP_Query for reference
 	 */
 	function pre_get_posts($q) {
-		$qv =& $q->query_vars;
-		$pt =& $qv['post_type'];
-		
+		$pt =& $q->query_vars['post_type'];
 		/* Do not continue processing if:
 		 * > In admin section
 		 * > Single object requested
@@ -1903,7 +1901,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		 * > Post type other than 'post' is supplied
 		 */
 		if ( is_admin()
-		|| is_singular()
+		|| $q->is_singular
 		|| ( is_array($pt)
 			&& ( count($pt) > 1 
 				|| 'post' != $pt[0] )
@@ -1912,6 +1910,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		) {
 			return false;
 		}
+		
 		$default_types = $this->get_default_post_types();
 		$custom_types = array_diff(array_keys($this->get_types()), $default_types);
 		if ( !count($custom_types) )

@@ -210,7 +210,6 @@ class CNR_Structure extends CNR_Base {
 		if ( empty($qvar) || !isset($qv[$qvar]) || empty($qv[$qvar]) ) {
 			return;
 		}
-		
 		global $wpdb;
 
 		$qval = $qv[$qvar];
@@ -234,6 +233,8 @@ class CNR_Structure extends CNR_Base {
 			//Set new query var
 			$qv[$new_var] = $qval;
 			unset($qv[$qvar]);
+			//Set post type
+			$qv['post_type'] = $type;
 			//Reparse query variables
 			$q->parse_query($qv);
 		}
