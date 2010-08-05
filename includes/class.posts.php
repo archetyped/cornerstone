@@ -144,10 +144,10 @@ class CNR_Post_Query extends CNR_Base {
 		$p_arg = 'post_parent';
 		if ( ! $this->arg_isset($p_arg) ) {
 			$parent = null;
-			if ( count($wp_query->posts) == 1 ) {
+			if ( is_page() ) {
 				$parent = $wp_query->posts[0]->ID;
 			}
-			elseif ( $wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID') ) {
+			elseif ( !is_home() && $wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID') ) {
 				$parent = $GLOBALS['post']->ID;
 			}
 			if ( !! $parent )
@@ -163,7 +163,6 @@ class CNR_Post_Query extends CNR_Base {
 		//Set query args
 		if ( !empty($args) )
 			$this->args = wp_parse_args($args, $this->args);
-		
 		//Set post limit
 		if ( is_numeric($limit) ) {
 			$limit = intval($limit);
@@ -182,7 +181,6 @@ class CNR_Post_Query extends CNR_Base {
 		//Remove filter after query has completed
 		$posts =& get_posts($this->args);
 		remove_filter($filter, $callback);
-		
 		//Save retrieved posts to array
 		$this->load($posts);
 
