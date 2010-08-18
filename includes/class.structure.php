@@ -156,24 +156,34 @@ class CNR_Structure extends CNR_Base {
 	 * @see get_post_permalink
 	 */
 	function post_link($permalink, $post, $leavename = false) {
-		global $wp_query;
+		global $wp_query, $cnr_content_utilities;
 		
 		/* Stop processing immediately if:
 		 * Custom permalink structure is not activated by user
 		 * Post data is not a valid post
 		 * Post has no name (e.g. drafts)
-		 * Post has no parent (e.g. not in a section)
+		 * Custom post type NOT in a section
 		 */
-		if ( !$this->using_post_permastruct() || ( !$this->util->check_post($post) ) || !$this->util->property_exists($post, 'post_name') || empty($post->post_name) || !$this->util->property_exists($post, 'post_parent') || 0 == $post->post_parent )
+		if ( !$this->using_post_permastruct()
+			|| ( !$this->util->check_post($post) )
+			|| ( empty($post->post_name) && empty($post->post_title) )
+			|| ( !$cnr_content_utilities->is_default_post_type($post->post_type) && empty($post->post_parent) ) )
 			return $permalink;
-            
 		//Get base URL
 		$base = get_bloginfo('url');
 		
+		$name = ( !empty($post->post_name) ) ? $post->post_name : '';
+		//Build name from title (if not yet set)
+		if ( empty($name) ) {
+			$post->post_status = 'publish';
+			$name = sanitize_title($name ? $name : $post->post_title, $post->ID);
+			$name = wp_unique_post_slug($name, $post->ID, $post->post_status, $post->post_type, $post->post_parent);
+		}
+		
 		//Canonical redirection usage
-		if (is_string($post)) {
+		if ( is_string($post) ) {
 			//Only process single posts
-			if (is_single()) {
+			if ( is_single() ) {
 				$post = $wp_query->get_queried_object();
 			} else {
 				//Stop processing for all other content (return control to redirect_canonical
@@ -185,7 +195,7 @@ class CNR_Structure extends CNR_Base {
 		$path = $this->get_path($post);
 		
 		//Set permalink (Add trailing slash)
-		$permalink = $base . $path . $post->post_name . '/';
+		$permalink = $base . $path . $name . '/';
 
 		return $permalink;
 	}

@@ -135,7 +135,7 @@ class CNR_Media extends CNR_Base {
 			case 'form':
 				$uploading_iframe_ID = (int) (0 == $post_ID ? $temp_ID : $post_ID);
 				$media_upload_iframe_src = "media-upload.php";
-				$media_id = $field->get_id(true);
+				$media_id = $field->get_id(array('format' => true));
 				$media_name = $media_id;
 				$query = array (
 								'post_id'			=> $uploading_iframe_ID,

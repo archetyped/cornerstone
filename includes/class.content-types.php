@@ -45,6 +45,7 @@ function cnr_the_data($field_id = null, $layout = 'display', $attr = null, $item
 /* Hooks */
 cnr_register_placeholder_handler('all', array('CNR_Field_Type', 'process_placeholder_default'), 11);
 cnr_register_placeholder_handler('field_id', array('CNR_Field_Type', 'process_placeholder_id'));
+cnr_register_placeholder_handler('field_name', array('CNR_Field_Type', 'process_placeholder_name'));
 cnr_register_placeholder_handler('data', array('CNR_Field_Type', 'process_placeholder_data'));
 cnr_register_placeholder_handler('loop', array('CNR_Field_Type', 'process_placeholder_loop'));
 cnr_register_placeholder_handler('data_ext', array('CNR_Field_Type', 'process_placeholder_data_ext'));
@@ -404,7 +405,7 @@ class CNR_Content_Base extends CNR_Base {
 
 	/**
 	 * Retrieves field ID
-	 * @param string|CNR_Field $field (optional) Field object or ID of field
+	 * @param string|CNR_Field|array $field (optional) Field object or ID of field or options array
 	 * @return string|bool Field ID, FALSE if $field is invalid
 	 */
 	function get_id($field = null) {
@@ -418,15 +419,31 @@ class CNR_Content_Base extends CNR_Base {
 
 		if ( is_string($id) )
 			$ret = trim($id);
-
+		
+		//Setup options
+		$options_def = array('format' => null);
+		 //Get options array
+		$num_args = func_num_args();
+		$options = ( $num_args > 0 && ( $last_arg = func_get_arg($num_args - 1) ) && is_array($last_arg) ) ? $last_arg : array();
+		$options = wp_parse_args($options, $options_def); 
 		//Check if field should be formatted
-		if ( is_string($ret) && ($num_args = func_num_args()) > 0 && ($format = func_get_arg($num_args - 1)) && true === $format ) {
+		if ( is_string($ret) && !empty($options['format']) ) {
+			//Clear format option if it is an invalid value
+			if ( is_bool($options['format']) || is_int($options['format']) )
+				$options['format'] = null;
+			//Setup values
+			$wrap = array('open' => '[', 'close' => ']');
+			if ( isset($options['wrap']) && is_array($options['wrap']) )
+				$wrap = wp_parse_args($options['wrap'], $wrap);
+			$wrap_trailing = ( isset($options['wrap_trailing']) ) ? !!$options['wrap_trailing'] : true;
+			switch ( $options['format'] ) {
+				case 'attr_id' :
+					$wrap = (array('open' => '_', 'close' => '_'));
+					$wrap_trailing = false;
+					break;
+			}
 			$c = $field->get_caller();
 			$field_id = array($ret);
-			$wrap = array(
-				'open'	=> '[',
-				'close'	=> ']'	
-			);
 			while ( !!$c ) {
 				//Add ID of current field to array
 				if ( isset($c->id) && is_a($c, $this->base_class) )
@@ -438,7 +455,7 @@ class CNR_Content_Base extends CNR_Base {
 			$field_id[] = 'attributes';
 
 			//Convert array to string
-			return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . $wrap['close'];
+			return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . ( $wrap_trailing ? $wrap['close'] : '');
 		}
 		return $ret;
 	}
@@ -893,7 +910,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * Parse field layout with a regular expression
 	 * @param string $layout Layout data
 	 * @param string $search Regular expression pattern to search layout for
-	 * @return array Associative array with containing all of the regular expression matches in the layout data
+	 * @return array Associative array containing all of the regular expression matches in the layout data
 	 * 	Array Structure:
 	 *		root => placeholder tags
 	 *				=> Tag instances (array)
@@ -1122,7 +1139,21 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @return string Placeholder output
 	 */
 	function process_placeholder_id($ph_output, $field, $placeholder, $layout, $data) {
-		return $field->get_id(true);
+		//Get attributes
+		$args = wp_parse_args($placeholder['attributes'], array('format' => 'attr_id')); 
+		return $field->get_id($args);
+	}
+	
+	/**
+	 * Build Field name attribute
+	 * Name is formatted as an associative array for processing by PHP after submission
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
+	 */
+	function process_placeholder_name($ph_output, $field, $placeholder, $layout, $data) {
+		//Get attributes
+		$args = wp_parse_args($placeholder['attributes'], array('format' => 'default')); 
+		return $field->get_id($args);
 	}
 
 	/**
@@ -1362,7 +1393,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 		//Add field to content type
 		$this->fields[$id] =& $field;
 		//Add field to group
-		$this->add_to_group($group, $field);
+		$this->add_to_group($group, $field->id);
 		return $field;
 	}
 
@@ -1669,7 +1700,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base->set_description('Default Element');
 		$base->set_property('tag', 'span');
 		$base->set_property('class', '', 'attr');
-		$base->set_layout('form', '<{tag} name="{field_id}" id="{field_id}" {properties ref_base="root" group="attr"} />');
+		$base->set_layout('form', '<{tag} name="{field_name}" id="{field_id}" {properties ref_base="root" group="attr"} />');
 		$base->set_layout('label', '<label for="{field_id}">{label}</label>');
 		$base->set_layout('display', '{data format="display"}');
 		$this->register_field($base);
@@ -1679,7 +1710,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base_closed->set_parent('base');
 		$base_closed->set_description('Default Element (Closed Tag)');
 		//$base_closed->set_property('value');
-		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_id}" {properties ref_base="root" group="attr"}>');
+		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_name}" {properties ref_base="root" group="attr"}>');
 		$base_closed->set_layout('form_end', '</{tag}>');
 		$base_closed->set_layout('form', '{form_start ref_base="layout"}{data}{form_end ref_base="layout"}');
 		$this->register_field($base_closed);
@@ -1707,6 +1738,12 @@ class CNR_Content_Utilities extends CNR_Base {
 		$ta->set_property('cols', 40, 'attr');
 		$ta->set_property('rows', 3, 'attr');
 		$this->register_field($ta);
+		
+		//Rich Text
+		$rt = new CNR_Field_Type('richtext', 'textarea');
+		$rt->set_property('class', 'theEditor {inherit}');
+		$rt->set_layout('form', '<div class="rt_container">{inherit}</div>');
+		$this->register_field($rt);
 
 		//Location
 		$location = new CNR_Field_Type('location');

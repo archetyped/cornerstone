@@ -100,6 +100,16 @@ ul.empty {
 	visibility: hidden;
 }
 
+/* Fields */
+
+.rt_container {
+	border: 1px solid #dfdfdf;
+}
+
+.rt_container textarea {
+	border: 0;
+}
+
 /* Management Page */
 
 .tablenav #cnr_section {

@@ -145,10 +145,7 @@ class CNR_Post_Query extends CNR_Base {
 		if ( ! $this->arg_isset($p_arg) ) {
 			$parent = null;
 			if ( is_page() ) {
-				$parent = $wp_query->posts[0]->ID;
-			}
-			elseif ( !is_home() && $wp_query->current_post != -1 && isset($GLOBALS['post']) && is_object($GLOBALS['post']) && $this->util->property_exists($GLOBALS['post'], 'ID') ) {
-				$parent = $GLOBALS['post']->ID;
+				$parent = $wp_query->get_queried_object_id();
 			}
 			if ( !! $parent )
 				$this->set_arg($p_arg, $parent);
@@ -546,7 +543,7 @@ class CNR_Post extends CNR_Base {
 	 * @return array Modified init array
 	 */
 	function admin_mce_before_init($initArray) {
-		$initArray['content_css'] = $this->util->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
+		//$initArray['content_css'] = $this->util->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
 		return $initArray;
 	}
 	

@@ -128,6 +128,11 @@ class CNR_Utilities {
 		return $this->get_path_base() . '/' . $file;
 	}
 	
+	function get_plugin_base_name() {
+		$file = $this->get_plugin_base_file();
+		return plugin_basename($file);
+	}
+	
 	/**
 	 * Retrieve current action based on URL query variables
 	 * @param mixed $default (optional) Default action if no action exists
