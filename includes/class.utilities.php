@@ -84,6 +84,57 @@ class CNR_Utilities {
 	}
 	
 	/**
+	 * Joins and normalizes the slashes in the paths passed to method
+	 * All forward/back slashes are converted to forward slashes
+	 * Multiple path segments can be passed as additional argments
+	 * @param string $path Path to normalize
+	 * @param bool $trailing_slash (optional) Whether or not normalized path should have a trailing slash or not (Default: FALSE)
+	 *  If multiple path segments are passed, $trailing_slash will be the LAST parameter (default value used if omitted)
+	 */
+	function normalize_path($path, $trailing_slash = false) {
+		$sl_f = '/';
+		$sl_b = '\\';
+		$parts = func_get_args();
+		if ( func_num_args() > 1 ) {
+			if ( is_bool(($tr = $parts[count($parts) - 1])) ) {
+				$trailing_slash = $tr;
+				//Remove from args array
+				array_pop($parts);
+			} else {
+				$trailing_slash = false;
+			}
+			$first = true;
+			//Trim trailing slashes from path parts
+			foreach ( $parts as $key => $part ) {
+				$part = trim($part);
+				//Special Trim
+				$parts[$key] = trim($part, $sl_f . $sl_b);
+				//Verify path still contains value
+				if ( empty($parts[$key]) ) {
+					unset($parts[$key]);
+					continue;
+				}
+				//Only continue processing the first valid path segment
+				if ( $first )
+					!!$first;
+				else
+					continue;
+				//Add back leading slash if necessary
+				if ( $part[0] == $sl_f || $part[0] == $sl_b )
+					$parts[$key] = $sl_f . $parts[$key];
+				
+			}
+		}
+		//Join path parts together
+		$parts = implode($sl_b, $parts);
+		$parts = str_replace($sl_b, $sl_f, $parts);
+		//Add trailing slash (if necessary)
+		if ( $trailing_slash )
+			$parts . $sl_f;
+		return $parts;
+	}
+	
+	/**
 	 * Returns URL of file (assumes that it is in plugin directory)
 	 * @param string $file name of file get URL
 	 * @return string File path
@@ -97,16 +148,36 @@ class CNR_Utilities {
 	}
 	
 	/**
+	 * Retrieves file extension
+	 * @param string $file file name/path
+	 * @return string File's extension
+	 */
+	function get_file_extension($file) {
+		$ret = '';
+		$sep = '.';
+		if ( is_string($icon) && ( $rpos = strrpos($file, $sep) ) !== false ) 
+			$ret = substr($file, $rpos + 1);
+		return $ret;
+	}
+	
+	/**
+	 * Checks if file has specified extension
+	 * @param string $file File name/path
+	 * @param string $extension File ending to check $file for
+	 * @return bool TRUE if file has extension
+	 */
+	function has_file_extension($file, $extension) {
+		return ( $this->get_file_extension($file) == $extension ) ? true : false;
+	}
+	
+	/**
 	 * Retrieve base URL for plugin-specific files
 	 * @return string Base URL
 	 */
 	function get_url_base() {
 		static $url_base = '';
 		if ( '' == $url_base ) {
-			$sl_f = '/';
-			$sl_b = '\\';
-			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', str_replace($sl_f, $sl_b, dirname(dirname(__FILE__))));
-			$url_base = str_replace($sl_b, $sl_f, WP_PLUGIN_URL . $plugin_dir);
+			$url_base = $this->normalize_path(WP_PLUGIN_URL, $this->get_plugin_base());
 		}
 		return $url_base;
 	}
@@ -114,13 +185,17 @@ class CNR_Utilities {
 	function get_path_base() {
 		static $path_base = '';
 		if ( '' == $path_base ) {
-			$sl_f = '/';
-			$sl_b = '\\';
-			$plugin_dir = str_replace(str_replace($sl_f, $sl_b, WP_PLUGIN_DIR), '', str_replace($sl_f, $sl_b, dirname(dirname(__FILE__))));
-			$path_base = str_replace($sl_b, $sl_f, WP_PLUGIN_DIR . $plugin_dir);
+			$path_base = $this->normalize_path(WP_PLUGIN_DIR, $this->get_plugin_base());
 		}
-		
 		return $path_base;
+	}
+	
+	function get_plugin_base() {
+		static $plugin_dir = '';
+		if ( '' == $plugin_dir ) {
+			$plugin_dir = str_replace($this->normalize_path(WP_PLUGIN_DIR), '', $this->normalize_path(dirname(dirname(__FILE__))));
+		}
+		return $plugin_dir;
 	}
 	
 	function get_plugin_base_file() {
