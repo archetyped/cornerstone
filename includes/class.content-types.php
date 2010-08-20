@@ -116,6 +116,12 @@ class CNR_Content_Base extends CNR_Base {
 	var $styles = array();
 
 	/**
+	 * Hooks (Filters/Actions) for object
+	 * @var array
+	 */
+	var $hooks = array();
+	
+	/**
 	 * Legacy Constructor
 	 */
 	function CNR_Content_Base($id = '', $parent = null) {
@@ -521,7 +527,77 @@ class CNR_Content_Base extends CNR_Base {
 		return $this->get_member_value('description', '','', $dir);
 		return $desc;
 	}
-
+	
+	/*-** Hooks **-*/
+	
+	/**
+	 * Retrieve hooks added to object
+	 * @return array Hooks
+	 */
+	function get_hooks() {
+		return $this->get_member_value('hooks', '', array());
+	}
+	
+	/**
+	 * Add hook for object
+	 * @see add_filter() for parameter defaults
+	 * @param $tag
+	 * @param $function_to_add
+	 * @param $priority
+	 * @param $accepted_args
+	 */
+	function add_hook($tag, $function_to_add, $priority = 10, $accepted_args = 1) {
+		//Create new array for tag (if not already set)
+		if ( !isset($this->hooks[$tag]) )
+			$this->hooks[$tag] = array();
+		//Build Unique ID
+		if ( is_string($function_to_add) )
+			$id = $function_to_add;
+		elseif ( is_array($function_to_add) && !empty($function_to_add) )
+			$id = strval($function_to_add[count($function_to_add) - 1]);
+		else
+			$id = 'function_' . ( count($this->hooks[$tag]) + 1 ); 
+		//Add hook
+		$this->hooks[$tag][$id] = func_get_args();
+	}
+	
+	/**
+	 * Convenience method for adding an action for object
+	 * @see add_filter() for parameter defaults
+	 * @param $tag
+	 * @param $function_to_add
+	 * @param $priority
+	 * @param $accepted_args
+	 */
+	function add_action($tag, $function_to_add, $priority = 10, $accepted_args = 1) {
+		$this->add_hook($tag, $function_to_add, $priority, $accepted_args);
+	}
+	
+	/**
+	 * Convenience method for adding a filter for object
+	 * @see add_filter() for parameter defaults
+	 * @param $tag
+	 * @param $function_to_add
+	 * @param $priority
+	 * @param $accepted_args
+	 */
+	function add_filter($tag, $function_to_add, $priority = 10, $accepted_args = 1) {
+		$this->add_hook($tag, $function_to_add, $priority, $accepted_args);
+	}
+	
+	/*-** Dependencies **-*/
+	
+	/**
+	 * Adds dependency to object
+	 * @param string $type Type of dependency to add (script, style)
+	 * @param array|string $context When dependency will be added (@see CNR_Utilities::get_action() for possible contexts)
+	 * @see wp_enqueue_script for the following of the parameters
+	 * @param $handle
+	 * @param $src
+	 * @param $deps
+	 * @param $ver
+	 * @param $ex
+	 */
 	function add_dependency($type, $context, $handle, $src = false, $deps = array(), $ver = false, $ex = false) {
 		$args = func_get_args();
 		//Remove type/context from arguments
@@ -529,30 +605,61 @@ class CNR_Content_Base extends CNR_Base {
 
 		//Set context
 		if ( !is_array($context) ) {
+			//Wrap single contexts in an array
 			if ( is_string($context) )
 				$context = array($context);
 			else 
 				$context = array();
 		}
+		//Add file to instance property
 		$this->{$type}[$handle] = array('context' => $context, 'params' => $args);
 	}
-
+	
+	/**
+	 * Add script to object to be added in specified contexts
+	 * @param array|string $context Array of contexts to add script to page
+	 * @see wp_enqueue_script for the following of the parameters
+	 * @param $handle
+	 * @param $src
+	 * @param $deps
+	 * @param $ver
+	 * @param $in_footer
+	 */
 	function add_script( $context, $handle, $src = false, $deps = array(), $ver = false, $in_footer = false ) {
 		$args = func_get_args();
+		//Add file type to front of arguments array
 		array_unshift($args, 'scripts');
 		call_user_func_array(array(&$this, 'add_dependency'), $args);
 	}
 
+	/**
+	 * Retrieve script dependencies for object
+	 * @return array Script dependencies
+	 */
 	function get_scripts() {
 		return $this->get_member_value('scripts', '', array());
 	}
-
+	
+	/**
+	 * Add style to object to be added in specified contexts
+	 * @param array|string $context Array of contexts to add style to page
+	 * @see wp_enqueue_style for the following of the parameters
+	 * @param $handle
+	 * @param $src
+	 * @param $deps
+	 * @param $ver
+	 * @param $in_footer
+	 */
 	function add_style( $handle, $src = false, $deps = array(), $ver = false, $media = false ) {
 		$args = func_get_args();
 		array_unshift($args, 'styles');
 		call_user_method_array('add_dependency', $this, $args);
 	}
 
+	/**
+	 * Retrieve Style dependencies for object
+	 * @return array Style dependencies
+	 */
 	function get_styles() {
 		return $this->get_member_value('styles', '', array());
 	}
@@ -1651,6 +1758,12 @@ class CNR_Content_Type extends CNR_Content_Base {
 class CNR_Content_Utilities extends CNR_Base {
 
 	/**
+	 * Array of hooks called
+	 * @var array
+	 */
+	var $hooks_processed = array();
+	
+	/**
 	 * Initialize content type functionality
 	 */
 	function init() {
@@ -1664,7 +1777,11 @@ class CNR_Content_Utilities extends CNR_Base {
 	function register_hooks() {
 		//Register types
 		add_action('init', $this->m('register_types'));
-
+		add_action('init', $this->m('add_hooks'), 11);
+		
+		//Enqueue scripts for fields in current post type
+		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
+		
 		//Add menus
 		//add_action('admin_menu', $this->m('admin_menu'));
 
@@ -1679,11 +1796,12 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Save Field data/Content type
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
 
-		//Enqueue scripts for fields in current post type
-		add_action('admin_enqueue_scripts', $this->m('enqueue_files'));
-
 		//Modify post query for content type compatibility
 		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+	}
+	
+	function test() {
+		$this->debug->print_message(current_filter());
 	}
 
 	/**
@@ -1743,6 +1861,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$rt = new CNR_Field_Type('richtext', 'textarea');
 		$rt->set_property('class', 'theEditor {inherit}');
 		$rt->set_layout('form', '<div class="rt_container">{inherit}</div>');
+		$rt->add_action('admin_print_footer_scripts', 'wp_tiny_mce', 25);
 		$this->register_field($rt);
 
 		//Location
@@ -1962,12 +2081,12 @@ class CNR_Content_Utilities extends CNR_Base {
 			$pt[] = $type;
 		}
 	}
-
+	
 	/**
-	 * Enqueues files for fields in current content type
-	 * @param string $page Current context
+	 * Retrieves current context (content type, action)
+	 * @return array Content Type and Action of current request
 	 */
-	function enqueue_files($page = null) {
+	function get_context() {
 		$post = false;
 		if ( isset($GLOBALS['post']) && !is_null($GLOBALS['post']) )
 			$post = $GLOBALS['post'];
@@ -1975,25 +2094,60 @@ class CNR_Content_Utilities extends CNR_Base {
 			$post = $_REQUEST['post_id'];
 		elseif ( isset($_REQUEST['post']) )
 			$post = $_REQUEST['post'];
-
+		elseif ( isset($_REQUEST['post_type']) )
+			$post = $_REQUEST['post_type'];
+		//Get action
 		$action = $this->util->get_action();
 		if ( empty($post) )
 			$post = $this->get_page_type();
 		//Get post's content type
-		if ( !empty($post) ) {
-			$ct =& $this->get_type($post);
-			$file_types = array('scripts' => 'script', 'styles' => 'style');
-			//Get content type fields
-			foreach ( $ct->fields as $field ) {
-				//Enqueue scripts/styles for each field
-				foreach ( $file_types as $type => $func_base ) {
-					$deps = $field->{"get_$type"}();
-					foreach ( $deps as $handle => $args ) {
-						//Confirm context
-						if ( 'all' == $args['context'] || in_array($page, $args['context']) || in_array($action, $args['context']) ) {
-							$this->enqueue_file($func_base, $args['params']);
-						}
+		$ct =& $this->get_type($post);
+		
+		return array(&$ct, $action);
+	}
+	
+	/**
+	 * Enqueues files for fields in current content type
+	 * @param string $page Current context
+	 */
+	function enqueue_files($page = null) {
+		list($ct, $action) = $this->get_context();
+		$file_types = array('scripts' => 'script', 'styles' => 'style');
+		//Get content type fields
+		foreach ( $ct->fields as $field ) {
+			//Enqueue scripts/styles for each field
+			foreach ( $file_types as $type => $func_base ) {
+				$deps = $field->{"get_$type"}();
+				foreach ( $deps as $handle => $args ) {
+					//Confirm context
+					if ( in_array('all', $args['context']) || in_array($page, $args['context']) || in_array($action, $args['context']) ) {
+						$this->enqueue_file($func_base, $args['params']);
 					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Add plugin hooks for fields used in current request
+	 */
+	function add_hooks() {
+		list($ct, $action) = $this->get_context();
+		//Iterate through content type fields and add hooks from fields
+		foreach ( $ct->fields as $field ) {
+			//Iterate through hooks added to field
+			$hooks = $field->get_hooks(); 
+			foreach ( $hooks as $tag => $callback ) {
+				//Iterate through function callbacks added to tag
+				foreach ( $callback as $id => $args ) {
+					//Check if hook/function was already processed
+					if ( isset($this->hooks_processed[$tag][$id]) )
+						continue;
+					//Add hook/function to list of processed hooks 
+					if ( !is_array($this->hooks_processed[$tag]) )
+						$this->hooks_processed[$tag] = array($id => true);
+					//Add hook to WP
+					call_user_func_array('add_filter', $args);
 				}
 			}
 		}
