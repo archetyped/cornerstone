@@ -180,7 +180,6 @@ class CNR_Post_Query extends CNR_Base {
 		remove_filter($filter, $callback);
 		//Save retrieved posts to array
 		$this->load($posts);
-
 		//Return retrieved posts so that array may be manipulated further if desired
 		return $this->posts;
 	}
@@ -553,7 +552,7 @@ class CNR_Post extends CNR_Base {
 	 * @return array Modified array of TinyMCE plugins
 	 */
 	function admin_mce_external_plugins($plugin_array) {
-		$plugin_array['cnr_inturl'] = $this->util->get_file_url('mce/plugins/inturl/editor_plugin.js');
+		$plugin_array[$this->add_prefix('inturl')] = $this->util->get_file_url('mce/plugins/inturl/editor_plugin.js');
 		return $plugin_array;
 	}
 	
@@ -573,7 +572,7 @@ class CNR_Post extends CNR_Base {
 		//Insert button into buttons array
 		$start = array_slice($buttons, 0, $pos);
 		$end = array_slice($buttons, $pos);
-		$start[] = 'cnr_inturl';
+		$start[] = $this->add_prefix('inturl');
 		$buttons = array_merge($start, $end);
 		return $buttons;
 	}

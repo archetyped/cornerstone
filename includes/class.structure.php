@@ -167,6 +167,7 @@ class CNR_Structure extends CNR_Base {
 		if ( !$this->using_post_permastruct()
 			|| ( !$this->util->check_post($post) )
 			|| ( empty($post->post_name) && empty($post->post_title) )
+			|| ( 'draft' == $post->post_status && empty($post->post_name) )
 			|| ( !$cnr_content_utilities->is_default_post_type($post->post_type) && empty($post->post_parent) ) )
 			return $permalink;
 		//Get base URL
@@ -212,7 +213,6 @@ class CNR_Structure extends CNR_Base {
 		//Do not process query if custom post permastruct is not in use
 		if ( !$this->using_post_permastruct() )
 			return;
-			
 		$qvar = $this->get_query_var();
 		$qv =& $q->query_vars;
 

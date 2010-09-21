@@ -1799,10 +1799,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		//Modify post query for content type compatibility
 		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
 	}
-	
-	function test() {
-		$this->debug->print_message(current_filter());
-	}
 
 	/**
 	 * Initialize fields and content types
