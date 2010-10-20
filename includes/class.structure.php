@@ -14,10 +14,22 @@ class CNR_Structure extends CNR_Base {
 	/* Properties */
 	
 	/**
+	 * Postname token
+	 * @var string
+	 */
+	var $tok_post = '%postname%';
+	
+	/**
+	 * Post Path token
+	 * @var string
+	 */
+	var $tok_path = '%postpath%';
+	
+	/**
 	 * Custom post permalink structure 
 	 * @var string
 	 */
-	var $permalink_structure = '/%postpath%/%postname%/';
+	var $permalink_structure = null;
 	
 	/* Constructor */
 	
@@ -33,6 +45,7 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function __construct() {
 		parent::__construct();
+		$this->permalink_structure = "/$this->tok_path/$this->tok_post/";
 	}
 	
 	/* Methods */
@@ -51,9 +64,10 @@ class CNR_Structure extends CNR_Base {
 		add_action('pre_get_posts', $this->m('pre_get_posts'));
 		
 		//Permalink
-		add_filter('post_link', $this->m('post_link'), 10, 2);
-		add_filter('post_type_link', $this->m('post_link'), 10, 2);
-		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
+		add_filter('post_link', $this->m('post_link'), 10, 3);
+		add_filter('post_type_link', $this->m('post_link'), 10, 3);
+		//TODO: Handle redirect_canonic (currently not evaluated)
+//		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
 		
 		//Admin
 		add_filter('admin_enqueue_scripts', $this->m('admin_enqueue_scripts'));
@@ -154,6 +168,9 @@ class CNR_Structure extends CNR_Base {
 	 * 
 	 * @see get_permalink
 	 * @see get_post_permalink
+	 * 
+	 * @todo Enable redirect_canonical functionality
+	 *
 	 */
 	function post_link($permalink, $post, $leavename = false) {
 		global $wp_query, $cnr_content_utilities;
@@ -169,11 +186,30 @@ class CNR_Structure extends CNR_Base {
 			|| ( empty($post->post_name) && empty($post->post_title) )
 			|| ( 'draft' == $post->post_status && empty($post->post_name) )
 			|| ( !$cnr_content_utilities->is_default_post_type($post->post_type) && empty($post->post_parent) ) )
-			return $permalink;
+			return $permalink;	
+		
+		/*
+		//Canonical redirection usage
+		if ( is_string($post) ) {
+			//Only process single posts
+			if ( is_single() ) {
+				$post = $wp_query->get_queried_object();
+			} else {
+				//Stop processing for all other content (return control to redirect_canonical)
+				return false;
+			}
+		}
+		*/
+			
 		//Get base URL
 		$base = get_bloginfo('url');
 		
-		$name = ( !empty($post->post_name) ) ? $post->post_name : '';
+		$name = '';
+		//Use permalink placeholder if sample permalink is being generated (@see get_sample_permalink())
+		if ( isset($post->filter) && 'sample' == $post->filter )
+			$name = '%postname%';
+		elseif ( !empty($post->post_name) )
+			$name = $post->post_name;
 		//Build name from title (if not yet set)
 		if ( empty($name) ) {
 			$post->post_status = 'publish';
@@ -181,22 +217,11 @@ class CNR_Structure extends CNR_Base {
 			$name = wp_unique_post_slug($name, $post->ID, $post->post_status, $post->post_type, $post->post_parent);
 		}
 		
-		//Canonical redirection usage
-		if ( is_string($post) ) {
-			//Only process single posts
-			if ( is_single() ) {
-				$post = $wp_query->get_queried_object();
-			} else {
-				//Stop processing for all other content (return control to redirect_canonical
-				return false;
-			}
-		}
-		
 		//Get post path
 		$path = $this->get_path($post);
 		
 		//Set permalink (Add trailing slash)
-		$permalink = $base . $path . $name . '/';
+		$permalink = trailingslashit($base . $path . $name);
 
 		return $permalink;
 	}

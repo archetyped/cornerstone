@@ -543,15 +543,14 @@ class CNR_Utilities {
 	 * @global array $submenu Admin page submenus
 	 */
 	function add_submenu_page($parent, $page_title, $menu_title, $capability, $file, $function = '', $pos = false) {
-		
 		//Add submenu page as usual
 		$args = func_get_args();
 		$hookname = call_user_func_array('add_submenu_page', $args);
-		
 		if ( is_int($pos) ) {
 			global $submenu;
 			//Get last submenu added
 			$parent = $this->get_submenu_parent_file($parent);
+			if ( isset($submenu[$parent]) ) {
 			$subs =& $submenu[$parent];
 
 			//Make sure menu isn't already in the desired position
@@ -568,6 +567,7 @@ class CNR_Utilities {
 					$subs = array_merge($top, $bottom);
 				}
 			}
+		}
 		}
 		
 		return $hookname;
