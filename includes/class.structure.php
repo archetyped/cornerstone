@@ -305,59 +305,21 @@ class CNR_Structure extends CNR_Base {
 		
 		//Find rules containing subpattern
 		$patterns = array_keys($rules);
-		$limit = 1;
 		
-		$this->debug->timer_start('splice_merge');
-		for ( $x = 0; $x < $limit; $x++ ) {
-			$rules_temp = $rules;
-			foreach ( $patterns as $idx => $patt ) {
-				$rule = $query = '';
-				//Check if pattern contains subpattern
-				if ( strpos($patt, $subpattern_old) !== false && strpos($rules_temp[$patt], $qvar) !== false ) {
-					//Generate new pattern and query pair
-					$rule = str_replace($subpattern_old, $subpattern_new, $patt);
-					$query = $rules_temp[$patt];
-					//Split rules array at current rule
-					$end = array_splice($rules_temp, $idx);
-					//Remove current rule
-					array_shift($end);
-					//Add new rule
-					$rules_temp[$rule] = $query;
-					//Merge rules
-					$rules_temp = array_merge($rules_temp, $end);
-				}
+		foreach ( $patterns as $idx => $patt ) {
+			$rule = '';
+			//Check if pattern contains subpattern
+			if ( strpos($patt, $subpattern_old) !== false && strpos($rules[$patt], $qvar) !== false ) {
+				//Generate new pattern
+				$rule = str_replace($subpattern_old, $subpattern_new, $patt);
+			} else {
+				$rule = $patt;
 			}
+			//Add rule to temp array
+			$rules_temp[$rule] = $rules[$patt];
 		}
-		$this->debug->timer_stop('splice_merge');
 		
-		$this->debug->timer_start('build');
-		for ( $x = 0; $x < $limit; $x++ ) {
-			$rules_temp = array();
-			foreach ( $patterns as $idx => $patt ) {
-				$rule = '';
-				//Check if pattern contains subpattern
-				if ( strpos($patt, $subpattern_old) !== false && strpos($rules[$patt], $qvar) !== false ) {
-					//Generate new pattern and query pair
-					$rule = str_replace($subpattern_old, $subpattern_new, $patt);
-				} else {
-					$rule = $patt;
-				}
-				//Add new rule
-				$rules_temp[$rule] = $rules[$patt];
-			}
-		}
-		$this->debug->timer_stop('build');
-		
-		$splice = $this->debug->timer_get('splice_merge');
-		$build = $this->debug->timer_get('build');
-		
-		$winner = 'tie';
-		if ( $splice < $build ) {
-			$winner = 'Splice by ' . ((1-($splice/$build))*100) . '%';
-		} elseif ( $build < $splice ) {
-			$winner = 'Build by ' . ((1-($build/$splice))*100) . '%';
-		}
-		$this->debug->print_message('Iterations: ' . $limit, 'Splice & Merge: ' . $splice, 'Build: ' . $build, 'Winner: ' . $winner);
+		$this->debug->print_message($rules_temp);
 		//Return modified rewrite rules
 		return $rules_temp;
 	}
