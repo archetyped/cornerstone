@@ -140,7 +140,7 @@ class CNR_Utilities {
 		$parts = str_replace($sl_b, $sl_f, $parts);
 		//Add trailing slash (if necessary)
 		if ( $trailing_slash )
-			$parts . $sl_f;
+			$parts .= $sl_f;
 		return $parts;
 	}
 	
@@ -733,7 +733,7 @@ class CNR_Debug {
 		}
 	}
 	
-	function timer_show($name = 'default', $format = 'Elapsed time: %s') {
+	function timer_get($name = 'default') {
 		if (!isset($this->timers[$name]) 
 			|| !is_object($this->timers[$name])
 			|| $this->timers[$name]->end < $this->timers[$name]->start
@@ -742,6 +742,11 @@ class CNR_Debug {
 		}
 		//Get difference in times
 		$res = (float)$this->timers[$name]->end - (float)$this->timers[$name]->start;
+		return $res;
+	}
+	
+	function timer_show($name = 'default', $format = 'Elapsed time: %s') {
+		$res = $this->timer_get($name);
 		$this->print_message(sprintf($format, $res));
 	}
 	

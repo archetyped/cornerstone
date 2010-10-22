@@ -45,7 +45,7 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function __construct() {
 		parent::__construct();
-		$this->permalink_structure = "/$this->tok_path/$this->tok_post/";
+		$this->permalink_structure = '/' . $this->util->normalize_path($this->tok_path, $this->tok_post, true);
 	}
 	
 	/* Methods */
@@ -56,6 +56,9 @@ class CNR_Structure extends CNR_Base {
 	
 	function register_hooks() {
 		parent::register_hooks();
+
+		//Rewrite Rules
+		add_filter('rewrite_rules_array', $this->m('rewrite_rules_array'));
 		
 		//Request
 		add_filter('post_rewrite_rules', $this->m('post_rewrite_rules'));
@@ -66,7 +69,7 @@ class CNR_Structure extends CNR_Base {
 		//Permalink
 		add_filter('post_link', $this->m('post_link'), 10, 3);
 		add_filter('post_type_link', $this->m('post_link'), 10, 3);
-		//TODO: Handle redirect_canonic (currently not evaluated)
+		//TODO: Handle redirect_canonical (currently not evaluated)
 //		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
 		
 		//Admin
@@ -288,6 +291,78 @@ class CNR_Structure extends CNR_Base {
 	}
 	
 	/**
+	 * Modifies rewrite rules array
+	 * Removes unnecessary paged permalink structure for Pages/Content Types (/pagename/[0-9]/)
+	 * - Conflicts with /pagename/postname/ permalink structure
+	 * @param array $rules Generated rewrite rules
+	 * @return array Modified rewrite rules
+	 */
+	function rewrite_rules_array($rules) {
+		$subpattern_old = '(/[0-9]+)?/?$';
+		$subpattern_new = '(/)?$';
+		$qvar = '&page=';
+		$rules_temp = array();
+		
+		//Find rules containing subpattern
+		$patterns = array_keys($rules);
+		$limit = 1;
+		
+		$this->debug->timer_start('splice_merge');
+		for ( $x = 0; $x < $limit; $x++ ) {
+			$rules_temp = $rules;
+			foreach ( $patterns as $idx => $patt ) {
+				$rule = $query = '';
+				//Check if pattern contains subpattern
+				if ( strpos($patt, $subpattern_old) !== false && strpos($rules_temp[$patt], $qvar) !== false ) {
+					//Generate new pattern and query pair
+					$rule = str_replace($subpattern_old, $subpattern_new, $patt);
+					$query = $rules_temp[$patt];
+					//Split rules array at current rule
+					$end = array_splice($rules_temp, $idx);
+					//Remove current rule
+					array_shift($end);
+					//Add new rule
+					$rules_temp[$rule] = $query;
+					//Merge rules
+					$rules_temp = array_merge($rules_temp, $end);
+				}
+			}
+		}
+		$this->debug->timer_stop('splice_merge');
+		
+		$this->debug->timer_start('build');
+		for ( $x = 0; $x < $limit; $x++ ) {
+			$rules_temp = array();
+			foreach ( $patterns as $idx => $patt ) {
+				$rule = '';
+				//Check if pattern contains subpattern
+				if ( strpos($patt, $subpattern_old) !== false && strpos($rules[$patt], $qvar) !== false ) {
+					//Generate new pattern and query pair
+					$rule = str_replace($subpattern_old, $subpattern_new, $patt);
+				} else {
+					$rule = $patt;
+				}
+				//Add new rule
+				$rules_temp[$rule] = $rules[$patt];
+			}
+		}
+		$this->debug->timer_stop('build');
+		
+		$splice = $this->debug->timer_get('splice_merge');
+		$build = $this->debug->timer_get('build');
+		
+		$winner = 'tie';
+		if ( $splice < $build ) {
+			$winner = 'Splice by ' . ((1-($splice/$build))*100) . '%';
+		} elseif ( $build < $splice ) {
+			$winner = 'Build by ' . ((1-($build/$splice))*100) . '%';
+		}
+		$this->debug->print_message('Iterations: ' . $limit, 'Splice & Merge: ' . $splice, 'Build: ' . $build, 'Winner: ' . $winner);
+		//Return modified rewrite rules
+		return $rules_temp;
+	}
+	
+	/**
 	 * Enqueues script to manage post permastruct to permalink admin options page
 	 * @param string $page Current page
 	 */
@@ -430,6 +505,12 @@ class CNR_Structure extends CNR_Base {
 		<?php endif;
 	}
 	
+	/**
+	 * Adds field for Section selection on the bulk edit form for posts
+	 * @see admin_quick_edit_custom_box()
+	 * @param string $column_name Name of custom column 
+	 * @param string $type Type of current item (post, page, etc.)
+	 */
 	function admin_bulk_edit_custom_box($column_name, $type) {
 		$this->admin_quick_edit_custom_box($column_name, $type, true);
 	}
