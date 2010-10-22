@@ -319,7 +319,6 @@ class CNR_Structure extends CNR_Base {
 			$rules_temp[$rule] = $rules[$patt];
 		}
 		
-		$this->debug->print_message($rules_temp);
 		//Return modified rewrite rules
 		return $rules_temp;
 	}
