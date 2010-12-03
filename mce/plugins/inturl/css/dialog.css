@@ -1,0 +1,54 @@
+#general_panel {
+	height: 100%;
+}
+
+.panel_wrapper {
+	border: 1px solid #919B9C;
+}
+
+select {
+	width: 50%;
+}
+optgroup {
+	padding-bottom: .5em;
+}
+.group_all .page {
+	font-weight: bold;
+}
+option.div {
+	border-bottom: 1px solid #ccc;
+	font-size: .5em;
+	height: 0px;
+	margin-bottom: 1em;
+}
+
+.input_group {
+	clear: both;
+	width: 100%;
+	overflow: hidden;
+	*height: 1%;
+	margin-bottom: .5em;
+}
+
+.input_group label,
+.input_group input,
+.input_group select {
+	float: left;
+}
+
+.input_group label {
+	width: 30%;
+}
+
+.input_group input,
+.input_group select {
+	width: 65%;
+}
+
+.input_group .note {
+	clear: both;
+	width: 65%;
+	margin-left: 30%;
+	padding: .2em .2em .5em;
+	color: #777;	
+}
