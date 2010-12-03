@@ -27,7 +27,7 @@ class Cornerstone extends CNR_Base {
 	 * @see posts_featured_cat()
 	 * @todo Remove need for this property
 	 */
-	var $posts_featured_cat = "feature";
+	var $posts_featured_cat = "features";
 	
 	/**
 	 * Featured posts container
