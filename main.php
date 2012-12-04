@@ -1,10 +1,10 @@
 <?php
 /* 
 Plugin Name: Cornerstone
-Plugin URI:
-Description: CMS Plugin for WP
-Version: 0
-Author: SM
+Plugin URI: http://archetyped.com/tools/cornerstone/
+Description: Enhanced content management for Wordpress
+Version: 0.7b1
+Author: Archetyped
 Author URI: http://archetyped.com
 */
 
@@ -12,27 +12,30 @@ Author URI: http://archetyped.com
  * @package Cornerstone 
  */
 require_once('model.php');
-$cnr =& new Cornerstone();
+$cnr = new Cornerstone();
 
-/* Page Level */
+/* Template tags */
 
 /**
- * Outputs formatted page title for current page
+ * Outputs feed links based on current page
  * @return void
- * @param string|array Arguments for formatting page title
- * May be an associative array or querystring-style list of arguments
  */
-function cnr_page_title($args = '') {
+function cnr_the_feed_links() {
 	global $cnr;
-	$cnr->page_title($args);
+	$cnr->feeds->the_links();
+}
+
+/*-** Child Content **-*/
+
+function cnr_is_section() {
+	return ( is_page() && cnr_have_children() ) ? true : false;
 }
 
 /**
  * Checks if current post/page has children elements
- * 
  * @return bool TRUE if post/page has children, FALSE otherwise
  */
-function cnr_has_children() {
+function cnr_have_children() {
 	global $cnr;
 	return $cnr->post_children_collection->has();
 }
@@ -47,26 +50,48 @@ function cnr_next_child() {
 	$cnr->post_children_collection->next();
 }
 
+/**
+ * Returns number of children in current request
+ * May not return total number of existing children (e.g. if output is paged, etc.)
+ * @return int Number of children returned in current request 
+ */
 function cnr_children_count() {
 	global $cnr;
 	return $cnr->post_children_collection->count();	
 }
 
+/**
+ * Returns total number of existing children
+ * @return int Total number of children
+ */
 function cnr_children_found() {
 	global $cnr;
 	return $cnr->post_children_collection->found();
 }
 
+/**
+ * Returns total number of pages of children
+ * Based on 'posts_per_page' option
+ * @return int Maximum number of pages
+ */
 function cnr_children_max_num_pages() {
 	global $cnr;
 	return $cnr->post_children_collection->max_num_pages();
 }
 
+/**
+ * Checks if current child item is the first child item
+ * @return bool TRUE if current item is first, FALSE otherwise
+ */
 function cnr_is_first_child() {
 	global $cnr;
 	return $cnr->post_children_collection->is_first();
 }
 
+/**
+ * Checks if current child item is the last child item
+ * @return bool TRUE if current item is last, FALSE otherwise
+ */
 function cnr_is_last_child() {
 	global $cnr;
 	return $cnr->post_children_collection->is_last();
@@ -90,7 +115,7 @@ function cnr_in_featured($post_id = null) {
 	return $cnr->posts_featured->contains($post_id);
 }
 
-function cnr_has_featured() {
+function cnr_have_featured() {
 	global $cnr;
 	return $cnr->posts_featured->has();
 }
@@ -122,17 +147,15 @@ function cnr_featured_count() {
 }
 
 /**
- * Checks if Post is "featured"
- * 
- * @return bool TRUE if post is featured, FALSE otherwise 
- * @param object $post (optional) Post to check.  Defaults to current post
+ * Returns total number of found posts
+ * @return int Total number of posts
  */
-function cnr_is_featured($post = null) {
+function cnr_featured_found() {
 	global $cnr;
-	return $cnr->post_is_featured($post);
+	return $cnr->posts_featured->found();
 }
 
-/*-** Post Content **-*/
+/*-** Post-Specific **-*/
 
 /**
  * Checks if post has content to display
@@ -159,42 +182,25 @@ function cnr_get_filesize($post = null, $formatted = true) {
 	/* Section */
 	
 /**
- * Retrieves the post's section data 
- * @return string post's section data 
- * @param string $type (optional) Type of data to return (Default: ID)
- * 	Possible values:
- * 	ID		Returns the ID of the section
- * 	name	Returns the name of the section
+ * Retrieves the post's section data
+ * @uses CNR_Post::get_section() 
+ * @param string $data (optional) Type of data to return (Default: ID)
+ * Possible values:
+ *  NULL		Full section post object
+ *	Column name	Post column data (if exists)
+ *
+ * @param int $id (optional) Post ID (Default: current post)
+ * @return mixed post's section (or column data if specified via $data parameter) 
  */
-function cnr_get_the_section($type = 'ID') {
-	return CNR_Post::get_section($type);
+function cnr_get_the_section($data = 'ID', $id = null) {
+	return CNR_Post::get_section($id, $data);
 }
 
 /**
  * Prints the post's section data
- * @param string $type (optional) Type of data to return (Default: ID)
- * @see cnr_get_the_section()
+ * @uses CNR_Post::the_section()
+ * @param string $data (optional) Type of data to return (Default: ID)
  */
-function cnr_the_section($type = 'ID') {
-	CNR_Post::the_section($type);
+function cnr_the_section($data = 'ID') {
+	CNR_Post::the_section(null, $data);
 }
-
-/**
- * Outputs HTML list of pages in specified page group
- * 
- * @return void
- * @param string $group Code (unique name) of page group to display
- * @param bool $wrap_list (optional) whether or not to wrap list in <ul></ul> tags.
- * 	Useful if page group list items are meant to be part of a larger list
- */
-function cnr_list_page_group($group, $wrap_list = true) {
-	$group = new CNR_Page_Group($group);
-	$group->list_pages($wrap_list);
-}
-
-function cnr_the_feed_links() {
-	global $cnr;
-	$cnr->feed_the_links();
-}
-
-?>

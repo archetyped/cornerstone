@@ -1,7 +1,7 @@
 /**
  * Internal URL MCE Plugin
  *
- * @author SM
+ * @author Archetyped
  * @package Cornerstone
  */
 
@@ -36,7 +36,7 @@
 						'isInturl':		function(e) {
 								return (ed.dom.hasClass(e, props.className)) ? true : false;
 							}
-						}
+					};
 			// Register the command so that it can be invoked by using tinyMCE.activeEditor.execCommand('cnr_inturl');
 			ed.addCommand(props.id, function() {
 				ed.windowManager.open({
@@ -56,8 +56,12 @@
 				cmd : props.id,
 				image : url + props.iconPath
 			});
+			
+			//Indent/Outdent shortcuts
+			ed.addShortcut('alt+shift+0', 'Indent', 'Indent');
+			ed.addShortcut('alt+shift+9', 'Outdent', 'Outdent');
 
-			//Format quicktag in editor
+			//Format quicktag in editor (HTML > Visual)
 			ed.onBeforeSetContent.add(function(ed, o) {
 				var reAnchor = /(\[inturl\s.*?)\banchor=("|'){0,1}(.*?\[\/inturl\])/g;
 				o.content = o.content.replace(reAnchor, '$1href=$2$3');
@@ -65,15 +69,21 @@
 				o.content = o.content.replace(re, '<a id="' + props.className + '_$2" class="' + props.className + ' link"$1$3>$4</a>'); 
 			});
 
-			//Revert content to quicktag
+			//Revert content to quicktag (Visual > HTML)
 			ed.onPostProcess.add(function(ed, o) {
 				if (o.get) {
+					
+					//Convert <a> elements to shortcode
 					var reInit = /<a\s([^>]*?)id="inturl_(\d+)"([^>]*)>(.*?)<\/a>/g;
 					o.content = o.content.replace(reInit, '[' + props.shortcode + ' id=$2$1$3]$4[/' + props.shortcode + ']');
-					var reClass = /\[inturl(.*?)\sclass=(?:'|"){1}(.*?)(?:'|"){1}(.*?)\](.*?)\[\/inturl\]/g
+					//Cleanup: Remove `class` attribute from shortcode
+					var reClass = /\[inturl([^\]]*?)\sclass=(?:'|"){1}([^\]]*?)(?:'|"){1}([^\]]*?)\](.*?)\[\/inturl\]/g
 					o.content = o.content.replace(reClass, '[' + props.shortcode + '$1$3]$4[/' + props.shortcode + ']');
-					var reAnchor = /\[inturl(.*?)\shref=(?:'|"){1}(.*?)(?:'|"){1}(.*?)\](.*?)\[\/inturl\]/g
+					//Cleanup: Remove `href` attribute from shortcode
+					var reAnchor = /\[inturl([^\]]*?)\shref=(?:'|"){1}([^\]]*?)(?:'|"){1}([^\]]*?)\](.*?)\[\/inturl\]/g
 					o.content = o.content.replace(reAnchor, '[' + props.shortcode + '$1 anchor="$2"$3]$4[/' + props.shortcode + ']');
+					/*
+					*/
 				}
 				
 				

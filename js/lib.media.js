@@ -1,14 +1,12 @@
 /**
  * Media
  * @package Cornerstone
- * @author SM
+ * @author Archetyped
  */
 
-/* Post */
-if ( typeof(cnr) == 'undefined' || typeof(cnr) != 'object' )
-	cnr = {};
 (function($) {
-	cnr['media'] = {
+
+if ( CNR && CNR.extend ) CNR.extend('media', {
 		/**
 		 * Convert array-based element IDs to standalone IDs
 		 * @param string el_id Element ID
@@ -29,9 +27,9 @@ if ( typeof(cnr) == 'undefined' || typeof(cnr) != 'object' )
 		 */
 		setPostMedia : function (a) {
 			if ( typeof(a) != 'undefined' ) {
-				var selContainer = '#' + escSelector(a.field) + '-data';
+				var selContainer = '#' + CNR.util.esc_selector(a.field) + '-data';
 				var container = $(selContainer);
-				var mediaElName = escSelector(a.field);
+				var mediaElName = CNR.util.esc_selector(a.field);
 				//Set Media ID
 				var mediaId = $(container).find("#" + mediaElName);
 				if ( mediaId.length == 0 ) {
@@ -100,8 +98,8 @@ if ( typeof(cnr) == 'undefined' || typeof(cnr) != 'object' )
 			var actEl;
 			var getEl = function (ident) {
 				ident = (typeof(ident) != 'undefined' && ident.length > 0) ? sep + ident : '';
-				return $('#' + escSelector(base) + ident);
-			}
+				return $('#' + CNR.util.esc_selector(base) + ident);
+			};
 			switch (action) {
 				case 'option_remove':
 					actEl = getEl('remove_confirmation').removeClass('confirmation-default');
@@ -123,5 +121,5 @@ if ( typeof(cnr) == 'undefined' || typeof(cnr) != 'object' )
 			
 			return false;
 		}
-}
+});
 })(jQuery);
