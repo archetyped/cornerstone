@@ -1,5 +1,6 @@
 === Cornerstone ===
 Contributors: Archetyped
+Donate: http://mycharitywater.org/archetyped-2012-fall
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
 Requires at least: 3.4.2
