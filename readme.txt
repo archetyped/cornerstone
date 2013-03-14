@@ -16,6 +16,9 @@ Cornerstone makes using your favorite web publishing platform (Wordpress) practi
 The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/cnr-0-7-beta/).
 Main changes
 
+#### Beta 2
+* Fix: Custom content types not displayed in sections (Unflappable Andy)
+
 #### Beta 1
 * Optimize: Permalink structure reset when plugin activated/deactivated
 * Optimize: Post Editor: Update permalink preview when section changed

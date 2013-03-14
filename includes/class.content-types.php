@@ -1867,7 +1867,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		add_action('save_post', $this->m('save_item_data'), 10, 2);
 
 		//Modify post query for content type compatibility
-		// add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
+		add_action('pre_get_posts', $this->m('pre_get_posts'), 20);
 	}
 
 	/**
