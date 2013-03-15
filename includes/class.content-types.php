@@ -4,6 +4,7 @@ require_once 'class.base.php';
 
 /* Variables */
 
+//Global content type variables
 if ( !isset($cnr_content_types) )
 	$cnr_content_types = array();
 if ( !isset($cnr_field_types) )
@@ -15,47 +16,79 @@ $cnr_content_utilities->init();
 
 /* Functions */
 
+/**
+ * Register handler for a placeholder in a content type template
+ * Placeholders allow templates to be populated with dynamic content at runtime
+ * Multiple handlers can be registered for a placeholder,
+ * thus allowing custom handlers to override default processing, etc.
+ * @uses CNR_Field_Type::register_placeholder_handler() to register placeholder
+ * @param string $placeholder Placeholder identifier
+ * @param callback $handler Callback function to use as handler for placeholder
+ * @param int $priority (optional) Priority of registered handler (Default: 10)
+ */
 function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10) {
 	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
 }
 
 /**
  * Checks if data exists for specified field
+ * @global $cnr_content_utilities
  * @param string $field_id ID of field to check for data
  * @param int|obj $item (optional) Post ID or object to check for field data (Default: global post)
  * @return bool TRUE if field data exists
- * 
- * @global $cnr_content_utilities
  */
 function cnr_has_data($field_id = null, $item = null) {
 	global $cnr_content_utilities;
 	return $cnr_content_utilities->has_item_data($item, $field_id);
 }
 
+/**
+ * Retrieve data from a field
+ * @global $cnr_content_utilities
+ * @see CNR_Content_Utilities::get_item_data() for more information
+ * @param string $field_id ID of field to retrieve
+ * @param string $layout (optional) Name of layout to use when returning data
+ * @param array $attr (optional) Additional attributes to pass to field
+ * @param int|object $item (optional) Post object to retrieve data from (Default: global post object)
+ * @param mixed $default Default value to return in case of errors (invalid field, no data, etc.)
+ * @return mixed Specified field data
+ */
 function cnr_get_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
 	global $cnr_content_utilities;
 	return $cnr_content_utilities->get_item_data($item, $field_id, $layout, $default, $attr);
 }
 
+/**
+ * Prints an item's field data
+ * @see CNR_Content_Utilities::the_item_data() for more information
+ * @param string $field_id Name of field to retrieve
+ * @param string $layout(optional) Layout to use when returning field data (Default: display)
+ * @param array $attr Additional items to pass to field
+ * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
+ * @param mixed $default Default value to return in case of errors, etc.
+ */
 function cnr_the_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
 	global $cnr_content_utilities;
 	$cnr_content_utilities->the_item_data($item, $field_id, $layout, $default, $attr);
 }
 
 /* Hooks */
+
+//Default placeholder handlers
 cnr_register_placeholder_handler('all', array('CNR_Field_Type', 'process_placeholder_default'), 11);
 cnr_register_placeholder_handler('field_id', array('CNR_Field_Type', 'process_placeholder_id'));
 cnr_register_placeholder_handler('field_name', array('CNR_Field_Type', 'process_placeholder_name'));
 cnr_register_placeholder_handler('data', array('CNR_Field_Type', 'process_placeholder_data'));
 cnr_register_placeholder_handler('loop', array('CNR_Field_Type', 'process_placeholder_loop'));
 cnr_register_placeholder_handler('data_ext', array('CNR_Field_Type', 'process_placeholder_data_ext'));
+cnr_register_placeholder_handler('rich_editor', array('CNR_Field_Type', 'process_placeholder_rich_editor'));
 
 /**
  * Content Types - Base Class
  * Core properties/methods for Content Type derivative classes
  * @package Cornerstone
  * @subpackage Content Types
- * @author SM
+ * @author Archetyped
  */
 class CNR_Content_Base extends CNR_Base {
 
@@ -135,6 +168,8 @@ class CNR_Content_Base extends CNR_Base {
 		parent::__construct();
 		$id = trim($id);
 		$this->id = $id;
+		if ( is_bool($parent) && $parent )
+			$parent = $id;
 		$this->set_parent($parent);
 	}
 
@@ -381,23 +416,26 @@ class CNR_Content_Base extends CNR_Base {
 	 * @param string|object $parent Parent ID or reference
 	 */
 	function set_parent($parent) {
-		//Validate parent object
-		if ( is_array($parent) && !empty($parent) )
-			$parent =& $parent[0];
-
-		//Retrieve reference object if ID was supplied
-		if ( is_string($parent) ) {
-			$parent = trim($parent);
-			//Check for existence of parent
-			$lookup = $this->base_class . 's';
-			if ( isset($GLOBALS[$lookup][$parent]) ) {
-				//Get reference to parent
-				$parent =& $GLOBALS[$lookup][$parent];
+		if ( !empty($parent) ) {
+			//Validate parent object
+			if ( is_array($parent) )
+				$parent =& $parent[0];
+	
+			//Retrieve reference object if ID was supplied
+			if ( is_string($parent) ) {
+				$parent = trim($parent);
+				//Check for existence of parent
+				$lookup = $this->base_class . 's';
+				if ( isset($GLOBALS[$lookup][$parent]) ) {
+					//Get reference to parent
+					$parent =& $GLOBALS[$lookup][$parent];
+				}
 			}
-		}
-		//Set reference to parent field type
-		if ( !empty($parent) && is_a($parent, $this->base_class) ) {
-			$this->parent =& $parent;
+			
+			//Set reference to parent field type
+			if ( is_a($parent, $this->base_class) ) {
+				$this->parent =& $parent;
+			}
 		}
 	}
 
@@ -670,11 +708,13 @@ class CNR_Content_Base extends CNR_Base {
  * Stores properties for a specific field
  * @package Cornerstone
  * @subpackage Content Types
- * @author SM
+ * @author Archetyped
  */
 class CNR_Field_Type extends CNR_Content_Base {
 	/* Properties */
-
+	
+	const USES_DATA = '{data}';
+	
 	/**
 	 * Base class name
 	 * @var string
@@ -844,7 +884,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param string $name Name of property
 	 * @param mixed $value Default value for property
 	 * @param string|array $group Group(s) property belongs to
-	 * @param boolean $uses_data Whether or not property uses data from the content item
 	 * @return boolean TRUE if property is successfully added to field type, FALSE otherwise
 	 */
 	function set_property($name, $value = '', $group = null) {
@@ -1167,7 +1206,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * Returns indacator to use field data (in layouts, property values, etc.)
 	 */
 	function uses_data() {
-		return '{data}';
+		return self::USES_DATA;
 	}
 
 	/**
@@ -1180,7 +1219,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param int $priority (optional) Priority of handler
 	 */
 	function register_placeholder_handler($placeholder, $handler, $priority = 10) {
-		global $cnr_debug;
 		if ( 'all' == $placeholder )
 			$placeholder = '';
 		else
@@ -1348,6 +1386,26 @@ class CNR_Field_Type extends CNR_Content_Base {
 
 		return $ph_output;
 	}
+	
+	/**
+	 * WP Editor
+	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
+	 * @return string Placeholder output
+	 */
+	function process_placeholder_rich_editor($ph_output, $field, $placeholder, $layout, $data) {
+		$id = $field->get_id( array (
+			'format' => 'attr_id'
+		));
+		$settings = array (
+			'textarea_name' => $field->get_id( array (
+				'format' => 'default'
+			))
+		);
+		ob_start();
+		wp_editor($field->get_data(), $id, $settings);
+		$out = ob_get_clean();
+		return $out;
+	}
 
 }
 
@@ -1386,41 +1444,32 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * Legacy constructor
 	 * @param string $id Content type ID
 	 */
-	function CNR_Content_Type($id) {
+	function CNR_Content_Type($id, $parent = false, $properties = null) {
 		$args = func_get_args();
 		call_user_func_array(array(&$this, '__construct'), $args);
 	}
 
 	/**
 	 * Class constructor
-	 * @param string $id Conten type ID
+	 * @param string $id Content type ID
+	 * @param string|bool $parent (optional) Parent to inherit properties from (Default: none)
+	 * @param array $properties (optional) Properties to set for content type (Default: none)
 	 */
-	function __construct($id = '') {
-		$args = array();
-		$args_default = func_get_args();
-		$args_num = count($args_default);
-		$arg_members = array('id', 'parent');
-		//Feed default arguments into arguments array
-		for ( $x = 0; $x < count($arg_members); $x++ ) {
-			//Do not merge last argument if it is an array (contains params for multiple properties)
-			if ( $x == $args_num - 1 && is_array($args_default[$x]) ) {
-				$args = wp_parse_args($args, $args_default[$args_num - 1]);
-				break;
-			}
-			$args[$arg_members[$x]] = $args_default[$x];
-		}
-		if ( ( $args_num = count($args) ) < ( $members_num = count($arg_members) ) ) {
-			for ( $x = $args_num; $x < $members_num; $x++ ) {
-				$args[$arg_members[$x]] = null;
-			}
-		}
-		parent::__construct($args['id'], $args['parent']);
-		unset($args['id']);
-		unset($args['parent']);
+	function __construct($id = '', $parent = null, $properties = null) {
+		parent::__construct($id, $parent);
+		
 		//Set properties
 		//TODO Iterate through additional arguments and set instance properties
-
-		//TODO Register custom wp post type
+	}
+	
+	/* Registration */
+	
+	/**
+	 * Registers current content type w/CNR
+	 */
+	function register() {
+		global $cnr_content_utilities;
+		$cnr_content_utilities->register_content_type($this);
 	}
 
 	/* Getters/Setters */
@@ -1432,11 +1481,16 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @param string $title Group title
 	 * @param string $description Short description of group's purpose
 	 * @param string $location Where group will be displayed on post edit form (Default: main)
+	 * @param array $fields (optional) ID's of existing fields to add to group
+	 * @return object Group object
 	 */
-	function &add_group($id, $title = '', $description = '', $location = 'normal') {
+	function &add_group($id, $title = '', $description = '', $location = 'normal', $fields = array()) {
 		//Create new group and set properties
 		$id = trim($id);
 		$this->groups[$id] =& $this->create_group($title, $description, $location);
+		//Add fields to group (if supplied)
+		if ( !empty($fields) && is_array($fields) )
+			$this->add_to_group($id, $fields);
 		return $this->groups[$id];
 	}
 
@@ -1532,7 +1586,7 @@ class CNR_Content_Type extends CNR_Content_Base {
 			$field = $this->get_member_value('fields', $field);
 		} else {
 			//Return empty field if no field exists
-			$field =& new CNR_Field('');
+			$field = new CNR_Field('');
 		}
 		return $field;
 	}
@@ -1554,15 +1608,20 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 */
 	function add_to_group($group, $fields) {
 		//Validate parameters
-		$group_title = '';
-		if ( is_array($group) )
-			list($group, $group_title) = $group;
-		$group = trim(strval($group));
-		if ( empty($group) || empty($fields) )
+		$group_id = '';
+		if ( !empty($group) ) {
+			if ( !is_array($group) ) {
+				$group = array($group, $group);
+			}
+			
+			$group[0] = $group_id = trim(sanitize_title_with_dashes($group[0]));
+		}
+		if ( empty($group_id) || empty($fields) )
 			return false;
 		//Create group if it doesn't exist
-		if ( !$this->group_exists($group) )
-			$this->add_group($group, $group_title);
+		if ( !$this->group_exists($group_id) ) {
+			call_user_func_array($this->m('add_group'), $group);
+		}
 		if ( ! is_array($fields) )
 			$fields = array($fields);
 		foreach ( $fields as $field ) {
@@ -1571,12 +1630,12 @@ class CNR_Content_Type extends CNR_Content_Base {
 				continue;
 			$fref =& $this->get_field($field);
 			//Remove field from any other group it's in (fields can only be in one group)
-			foreach ( array_keys($this->groups) as $group_id ) {
-				if ( isset($this->groups[$group_id]->fields[$fref->id]) )
-					unset($this->groups[$group_id]->fields[$fref->id]);
+			foreach ( array_keys($this->groups) as $group_name ) {
+				if ( isset($this->groups[$group_name]->fields[$fref->id]) )
+					unset($this->groups[$group_name]->fields[$fref->id]);
 			}
 			//Add reference to field in group
-			$this->groups[$group]->fields[$fref->id] =& $fref;
+			$this->groups[$group_id]->fields[$fref->id] =& $fref;
 		}
 	}
 
@@ -1618,8 +1677,8 @@ class CNR_Content_Type extends CNR_Content_Base {
 		//Create group if it doesn't already exist
 		if ( ! $this->group_exists($group) )
 			$this->add_group($group);
-
-		return $this->get_member_value('groups', $group);
+		$group = $this->get_member_value('groups', $group);
+		return $group;
 	}
 
 	/**
@@ -1627,7 +1686,8 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @return array Reference to group objects
 	 */
 	function &get_groups() {
-		return $this->get_member_value('groups');
+		$groups = $this->get_member_value('groups');
+		return $groups;
 	}
 
 	/**
@@ -1651,11 +1711,21 @@ class CNR_Content_Type extends CNR_Content_Base {
 
 			//Build layout for each field in group
 			foreach ( array_keys($group->fields) as $field_id ) {
+				/**
+				 * CNR_Field_Type
+				 */
 				$field =& $group->fields[$field_id];
 				$field->set_caller($this);
 				//Start field output
 				$id = 'cnr_field_' . $field->get_id();
-				$out[] = '<div id="' . $id . '_wrap" class="cnr_attribute_wrap">';
+				$class = array('cnr_attribute_wrap');
+				//If single field in group, check if field title matches group
+				if ( count($group->fields) == 1 && $group->title == $field->get_property('label') )
+					$class[] = 'group_field_title';
+				//Add flag to indicate that field was loaded on page
+				$inc = 'cnr[fields_loaded][' . $field->get_id() . ']';
+				$out[] = '<input type="hidden" id="' . $inc . '" name="' . $inc . '" value="1" />';
+				$out[] = '<div id="' . $id . '_wrap" class="' . implode(' ', $class) . '">';
 				//Build field layout
 				$out[] = $field->build_layout();
 				//end field output
@@ -1753,7 +1823,7 @@ class CNR_Content_Type extends CNR_Content_Base {
  * Utilities for Content Type functionality
  * @package Cornerstone
  * @subpackage Content Types
- * @author SM
+ * @author Archetyped
  */
 class CNR_Content_Utilities extends CNR_Base {
 
@@ -1806,7 +1876,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	function register_types() {
 		//Global variables
 		global $cnr_field_types, $cnr_content_types;
-
+		
 		/* Field Types */
 
 		//Base
@@ -1823,7 +1893,6 @@ class CNR_Content_Utilities extends CNR_Base {
 		$base_closed = new CNR_Field_Type('base_closed');
 		$base_closed->set_parent('base');
 		$base_closed->set_description('Default Element (Closed Tag)');
-		//$base_closed->set_property('value');
 		$base_closed->set_layout('form_start', '<{tag} id="{field_id}" name="{field_name}" {properties ref_base="root" group="attr"}>');
 		$base_closed->set_layout('form_end', '</{tag}>');
 		$base_closed->set_layout('form', '{form_start ref_base="layout"}{data}{form_end ref_base="layout"}');
@@ -1835,9 +1904,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		$input->set_description('Default Input Element');
 		$input->set_property('tag', 'input');
 		$input->set_property('type', 'text', 'attr');
-		$input->set_property('value', CNR_Field::uses_data(), 'attr');
+		$input->set_property('value', CNR_Field::USES_DATA, 'attr');
 		$this->register_field($input);
-
+		
 		//Text input
 		$text = new CNR_Field_Type('text', 'input');
 		$text->set_description('Text Box');
@@ -1845,7 +1914,16 @@ class CNR_Content_Utilities extends CNR_Base {
 		$text->set_property('label');
 		$text->set_layout('form', '{label ref_base="layout"} {inherit}');
 		$this->register_field($text);
-
+		
+		//Checkbox
+		$checkbox = new CNR_Field_Type('checkbox', 'input');
+		$checkbox->set_description('Checkbox');
+		$checkbox->set_property('type', 'checkbox', 'attr');
+		$checkbox->set_property('label');
+		$checkbox->set_property('checked', '', 'attr');
+		$checkbox->set_layout('form', '{inherit} {label ref_base="layout"}');
+		$this->register_field($checkbox);
+		
 		//Textarea
 		$ta = new CNR_Field_Type('textarea', 'base_closed');
 		$ta->set_property('tag', 'textarea');
@@ -1855,9 +1933,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		
 		//Rich Text
 		$rt = new CNR_Field_Type('richtext', 'textarea');
-		$rt->set_property('class', 'theEditor {inherit}');
-		$rt->set_layout('form', '<div class="rt_container">{inherit}</div>');
-		$rt->add_action('admin_print_footer_scripts', 'wp_tiny_mce', 25);
+		$rt->set_layout('form', '<div class="rt_container">{rich_editor}</div>');
 		$this->register_field($rt);
 
 		//Location
@@ -1908,14 +1984,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		do_action_ref_array('cnr_register_field_types', array(&$cnr_field_types));
 
 		//Content Types
-
-		$ct = new CNR_Content_Type('post');
-		$ct->set_title('Post');
-		$ct->add_group('subtitle', 'Subtitle');
-		$ct->add_field('subtitle', 'text', array('size' => '50', 'label' => 'Subtitle'));
-		$ct->add_to_group('subtitle', 'subtitle');
-		$this->register_content_type($ct);
-
+		
 		//Enable plugins to add/remove content types
 		do_action_ref_array('cnr_register_content_types', array(&$cnr_content_types));
 
@@ -1926,7 +1995,6 @@ class CNR_Content_Utilities extends CNR_Base {
 	/**
 	 * Add content type to global array of content types
 	 * @param CNR_Content_Type $ct Content type to register
-	 * 
 	 * @global array $cnr_content_types Content types array
 	 */
 	function register_content_type(&$ct) {
@@ -1937,7 +2005,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		}
 		//WP Post Type Registration
 		global $wp_post_types;
-		if ( !isset($wp_post_types[$ct->id]) )
+		if ( !empty($ct->id) && !isset($wp_post_types[$ct->id]) )
 			register_post_type($ct->id, $this->build_post_type_args($ct));
 	}
 	
@@ -1950,22 +2018,22 @@ class CNR_Content_Utilities extends CNR_Base {
 	function build_post_type_args(&$ct) {
 		//Setup labels
 		
-		
 		//Build labels
 		$labels = array (
 			'name'				=> _( $ct->get_title(true) ),
 			'singular_name'		=> _( $ct->get_title(false) ),
+			'all_items'			=> sprintf( _( 'All %s' ), $ct->get_title(true) ),
 		);
 		
 		//Action labels
 		$item_actions = array(
-			'add_new'	=> 'Add new %s',
-			'edit'		=> 'Edit %s',
-			'new'		=> 'New %s',
-			'view'		=> 'View %s',
-			'search'	=> array('Search %s', true),
-			'not_found'	=> array('No %s found', true, false),
-			'not_found_in_trash'	=> array('No %s found in Trash', true, false)	
+			'add_new'				=> 'Add New %s',
+			'edit'					=> 'Edit %s',
+			'new'					=> 'New %s',
+			'view'					=> 'View %s',
+			'search'				=> array('Search %s', true),
+			'not_found'				=> array('No %s found', true, false),
+			'not_found_in_trash'	=> array('No %s found in Trash', true, false)
 		);
 
 		foreach ( $item_actions as $key => $val ) {
@@ -1994,10 +2062,12 @@ class CNR_Content_Utilities extends CNR_Base {
 			'description'			=> $ct->get_description(),
 			'public'				=> true,
 			'capability_type'		=> 'post',
+			'rewrite'				=> array( 'slug' => strtolower($labels['name']) ),
+			'has_archive'			=> true,
 			'hierarchical'			=> false,
 			'menu_position'			=> 5,
 			'supports'				=> array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'trackbacks', 'custom-fields', 'comments', 'revisions'),
-			'taxonomies'			=> get_object_taxonomies('post')
+			'taxonomies'			=> get_object_taxonomies('post'),
 		);
 		
 		return $args;
@@ -2140,7 +2210,7 @@ class CNR_Content_Utilities extends CNR_Base {
 					if ( isset($this->hooks_processed[$tag][$id]) )
 						continue;
 					//Add hook/function to list of processed hooks 
-					if ( !is_array($this->hooks_processed[$tag]) )
+					if ( !isset($this->hooks_processed[$tag]) || !is_array($this->hooks_processed[$tag]) )
 						$this->hooks_processed[$tag] = array($id => true);
 					//Add hook to WP
 					call_user_func_array('add_filter', $args);
@@ -2228,7 +2298,7 @@ class CNR_Content_Utilities extends CNR_Base {
 				enqueue_comment_hotkeys_js();
 				//Get post being edited
 				if ( empty($_GET['post']) ) {
-					wp_redirect("post.php"); //TODO redict to appropriate manage page
+					wp_redirect("post.php"); //TODO redirect to appropriate manage page
 					exit();
 				}
 				$post_ID = $p = (int) $_GET['post'];
@@ -2254,7 +2324,7 @@ class CNR_Content_Utilities extends CNR_Base {
 				wp_enqueue_script('word-count');
 				add_action( 'admin_print_footer_scripts', 'wp_tiny_mce', 25 );
 				wp_enqueue_script('quicktags');
-				wp_enqueue_script($this->add_prefix('edit_form'), $this->util->get_file_url('js/admin_edit_form.js'), array('jquery', 'postbox'), false, true);
+				wp_enqueue_script($this->add_prefix('edit_form'), $this->util->get_file_url('js/lib.admin.edit_form.js'), array('jquery', 'postbox'), false, true);
 				break;
 			default		:
 				wp_enqueue_script( $this->add_prefix('inline-edit-post') );
@@ -2706,24 +2776,28 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param object $post Post object
 	 */
 	function save_item_data($post_id, $post) {
-		if ( empty($post_id) || empty($post) )
+		if ( empty($post_id) || empty($post) || !isset($_POST['cnr']) || !is_array($_POST['cnr']) )
 			return false;
-		//Save field data
-		if ( isset($_POST['cnr']['attributes']) ) {  
-			$prev_data = $this->get_item_data($post_id);
-
+		$pdata = $_POST['cnr'];
+		
+		if ( isset($pdata['attributes']) && is_array($pdata['attributes']) && isset($pdata['fields_loaded']) && is_array($pdata['fields_loaded']) ) {
+			
+			$prev_data = (array) $this->get_item_data($post_id);
+			
+			//Remove loaded fields from prev data
+			$prev_data = array_diff_key($prev_data, $pdata['fields_loaded']);
+			
 			//Get current field data
-			$curr_data = $_POST['cnr']['attributes'];
-
+			$curr_data = $pdata['attributes'];
+						
 			//Merge arrays together (new data overwrites old data)
 			if ( is_array($prev_data) && is_array($curr_data) ) {
 				$curr_data = array_merge($prev_data, $curr_data);
 			}
-
+			
 			//Save to database
 			update_post_meta($post_id, $this->get_fields_meta_key(), $curr_data);
 		}
-
 		//Save content type
 		if ( isset($_POST['cnr']['content_type']) ) {
 			$type = $_POST['cnr']['content_type'];
@@ -2781,13 +2855,15 @@ class CNR_Content_Utilities extends CNR_Base {
 
 	/**
 	 * Retrieves content type definition for specified content item (post, page, etc.)
+	 * If content type does not exist, a new instance object will be created and returned
+	 * > New content types are automatically registered (since we are looking for registered types when using this method)
 	 * @param string|object $item Post object, or item type (string)
 	 * @return CNR_Content_Type Reference to matching content type, empty content type if no matching type exists
 	 * 
 	 * @uses array $cnr_content_types
 	 */
 	function &get_type($item) {
-		//Return immediately if $item is a content type
+		//Return immediately if $item is a content type instance
 		if ( is_a($item, 'CNR_Content_Type') )
 			return $item;
 
@@ -2803,11 +2879,6 @@ class CNR_Content_Utilities extends CNR_Base {
 			if ( $this->util->check_post($post) && isset($post->post_type) ) {
 				$type = $post->post_type;
 			}
-			/*
-			if ( ( $type_page = $this->get_page_type() ) && ( empty($type) || $this->is_default_post_type($type) ) ) {
-				$type = $type_page;
-			}
-			*/
 		}
 		global $cnr_content_types;
 		if ( $this->type_exists($type) ) {
@@ -2815,10 +2886,10 @@ class CNR_Content_Utilities extends CNR_Base {
 			$type =& $cnr_content_types[$type];
 		} else {
 			//Create new empty content type if it does not already exist
-			$type =& new CNR_Content_Type($type);
-			//Add default post types to global content types array
-			if ( !empty($type) && !empty($type->id) && $this->is_default_post_type($type->id) )
-				$cnr_content_types[$type->id] =& $type;
+			$type = new CNR_Content_Type($type);
+			//Automatically register newly initialized content type if it extends an existing WP post type
+			if ( $this->is_default_post_type($type->id) )
+				$type->register();
 		}
 
 		return $type;
@@ -2837,7 +2908,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @return string Fields meta key
 	 */
 	function get_fields_meta_key() {
-		return $this->make_meta_key('fields');
+		return $this->util->make_meta_key('fields');
 	}
 
 	/**
@@ -2845,7 +2916,7 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @return string Post type meta key
 	 */
 	function get_type_meta_key() {
-		return $this->make_meta_key('post_type');
+		return $this->util->make_meta_key('post_type');
 	}
 
 	/**
@@ -2860,11 +2931,10 @@ class CNR_Content_Utilities extends CNR_Base {
 			return ( !empty($ret) || $ret === 0 );
 		if ( is_array($ret) ) {
 			foreach ( $ret as $key => $val ) {
-				if ( !empty($val) || $ret === 0 )
+				if ( !empty($val) || $val === 0 )
 					return true;
 			}
 		}
-		
 		return false;
 	}
 
@@ -2894,6 +2964,8 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
 	 * @param string $field ID of field to retrieve
 	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
+	 * @param array $attr (optional) Additional attributes to pass along to field object (e.g. for building layout, etc.)
+	 * @see CNR_Field_Type::build_layout for more information on attribute usage
 	 * @return mixed Specified field data 
 	 */
 	function get_item_data($item = null, $field = null, $layout = null, $default = '', $attr = null) {
@@ -2961,6 +3033,8 @@ class CNR_Content_Utilities extends CNR_Base {
 	 * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
 	 * @param string $field ID of field to retrieve
 	 * @param string $layout(optional) Layout to use when returning field data (Default: display)
+	 * @param mixed $default (optional) Default value to return in case of errors, etc.
+	 * @param array $attr Additional attributes to pass to field
 	 */
 	function the_item_data($item = null, $field = null, $layout = null, $default = '', $attr = null) {
 		echo apply_filters('cnr_the_item_data', $this->get_item_data($item, $field, $layout, $default, $attr), $item, $field, $layout, $default, $attr);

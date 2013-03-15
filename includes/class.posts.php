@@ -1,11 +1,11 @@
 <?php
 
-include_once 'class.base.php';
+require_once 'class.base.php';
 
 /**
  * @package Cornerstone
  * @subpackage Posts
- * @author SM
+ * @author Archetyped
  * 
  * Represents a collection of posts in a query
  * Handles navigating through post collection, reporting status, etc.
@@ -14,6 +14,20 @@ include_once 'class.base.php';
 class CNR_Post_Query extends CNR_Base {
 	
 	/*-** Variables **-*/
+	
+	var $scripts = array (
+		'posts'		=> array (
+			'file'		=> 'js/lib.posts.js',
+			'deps'		=> '[core]',
+			'context'	=> 'admin'
+		),
+		/*'quicktags'	=> array (
+			'file'		=> 'js/lib.posts.quicktags.js',
+			'deps'		=> 'quicktags', '[posts]',
+			'context'	=> array('admin_action_edit-item', 'admin_action_add')
+		)
+		*/
+	);
 	
 	/**
 	 * Holds posts
@@ -59,6 +73,14 @@ class CNR_Post_Query extends CNR_Base {
 	var $args;
 	
 	/**
+	 * Argument to be used during query to identify request
+	 * Prefix added during init
+	 * @see init()
+	 * @var string
+	 */
+	var $arg_fetch = 'fetch';
+	
+	/**
 	 * TRUE if posts have been fetched, FALSE otherwise
 	 * @var bool
 	 */
@@ -70,13 +92,14 @@ class CNR_Post_Query extends CNR_Base {
 	
 	function __construct( $args = null ) {
 		parent::__construct();
-
+		
+		parent::init();
 		//Init properties
 		$this->init();
 		
 		//Set arguments
 		if ( !empty($args) && is_array($args) ) {
-			$this->args =& $args;
+			$this->args = wp_parse_args($args, $this->args);
 		}
 	}
 	
@@ -91,7 +114,8 @@ class CNR_Post_Query extends CNR_Base {
 		$this->current = -1;
 		$this->count = 0;
 		$this->found = 0;
-		$this->args = array();
+		$this->arg_fetch = $this->add_prefix($this->arg_fetch);
+		$this->args = array($this->arg_fetch => true);
 		$this->fetched = false;
 	}
 	
@@ -161,23 +185,35 @@ class CNR_Post_Query extends CNR_Base {
 		if ( !empty($args) )
 			$this->args = wp_parse_args($args, $this->args);
 		//Set post limit
-		if ( is_numeric($limit) ) {
+		if ( is_numeric($limit) )
 			$limit = intval($limit);
-			if ( ! $limit ) {
-				$limit = ( is_feed() ) ? get_option('posts_per_rss') : get_option('posts_per_page');
-			}
-			if ( $limit > 0 )
-				$this->set_arg('numberposts', $limit);
+		if ( ! $limit && !$this->arg_isset('numberposts') )
+			$limit = ( is_feed() ) ? get_option('posts_per_rss') : get_option('posts_per_page');
+		if ( $limit > 0 )
+			$this->set_arg('numberposts', $limit);
+		
+		//Set offset (pagination)
+		if ( !is_feed() ) {
+			$c_page = $wp_query->get('paged');
+			$offset = ( $c_page > 0 ) ? $c_page - 1 : 0;
+			$offset = $limit * $offset;
+			$this->set_arg('offset', $offset);
 		}
 		
-		//Retrieve featured posts
-		$callback = $this->m('set_found');
+		//Retrieve posts
 		$filter = 'found_posts';
+		$f_callback = $this->m('set_found');
+		$action = 'parse_query';
+		$a_callback = $this->m('set_found_flag');
+		
 		//Add filter to populate found property during query
-		add_filter($filter, $callback);
-		//Remove filter after query has completed
+		add_filter($filter, $f_callback);
+		add_action($action, $a_callback);
+		//Get posts
 		$posts =& get_posts($this->args);
-		remove_filter($filter, $callback);
+		//Remove filter after query has completed
+		remove_action($action, $a_callback);
+		remove_filter($filter, $f_callback);
 		//Save retrieved posts to array
 		$this->load($posts);
 		//Return retrieved posts so that array may be manipulated further if desired
@@ -216,6 +252,8 @@ class CNR_Post_Query extends CNR_Base {
 	
 	/**
 	 * Sets number of found posts in object's query
+	 * @link `found_posts` hook
+	 * @see WP_Query::get_posts()
 	 * @param int $num_found 
 	 */
 	function set_found($num_found) {
@@ -223,11 +261,34 @@ class CNR_Post_Query extends CNR_Base {
 	}
 	
 	/**
+	 * Modifies query parameters to allow `found_posts` hook to be called
+	 * Unsets `no_found_rows` query parameter set in WP 3.1
+	 * @see WP_Query::parse_query()
+	 * @link `parse_query` action hook
+	 * @param WP_Query $q Query instance object
+	 */
+	function set_found_flag(&$q) {
+		if ( isset($q->query_vars[$this->arg_fetch]) ) {
+			$q->query_vars['no_found_rows'] = false;
+		}
+	}
+	
+	/**
+	 * Makes sure query was run prior
+	 * @return void
+	 */
+	function confirm_fetched() {
+		if ( !$this->fetched )
+			$this->get();
+	}
+
+	/**
 	 * Returns number of matching posts found in DB
 	 * May not necessarily match number of posts contained in object (due to post limits, pagination, etc.)
 	 * @return int Number of posts found
 	 */
 	function found() {
+		$this->confirm_fetched();
 		return $this->found;
 	}
 	
@@ -247,12 +308,9 @@ class CNR_Post_Query extends CNR_Base {
 	 * @global obj $post
 	 */
 	function has( $fetch = true ) {
-		global $wp_query, $post;
+		global $wp_query, $post, $more;
 		
-		//Get posts if not yet fetched
-		if ( $fetch && !$this->fetched ) {
-			$this->get();
-		}
+		$this->confirm_fetched();
 		
 		//Check if any posts on current page were retrieved
 		//If posts are found, make sure there are more posts
@@ -262,7 +320,7 @@ class CNR_Post_Query extends CNR_Base {
 		
 		//Reset current post position if all posts have been processed
 		$this->rewind();
-		
+		$wp_query->in_the_loop = false;
 		//If no posts were found (or the last post has been previously loaded),
 		//load previous post back into global post variable
 		$i = ( $wp_query->current_post >= 0 ) ? $wp_query->current_post : 0;
@@ -271,6 +329,8 @@ class CNR_Post_Query extends CNR_Base {
 			setup_postdata($post);
 		}
 		
+		if ( is_single() || is_page() )
+			$more = 1;
 		return false;
 	}
 	
@@ -282,9 +342,10 @@ class CNR_Post_Query extends CNR_Base {
 	 * @global obj $post Post object
 	 */
 	function next() {
-		global $post;
+		global $post, $more, $wp_query;
 		
 		if ( $this->has() ) {
+			$wp_query->in_the_loop = true;
 			//Increment post position
 			$this->current++;
 			
@@ -292,6 +353,7 @@ class CNR_Post_Query extends CNR_Base {
 			$post = $this->posts[ $this->current ];
 			
 			setup_postdata($post);
+			$more = 0;
 		}
 	}
 	
@@ -317,6 +379,7 @@ class CNR_Post_Query extends CNR_Base {
 	 * @return int number of posts
 	 */
 	function count() {
+		$this->confirm_fetched();
 		return $this->count;
 	}
 	
@@ -325,6 +388,7 @@ class CNR_Post_Query extends CNR_Base {
 	 * @return int Total number of pages
 	 */
 	function max_num_pages() {
+		$this->confirm_fetched();
 		$posts_per_page = $this->get_arg('numberposts');
 		if ( ! $posts_per_page )
 			$posts_per_page = get_option('posts_per_page');
@@ -336,6 +400,7 @@ class CNR_Post_Query extends CNR_Base {
 	 * @return bool TRUE if current post is the first post in array, FALSE otherwise
 	 */
 	function is_first() {
+		$this->confirm_fetched();
 		return ( 0 == $this->current() );
 	}
 	
@@ -344,6 +409,7 @@ class CNR_Post_Query extends CNR_Base {
 	 * @return bool TRUE if item is the last featured item, FALSE otherwise
 	 */
 	function is_last() {
+		$this->confirm_fetched();
 		return ($this->current == $this->count - 1) ? true : false;
 	}
 	
@@ -352,11 +418,19 @@ class CNR_Post_Query extends CNR_Base {
 	 * @return bool TRUE if post is in posts array
 	 */
 	function contains( $post = null ) {
-		//TODO Validate $post_id
-		if ( !$this->util->check_post($post) ) {
+		$this->confirm_fetched();
+		//Use argument value if it is an integer
+		if ( is_numeric($post) && intval($post) > 0 ) {
+			//Cast to object and set ID property (for later use)
+			$post = (object) $post;
+			$post->ID = $post->scalar;
+		}
+		//Otherwise check if argument is valid post
+		elseif ( !$this->util->check_post($post) ) {
 			return false;
 		}
 		
+		//Check for existence of post ID in posts array
 		return in_array($post->ID, $this->get_ids());
 	}
 	
@@ -364,6 +438,8 @@ class CNR_Post_Query extends CNR_Base {
 	 * Retrieve IDs of all retrieved posts
 	 */
 	function get_ids() {
+		$this->confirm_fetched();
+		
 		if ( $this->has && empty($this->post_ids) ) {
 			//Build array of post ids in array
 			foreach ($this->posts as $post) {
@@ -379,24 +455,57 @@ class CNR_Post_Query extends CNR_Base {
 /**
  * @package Cornerstone
  * @subpackage Posts
- * @author SM
+ * @author Archetyped
  *
  */
 class CNR_Post extends CNR_Base {
+	
+	/*-** Properties **-*/
+	
+	/**
+	 * Script files
+	 * @see CNR_Base::client_files
+	 * @var array
+	 */
+	var $scripts = array (
+		'posts'		=> array (
+			'file'		=> 'js/lib.posts.js',
+			'deps'		=> '[core]',
+			'context'	=> 'admin'
+		),
+		'quicktags'	=> array (
+			'file'		=> 'js/lib.posts.quicktags.js',
+			'deps'		=> 'quicktags', '[posts]',
+			'context'	=> array('admin_action_edit-item', 'admin_action_add')
+		)
+	);
+	
+	/**
+	 * Default title separator
+	 * @var string
+	 */
+	var $title_sep = '&lsaquo;';
 	
 	/*-** Initialization **-*/
 	
 	function register_hooks() {
 		parent::register_hooks();
 		
+		//Template
+		// add_filter('wp_title', $this->m('page_title'), 11, 3);
+		
+		//Admin
+		add_action('admin_head', $this->m('admin_set_title'), 11);
+		
 		//TinyMCE
-		add_filter('tiny_mce_before_init', $this->m('admin_mce_before_init'));
+		/*
+		add_filter('mce_css', $this->m('admin_mce_css'));
 		add_filter('mce_buttons', $this->m('admin_mce_buttons'));
 		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
-		add_action('admin_enqueue_scripts', $this->m('admin_post_quicktags'));
 		
 		//Activate Shortcodes
 		$this->sc_activate();
+		*/
 	}
 	
 	/**
@@ -414,10 +523,11 @@ class CNR_Post extends CNR_Base {
 		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
 			//Retrieve post data for parents if full data or property other than post ID is required
 			$args = array(
-						'include'		=> implode(',', $parents),
+						'include'		=> $parents,
 						'post_type'		=> 'any',
 						);
 			$ancestors = get_posts($args);
+			
 			//Sort array in ancestor order
 			$temp_parents = array();
 			foreach ($ancestors as $ancestor) {
@@ -461,7 +571,7 @@ class CNR_Post extends CNR_Base {
 	function &get_children($post = null) {
 		//Global variables
 		global $wp_query;
-		$children =& new CNR_Post_Query();
+		$children = new CNR_Post_Query();
 		if ( empty($post) && !empty($wp_query->posts) )
 			$post = $wp_query->posts[0];
 		
@@ -496,54 +606,70 @@ class CNR_Post extends CNR_Base {
 	/*-** Post Metadata **-*/
 	
 	/**
-	 * Retrieves the post's section data 
-	 * @return string post's section data 
-	 * @param string $type (optional) Type of data to return (Default: ID)
-	 * 	Possible values:
-	 * 	ID		Returns the ID of the section
-	 * 	name	Returns the name of the section
+	 * Retrieves the post's section data
+	 * @param string $data (optional) Section data to return (Default: full section object)
+	 * Possible values:
+	 *  NULL		Full section post object
+	 *	Column name	Post column data (if exists)
+	 *
+	 * @return mixed post's section data (Default: ID value) 
 	 */
-	function get_section($type = 'ID') {
-		global $post;
-		$retval = $post->post_parent;
+	function get_section($post = null, $data = null) {
+		$p = get_post($post);
+		$retval = 0;
+		if ( is_object($p) && isset($p->post_parent) )
+			$retval = intval($p->post_parent);
 		
-		if ('title' == $type) {
-			$retval = get_post_field('post_title', $post->post_parent);
+		//Get specified section data for posts with valid parents
+		if ( $retval > 0 ) {
+			if ( !empty($data) ) {
+				$retval = get_post_field($data, $retval);
+			} else {
+				$retval = get_post($retval);
+			}
 		}
+		
 		return $retval;
 	}
 	
 	/**
 	 * Prints the post's section data
+	 * @uses CNR_Post::get_section()
 	 * @param string $type (optional) Type of data to return (Default: ID)
-	 * @see cnr_get_the_section()
 	 */
-	function the_section($type = 'ID') {
-		echo CNR_Post::get_section($type);
+	function the_section($post = null, $data = 'ID') {
+		if ( empty($data) )
+			$data = 'ID';
+		echo CNR_Post::get_section($post, $data);
 	}
 	
 	/*-** Admin **-*/
 	
-	
-	/**
-	 * Adds quicktags to post edit form
-	 * @return void
-	 */
-	function admin_post_quicktags() {
-		$actions = array('edit-item', 'add');
-		if ( in_array($this->util->get_action(), $actions) ) {
-			wp_enqueue_script('cnr_quicktags', $this->util->get_file_url('js/cnr_quicktags.js'), array('quicktags'));
-		}
+	function admin_set_title() {
+		global $post;
+		
+		if ( !$post )
+			return false;
+		
+		$obj = new stdClass();
+		//Section title
+		$sec = $this->get_section($post);
+		if ( $sec )
+			$obj->item_section = get_the_title($sec);
+		//Separator
+		$obj->title_sep = $this->page_title_get_sep();
+		$this->util->extend_client_object('posts', $obj, true);
 	}
-	
+
 	/**
-	 * Modify TinyMCE init array prior to initialization
-	 * @param array $initArray
-	 * @return array Modified init array
+	 * Add IntURL CSS to editor
+	 * @uses `mce_css` filter hook to add file
+	 * @param string $mce_css Comma-separated list of CSS files to be added for editor
+	 * @return string Modified list of CSS files
 	 */
-	function admin_mce_before_init($initArray) {
-		//$initArray['content_css'] = $this->util->get_file_url('mce/mce_styles.css') . '?vt=' . time(); //Dev: vt param stops browser from caching css
-		return $initArray;
+	function admin_mce_css($mce_css) {
+		$mce_css .= ',' . $this->util->get_file_url('mce/mce_styles.css') . '?v=' . $this->util->get_plugin_version();
+		return $mce_css;
 	}
 	
 	/**
@@ -575,6 +701,59 @@ class CNR_Post extends CNR_Base {
 		$start[] = $this->add_prefix('inturl');
 		$buttons = array_merge($start, $end);
 		return $buttons;
+	}
+	
+	function page_title_get_sep($pad = true) {
+		$sep = $this->title_sep;
+		if ( $pad )
+			$sep = ' ' . trim($sep) . ' ';
+		return $sep;
+	}
+	
+	/*-** Template **-*/
+	
+	/**
+	 * Builds page title for current request
+	 * Adds subtitle to title
+	 * Filter called by `wp_title` hook
+	 * @param $title
+	 * @param $sep
+	 * @param $seplocation
+	 * @return string Title text
+	 */
+	function page_title_get($title, $sep = '', $seplocation = '') {
+		global $post;
+		
+		$sep = $this->page_title_get_sep();
+		
+		if ( is_single() ) {
+			//Append section name to post title
+			$ptitle = get_the_title();
+			$ptitle_pos = ( $ptitle ) ? strpos($title, $ptitle) : false;
+			if ( $ptitle_pos !== false ) {
+				//Get section
+				if ( ( $sec = $this->get_section($post) ) ) {
+					//Append section name to post title only once
+					$title = substr_replace($ptitle, $ptitle . $sep . get_the_title($sec), $ptitle_pos, strlen($ptitle)) . substr($title, strlen($ptitle));
+				}
+			}
+		}
+		
+		//Return new title
+		return $title;
+	}
+	
+	/**
+	 * Builds page title for current request
+	 * Filter called by `wp_title` hook
+	 * @param $title
+	 * @param $sep
+	 * @param $seplocation
+	 * @return string Title text
+	 * @uses CNR::page_title_get()
+	 */
+	function page_title($title, $sep = '', $seplocation = '') {
+		return $this->page_title_get($title, $sep, $seplocation);
 	}
 	
 	/*-** Shortcodes **-*/
@@ -629,7 +808,7 @@ class CNR_Post extends CNR_Base {
 			$title = trim($title);
 			if ($title == '' && $url != $url_default)
 				$title = get_post_field('post_title', $id);
-			$title = attribute_escape($title);
+			$title = esc_attr($title);
 		
 			if (empty($content) && $url != $url_default)
 				$content = $url;

@@ -1,0 +1,159 @@
+.site-pages .actions {
+	clear: both;
+}
+
+.group-pages, .list-pages {
+	padding-left: 1em;
+	margin-top: 1em;
+	width: 20em;
+	float: left;
+	margin-right: 5em;
+}
+
+.ph {
+	background: #FFE1E2;
+}
+
+.item-page, .page_item a {
+	border: 1px solid #bbb;
+	background: #eee;
+	padding: .5em;
+	width: 15em;
+	display: block;
+	margin: .5em 0;
+}
+
+.site-pages li ul {
+	padding: 0 1.5em;
+}
+
+.group-pages {
+	min-height: 5em;
+}
+
+ul.empty {
+	border: 1px dashed #ccc;
+}
+
+.group-pages .empty {
+	border: 0;
+	background: none;
+	
+}
+
+.item-page,
+.item-page a {
+	color: #333;
+}
+
+.item-page {
+	position: relative;
+}
+
+.js .page-group .actions-commit {
+	display: none;
+}
+
+.item-page .page-delete {
+	position: absolute;
+	right: 10px;
+	top: 30%;
+	text-indent: -2000em;
+	cursor: pointer;
+	height: 11px;
+	width: 11px;
+	background: url("images/page_delete.gif") top left no-repeat;
+	opacity: .5;
+}
+
+.item-page .page-delete.on {
+	opacity: 1;
+}
+
+.page-group .sorting {
+	
+}
+
+.checking {
+	border: 1px solid green;
+	background-color: #E6FFE6;
+}
+
+.removing {
+	background-color: #FFCECE;
+	opacity: 0;
+}
+
+/* Post/Page Edit Form */
+
+#quicktags #cnr_inturl {
+	color: #00f;
+	text-decoration: underline;
+}
+
+.buttons {
+	padding: 6px;
+}
+
+.options-default,
+.confirmation-default {
+	visibility: hidden;
+}
+
+/* Fields */
+
+.rt_container {
+	border: 1px solid #dfdfdf;
+}
+
+.rt_container textarea {
+	border: 0;
+}
+
+/* Management Page */
+
+.tablenav #cnr_section {
+	width: 150px;
+}
+
+/* Content Types */
+
+.cnr_group_wrap {
+	overflow: hidden;
+}
+
+.cnr_attribute_wrap {
+	margin: 1em;
+	display: block;
+}
+
+.cnr_attribute_wrap .actions {
+	margin-top: 1em;
+}
+
+.cnr_attribute_wrap .media_frame,
+.cnr_attribute_wrap .media_link {
+	clear: both;
+	display: block;
+}
+
+.cnr_attribute_wrap  .media_frame {
+	margin-bottom: 1em;
+	border: 1px solid #F5F5F5;
+}
+
+	/* Single Field Groups */
+	
+.cnr_group_wrap .single_field textarea,
+.cnr_group_wrap .single_field input[type=text] {
+	width: 98%;
+}
+
+.cnr_group_wrap .single_field .group_field_title label,
+.cnr_group_wrap .single_field_has_elements legend {
+	display: none;
+}
+
+.cnr_pages_dropdown select {
+	width: 100%;
+}

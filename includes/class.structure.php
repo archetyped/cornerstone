@@ -7,7 +7,8 @@ require_once 'class.posts.php';
  * Core properties/methods for Media management
  * @package Cornerstone
  * @subpackage Media
- * @author SM
+ * @author Archetyped
+ * @uses CNR_Post
  */
 class CNR_Structure extends CNR_Base {
 	
@@ -31,6 +32,57 @@ class CNR_Structure extends CNR_Base {
 	 */
 	var $permalink_structure = null;
 	
+	/**
+	 * ID of old permalink structure
+	 * Used as base of meta key
+	 * @see __construct() Value prefixed
+	 * @var string
+	 */
+	var $permalink_structure_old = 'permastruct_old';
+	
+	/**
+	 * Name of field used for setting post parent
+	 * Prefix added in constructor
+	 * @var string
+	 */
+	var $field_parent = 'post_parent';
+	
+	/**
+	 * Name of post being created/edited
+	 * @var string
+	 */
+	var $data_insert_post_name = null;
+	
+	/**
+	 * Indicates whether process is currently occurring
+	 * Used to determine whether to skip hook handlers, etc.
+	 * @var bool
+	 */
+	var $status_processing = false;
+	
+	/**
+	 * Column name on posts management page
+	 * @var string
+	 */
+	var $management_column = array( 'name' => 'section', 'title' => 'Section' );
+	
+	/**
+	 * Client scripts
+	 * @var array
+	 */
+	var $scripts = array(
+		'structure'				=> array (
+			'file'		=> 'js/lib.structure.js',
+			'deps'		=> array('jquery', '[core]'),
+			'context'	=> 'admin'
+		),
+		'structure_permalink'	=> array (
+			'file'		=> 'js/lib.structure.admin.js',
+			'deps'		=> array('jquery', '[admin]','[structure]'),
+			'context'	=> 'admin_page_options-permalink'
+		)
+	);
+	
 	/* Constructor */
 	
 	/**
@@ -45,14 +97,13 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function __construct() {
 		parent::__construct();
-		$this->permalink_structure = '/' . $this->util->normalize_path($this->tok_path, $this->tok_post, true);
+		$this->add_prefix_ref($this->field_parent);
+		$this->add_prefix_ref($this->permalink_structure_old);
+		$this->permalink_structure = $this->util->normalize_path($this->tok_path, $this->tok_post, array(true, true));
+		$this->add_prefix_ref($this->management_column['name']);
 	}
 	
 	/* Methods */
-	
-	function init() {
-		$this->register_hooks();
-	}
 	
 	function register_hooks() {
 		parent::register_hooks();
@@ -68,21 +119,37 @@ class CNR_Structure extends CNR_Base {
 		
 		//Permalink
 		add_filter('post_link', $this->m('post_link'), 10, 3);
-		add_filter('post_type_link', $this->m('post_link'), 10, 3);
-		//TODO: Handle redirect_canonical (currently not evaluated)
-//		add_filter('redirect_canonical', $this->m('post_link'), 10, 2);
+		add_filter('post_type_link', $this->m('post_link'), 10, 4);
+
+		//Navigation
+		add_filter('wp_nav_menu_objects', $this->m('nav_menu_objects'), 10, 2);
 		
 		//Admin
-		add_filter('admin_enqueue_scripts', $this->m('admin_enqueue_scripts'));
+		add_action('admin_print_scripts', $this->m('admin_print_scripts'), 30);
+		add_action('update_option_permalink_structure', $this->m('update_permastruct'), 10, 3);
 			//Edit
+		//Add meta boxes
 		add_action('do_meta_boxes', $this->m('admin_post_sidebar'), 1, 3);
+		//Process post creation/updating
+		add_filter('wp_insert_post_data', $this->m('admin_post_insert_data'), 10, 2);
+		add_action('save_post', $this->m('admin_post_save'), 10, 2);
+		add_action('delete_post', $this->m('admin_post_delete'), 10, 1);
 			//Management
 		add_action('restrict_manage_posts', $this->m('admin_restrict_manage_posts'));
-		add_action('parse_query', $this->m('admin_manage_posts_filter_section'));
+		add_action('parse_request', $this->m('admin_manage_posts_filter_section'));
 		add_filter('manage_posts_columns', $this->m('admin_manage_posts_columns'));
 		add_action('manage_posts_custom_column', $this->m('admin_manage_posts_custom_column'), 10, 2);
 		add_action('quick_edit_custom_box', $this->m('admin_quick_edit_custom_box'), 10, 2);
 		add_action('bulk_edit_custom_box', $this->m('admin_bulk_edit_custom_box'), 10, 2);
+	}
+	
+	/**
+	 * Flushes rewrite rules
+	 */
+	function reset() {
+		global $wp_rewrite;
+		//Rebuild URL Rewrite rules
+		$wp_rewrite->flush_rules();
 	}
 	
 	/**
@@ -91,15 +158,33 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function activate() {
 		global $wp_rewrite;
-		//Rebuild URL Rewrite rules
-		$wp_rewrite->flush_rules();
+		//Update permalink structure
+		$struct = get_option($this->permalink_structure_old, null);
+		if ( $struct )
+			$wp_rewrite->set_permalink_structure($this->permalink_structure);
+		else {
+			delete_option($this->permalink_structure_old);
+		}
+		$this->reset();
 	}
 	
 	/**
 	 * Plugin deactivation routines
+	 * @uses WP_Rewrite $wp_rewrite to Update permalink structure
 	 */
 	function deactivate() {
-		$this->activate();
+		//Reset permalink structure
+		if ( $this->using_post_permastruct() ) {
+			global $wp_rewrite;
+			$permastruct = get_option($this->permalink_structure_old, '');
+			$wp_rewrite->set_permalink_structure($permastruct);
+			//Save permastruct setting
+			update_option($this->permalink_structure_old, true);
+		} else {
+			delete_option($this->permalink_structure_old);
+		}
+		//Flush Rules
+		$this->reset();
 	}
 	
 	/**
@@ -141,16 +226,52 @@ class CNR_Structure extends CNR_Base {
 	}
 	
 	/**
+	 * Save old permastruct when custom one set
+	 * @uses `update_option_permalink_structure` Action hook
+	 * @see update_option()
+	 * @see register_hooks() Initialized
+	 * @param string $option Option name
+	 * @param string $old Previous permalink structure value
+	 * @param string $new New permalink structure value
+	 * @return void
+	 */
+	function update_permastruct($old, $new) {
+		//Validate request
+		if ( $old == $new || ( $new != $this->permalink_structure && $old != $this->permalink_structure ) )
+			return false;
+		//Save old permastruct
+		if ( $new == $this->permalink_structure)
+			update_option($this->permalink_structure_old, $old);
+		elseif ( $old == $this->permalink_structure )
+			delete_option($this->permalink_structure_old);
+	}
+	
+	/**
 	 * Returns path to post based on site structure
 	 * @return string Path to post enclosed in '/' (forward slashes)
 	 * Example: /path/to/post/
 	 * @param object $post Post object
 	 */
-	function get_path($post) {
+	function get_path($post, $sample = false) {
 		//Get post parents
 		$parents = CNR_Post::get_parents($post);
 		$sep = '/';
 		$path = $sep;
+		//Modify parent for sample permalink request
+		if ( $sample ) {
+			$this->util->check_post($post);
+			$parent = get_post_meta($post->ID, $this->get_parent_meta_key(), true);
+			
+			if ( $parent && $parent = get_post($parent) ) {
+				if ( !empty($parents) ) {
+					//Remove last element
+					array_pop($parents);
+				}
+				//Add new parent
+				$parents[] = $parent;
+			}
+		}
+		//Build path
 		foreach ($parents as $post_parent) {
 			$path .= $post_parent->post_name . $sep;
 		}
@@ -175,8 +296,8 @@ class CNR_Structure extends CNR_Base {
 	 * @todo Enable redirect_canonical functionality
 	 *
 	 */
-	function post_link($permalink, $post, $leavename = false) {
-		global $wp_query, $cnr_content_utilities;
+	function post_link($permalink, $post, $leavename = false, $sample = false) {
+		global $wp_query;
 		
 		/* Stop processing immediately if:
 		 * Custom permalink structure is not activated by user
@@ -187,32 +308,38 @@ class CNR_Structure extends CNR_Base {
 		if ( !$this->using_post_permastruct()
 			|| ( !$this->util->check_post($post) )
 			|| ( empty($post->post_name) && empty($post->post_title) )
-			|| ( 'draft' == $post->post_status && empty($post->post_name) )
-			|| ( !$cnr_content_utilities->is_default_post_type($post->post_type) && empty($post->post_parent) ) )
-			return $permalink;	
+			|| ( 'draft' == $post->post_status && empty($post->post_name) && !$sample )
+			|| ( 'inherit' == $post->post_status )
+			|| ( !in_array($post->post_type, array('post', 'page', 'attachment', 'revision', 'nav_menu')) && empty($post->post_parent) ) )
+			return $permalink;
 		
-		/*
-		//Canonical redirection usage
-		if ( is_string($post) ) {
-			//Only process single posts
-			if ( is_single() ) {
-				$post = $wp_query->get_queried_object();
-			} else {
-				//Stop processing for all other content (return control to redirect_canonical)
-				return false;
+		//Get base data
+		$base = get_bloginfo('url');
+		$name = '';
+		
+		//Set mode
+		$sample = ( isset($post->filter) && 'sample' == $post->filter ) ? true : $sample;
+		
+		//Get post slug
+		
+		//Sample
+		if ( $sample ) {
+			/**
+			 * Sample permalink
+			 * Use permalink placeholder if sample permalink is being generated 
+			 * @see get_sample_permalink()
+			 */
+			$name = '%postname%';
+			
+			//Remove temporary parent if not valid for current request
+			if ( !defined('DOING_AJAX') || !DOING_AJAX || !isset($_POST['action']) || 'sample-permalink' != $_POST['action'] ) {
+				delete_post_meta($post->ID, $this->get_parent_meta_key());
 			}
 		}
-		*/
-			
-		//Get base URL
-		$base = get_bloginfo('url');
-		
-		$name = '';
-		//Use permalink placeholder if sample permalink is being generated (@see get_sample_permalink())
-		if ( isset($post->filter) && 'sample' == $post->filter )
-			$name = '%postname%';
-		elseif ( !empty($post->post_name) )
+		//Use existing name
+		elseif ( !empty($post->post_name) ) {
 			$name = $post->post_name;
+		}
 		//Build name from title (if not yet set)
 		if ( empty($name) ) {
 			$post->post_status = 'publish';
@@ -221,7 +348,7 @@ class CNR_Structure extends CNR_Base {
 		}
 		
 		//Get post path
-		$path = $this->get_path($post);
+		$path = $this->get_path($post, $sample);
 		
 		//Set permalink (Add trailing slash)
 		$permalink = trailingslashit($base . $path . $name);
@@ -324,30 +451,204 @@ class CNR_Structure extends CNR_Base {
 	}
 	
 	/**
-	 * Enqueues script to manage post permastruct to permalink admin options page
-	 * @param string $page Current page
+	 * Performs additional processing on nav menu objects
+	 * > Adds additional classes to menu items based on current request
+	 * @see wp_nav_menu()
+	 * @uses `wp_nav_menu_objects` filter hook to modify items
+	 * @param array $menu_items Sorted menu items
+	 * @param object $args Arguments passed to function
+	 * @return array Menu items array 
 	 */
-	function admin_enqueue_scripts($page) {
-		//Only continue processing on permalink options page
-		if ( 'options-permalink.php' != $page )
-			return;
+	function nav_menu_objects($menu_items, $args) {
+		$class_base = 'current-page-';
+		$class_ancestor = $class_base . 'ancestor';
+		$class_parent = $class_base . 'parent';
+		//Get current item
+		if ( is_singular()
+			&& ( $item = get_queried_object() )
+			&& !empty($item->post_type)
+			&& !is_post_type_hierarchical($item->post_type) //Only process non-hierarchical post types
+		) {
+			//Get ancestors of current item
+			$ancestors = get_ancestors($item->ID, $item->post_type);
+			
+			//Loop through menu items and add classes to ancestors of current item
+			foreach ( $menu_items as $key => $m_item ) {
+				//Only process menu items representing posts/pages
+				if ( isset($m_item->type) && 'post_type' == $m_item->type && in_array($m_item->object_id, $ancestors) ) {
+					//Add ancestor class to item
+					if ( !is_array($m_item->classes) )
+						$m_item->classes = array();
+					$m_item->classes[] = $class_ancestor;
+					//Check if menu item is parent of current item
+					if ( $item->post_parent == $m_item->object_id )
+						$m_item->classes[] = $class_parent;
+					//Filter duplicate classes
+					$m_item->classes = array_unique($m_item->classes);
+					//Update menu array
+					$menu_items[$key] = $m_item;
+				}
+			}
+		}
 		
-		//Enqueue script to insert custom permalink option
-		wp_enqueue_script($this->add_prefix('options-permalink'), $this->util->get_file_url('js/options_structure.js'), array('jquery'));
-		
-		//Insert permalink option data in javascript for use in enqueued script
-		?>
-		<script type="text/javascript">
-		cnr_permalink_option = {
-			'structure': '<?php echo $this->permalink_structure; ?>',
-			'label': '<?php _e('Structured'); ?>',
-			'example': '<?php echo get_option('home') . '/section-name/sample-post/'?>'
-		};
-		</script>
-		<?php
+		return $menu_items;
 	}
 	
+	/**
+	 * Sets post parent
+	 * @param obj|int $post Post object or ID
+	 * @param obj|int $parent Parent post object or ID
+	 * @param bool $temp (optional) Whether parent should be temporarily set (Default: NO)
+	 */
+	function set_parent($post, $parent = null, $temp = false) {
+		/* Validation */
+		//Post
+		if ( !$this->util->check_post($post) || ( is_null($parent) && !isset($post->post_parent) ) )
+			return false;
+		//Default parent
+		if ( is_null($parent) )
+			$parent = $post->post_parent;
+		//Request
+		if ( 0 != $parent && ( !$this->util->check_post($parent) || !isset($parent->ID) || $post->ID == $parent->ID ) )
+			return false;
+		
+		if ( is_object($parent) ) {
+			$parent = $parent->ID;
+		}
+		
+		/* Set Parent */
+		
+		//Temporary
+		if ( $temp ) {
+			update_post_meta($post->ID, $this->get_parent_meta_key(), $parent);
+		} 
+		//Standard
+		else {
+			//Remove temporary parent
+			delete_post_meta($post->ID, $this->get_parent_meta_key());
+		}
+	}
+
 	/*-** Admin **-*/
+	
+	/**
+	 * Outputs structure data to client
+	 * @param string $page Current page
+	 */
+	function admin_print_scripts() {
+		$out = array();
+		$opts = array (
+			'using_permastruct'		=> $this->using_post_permastruct(),
+			'permalink_structure'	=> $this->permalink_structure,
+			'field_parent' 			=> $this->field_parent
+		);
+		
+		$out[] = $this->util->extend_client_object('structure.options', $opts);
+		
+		if ( $this->util->is_context($this->scripts->structure_permalink->context) ) {
+			$opts_admin = array (
+				'label'		=> __('Structured', $this->get_prefix()),
+				'example'	=> get_option('home') . '/section-name/sample-post/'
+			);
+			
+			$out[] = $this->util->extend_client_object('structure.admin.options', $opts_admin);
+		}
+
+		//Output data
+		echo $this->util->build_script_element(implode(PHP_EOL, $out), 'structure_options');
+	}
+	
+	/**
+	 * Set post parent for current post
+	 * If custom field is present in $postarr, use value to set post's parent
+	 * Post parent is set in WP posts table (as post_parent value) in calling function
+	 * @see $this->admin_post_save() Saves parent as metadata for post
+	 * @see wp_insert_post()
+	 * @uses $this->field_parent as field name to check for
+	 * @param array $data Post data (restricted default columns only) 
+	 * @param array $postarr Post data passed to wp_insert_post() and parsed with defaults
+	 * @return array Modified post data
+	 */
+	function admin_post_insert_data($data, $postarr) {
+		if ( !in_array($data['post_type'], array('revision', 'page')) && !$this->is_processing() ) {
+			//Check for custom field and validate value
+			if ( isset($postarr[$this->field_parent]) ) {
+				$parent_val = intval($postarr[$this->field_parent]);
+				//If field is set, set as parent
+				if ( $parent_val >= 0 )
+					$data['post_parent'] = $parent_val;
+				//Set post name
+				// $this->data_insert_post_name = $data['post_name'];
+			} else {
+				//If field is not set, remove metadata (if previously set)
+				// $this->data_insert_post_name = null;
+			}
+		}
+		//Return updated post data
+		return $data;
+	}
+	
+	/**
+	 * Save post parent as metadata
+	 * Metadata used for backwards compatibility and future-proofing
+	 * @param int $post_ID Saved post ID
+	 * @param obj $post Saved post object
+	 */
+	function admin_post_save($post_ID, $post) {
+		$parent = null;
+		$temp = false;
+			
+		//Autosave
+		if ( defined('DOING_AUTOSAVE') && DOING_AUTOSAVE && $pid =  wp_is_post_autosave($post) ) {
+			//Get temporary parent ID
+			$parent = ( isset($_POST['parent_id']) ) ? $_POST['parent_id'] : 0;
+			//Save temporary parent as metadata
+			$temp = true;
+			$post_ID = $post->post_parent;
+		}
+		
+		$this->set_parent($post_ID, $parent, $temp);
+	}
+	
+	/**
+	 * Move children of deleted section to parent
+	 * Process only pages
+	 * @uses $wpdb
+	 * @param int $post_ID ID of deleted post
+	 */
+	function admin_post_delete($post_ID) {
+		static $p = null;
+		//Only set if post type is page
+		$page = get_post($post_ID);
+		if ( 'page' != $page->post_type )
+			return false;
+		if ( is_null($p) ) {
+			//Set static var and stop processing
+			$p = $post_ID;
+		}
+		elseif ( $p != $post_ID ) {
+			//Clear static var
+			$p = null;	
+		}
+		else {
+			global $wpdb;
+			//Move children
+			$page = get_post($post_ID);
+			$children_ids = $wpdb->get_col($wpdb->prepare("SELECT ID FROM $wpdb->posts WHERE post_parent = %d", $post_ID));
+			$parent_data = array( 'post_parent' => $page->post_parent );
+			$parent_where = array( 'post_parent' => $page->ID );
+			$wpdb->update($wpdb->posts, $parent_data, $parent_where);
+			
+			//Clear child caches & update postmeta
+			foreach ( $children_ids as $child ) {
+				$this->set_parent($child, $page->post_parent);
+				clean_post_cache($child);
+			}
+			
+			//Clear static var
+			$p = null;
+		}
+	}
 	
 	/**
 	 * Adds meta box for section selection on post edit form
@@ -367,11 +668,17 @@ class CNR_Structure extends CNR_Base {
 	 * @param object $post Post Object
 	 */
 	function admin_post_sidebar_section($post) {
+		?>
+		<div class="<?php echo $this->add_prefix('pages_dropdown'); ?>">
+		<?php
 		wp_dropdown_pages(array('exclude_tree' => $post->ID,
 								'selected' => $post->post_parent,
-								'name' => 'parent_id',
+								'name' => $this->field_parent,
 								'show_option_none' => __('- No Section -'),
 								'sort_column'=> 'menu_order, post_title'));
+		?>
+		</div>
+		<?php
 	}
 	
 	/**
@@ -379,7 +686,7 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function admin_restrict_manage_posts() {
 		//Add to post edit only
-		$section_param = 'cnr_section';
+		$section_param = $this->add_prefix('section');
 		if ( $this->util->is_admin_management_page() ) {
 			$selected = ( isset($_GET[$section_param]) && is_numeric($_GET[$section_param]) ) ? $_GET[$section_param] : 0;
 			//Add post statuses
@@ -393,19 +700,19 @@ class CNR_Structure extends CNR_Base {
 	
 	/**
 	 * Filters posts by specified section on the Manage Posts admin page
-	 * Hooks into 'request' filter
+	 * Hooks into 'parse_request' action
 	 * @see WP::parse_request()
 	 * @param array $query_vars Parsed query variables
 	 * @return array Modified query variables
 	 */
 	function admin_manage_posts_filter_section($q) {
 		//Determine if request is coming from manage posts admin page
-		//TODO Modify condition to work in this class
+		$var = $this->add_prefix('section');
 		if ( $this->util->is_admin_management_page()
-			&& isset($_GET['cnr_section'])
-			&& is_numeric($_GET['cnr_section']) 
+			&& isset($_GET[$var])
+			&& is_numeric($_GET[$var]) 
 			) {
-				$q->query_vars['post_parent'] = intval($_GET['cnr_section']);
+				$q->query_vars['post_parent'] = intval($_GET[$var]);
 		}
 	}
 	
@@ -415,7 +722,7 @@ class CNR_Structure extends CNR_Base {
 	 * @return array Modified columns array
 	 */
 	function admin_manage_posts_columns($columns) {
-		$columns['section'] = __('Section');
+		$columns[$this->management_column['name']] = __($this->management_column['title']);
 		return $columns;
 	}
 	
@@ -425,15 +732,19 @@ class CNR_Structure extends CNR_Base {
 	 * @param int $post_id ID of current post
 	 */
 	function admin_manage_posts_custom_column($column_name, $post_id) {
-		$section_id = CNR_Post::get_section();
-		$section = null;
-		if ($section_id > 0) 
-			$section = get_post($section_id);
-		if (!empty($section)) {
+		//Only process for specific columns (stop processing otherwise)
+		if ( $this->management_column['name'] != $column_name )
+			return false;
+		//Get section
+		$section = CNR_Post::get_section($post_id);
+
+		if ( !empty($section) ) {
 			echo $section->post_title;
-			echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section_id . '};</script>'; 
+			$data = array("post_$post_id" => (object) array('post_parent' => $section->ID));
+			echo $this->util->build_script_element($this->util->extend_client_object('posts.data', $data));
+			//echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section->ID . '};</script>'; 
 		} else
-			echo 'None';
+			_e('None');
 	}
 	
 	/**
@@ -445,7 +756,7 @@ class CNR_Structure extends CNR_Base {
 		global $post;
 		$child_types = get_post_types(array('show_ui' => true, '_builtin' => false));
 		$child_types[] = 'post';
-		if ( $column_name == 'section' && in_array($type, $child_types) ) :
+		if ( $column_name == $this->add_prefix('section') && in_array($type, $child_types) ) :
 		?>
 		<fieldset class="inline-edit-col-right">
 			<div class="inline-edit-col">
@@ -453,7 +764,7 @@ class CNR_Structure extends CNR_Base {
 					<label><span class="title">Section</span></label>
 					<?php
 					$options = array('exclude_tree'				=> $post->ID, 
-									 'name'						=> 'post_parent',
+									 'name'						=> $this->field_parent,
 									 'show_option_none'			=> __('- No Section -'),
 									 'option_none_value'		=> 0,
 									 'show_option_no_change'	=> ($bulk) ? __('- No Change -') : '',
@@ -474,6 +785,42 @@ class CNR_Structure extends CNR_Base {
 	 */
 	function admin_bulk_edit_custom_box($column_name, $type) {
 		$this->admin_quick_edit_custom_box($column_name, $type, true);
+	}
+	
+	/* Helpers */
+	
+	/**
+	 * Return key for storing post parent metadata
+	 * @return string Meta key value
+	 */
+	function get_parent_meta_key() {
+		return '_' . $this->field_parent;
+	}
+	
+	/**
+	 * Set processing flag
+	 * @uses status_processing
+	 * @param bool $status (optional) Set processing status
+	 */
+	function start_processing($status = true) {
+		$this->status_processing = !!$status;
+	}
+	
+	/**
+	 * Unset processing flag
+	 * @uses start_processing() to set processing flag
+	 */
+	function stop_processing() {
+		$this->start_processing(false);
+	}
+	
+	/**
+	 * Check if request is currently being processed
+	 * @uses status_processing
+	 * return bool Processing status
+	 */
+	function is_processing() {
+		return !!$this->status_processing;
 	}
 }
 ?>
