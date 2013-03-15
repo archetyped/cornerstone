@@ -1,7 +1,7 @@
 # Cornerstone
 Enhanced Content Management for Wordpress
 
-Cornerstone transforms WordPress into a full-fledged Content Management System.  Say *adios* to the hacks and tricks used to shoehorn your posts into something that resembles a non-blog site and say hello to content management simplified.
+Cornerstone transforms WordPress into a full-fledged Content Management System.  Say *adios* to the hacks and tricks used to shoehorn your content into something that resembles a non-blog site and say hello to content management simplified.
 
 [Learn more][home]
 
