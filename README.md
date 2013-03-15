@@ -6,7 +6,7 @@ Cornerstone transforms WordPress into a full-fledged Content Management System. 
 [Learn more][home]
 
 ## Support
-Found a bug or otherwise experiencing an issue with Simple Lightbox?  [Report the issue here][issue-report]
+Found a bug or otherwise experiencing an issue with Cornerstone?  [Report the issue here][issue-report]
 
 [issue-report]: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues "Report an issue"
 [home]: http://archetyped.com/tools/cornerstone/ "Cornerstone home page"
