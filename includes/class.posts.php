@@ -21,12 +21,6 @@ class CNR_Post_Query extends CNR_Base {
 			'deps'		=> '[core]',
 			'context'	=> 'admin'
 		),
-		/*'quicktags'	=> array (
-			'file'		=> 'js/lib.posts.quicktags.js',
-			'deps'		=> 'quicktags', '[posts]',
-			'context'	=> array('admin_action_edit-item', 'admin_action_add')
-		)
-		*/
 	);
 	
 	/**
@@ -473,11 +467,6 @@ class CNR_Post extends CNR_Base {
 			'deps'		=> '[core]',
 			'context'	=> 'admin'
 		),
-		'quicktags'	=> array (
-			'file'		=> 'js/lib.posts.quicktags.js',
-			'deps'		=> 'quicktags', '[posts]',
-			'context'	=> array('admin_action_edit-item', 'admin_action_add')
-		)
 	);
 	
 	/**
@@ -496,16 +485,6 @@ class CNR_Post extends CNR_Base {
 		
 		//Admin
 		add_action('admin_head', $this->m('admin_set_title'), 11);
-		
-		//TinyMCE
-		/*
-		add_filter('mce_css', $this->m('admin_mce_css'));
-		add_filter('mce_buttons', $this->m('admin_mce_buttons'));
-		add_filter('mce_external_plugins', $this->m('admin_mce_external_plugins'));
-		
-		//Activate Shortcodes
-		$this->sc_activate();
-		*/
 	}
 	
 	/**
@@ -661,48 +640,6 @@ class CNR_Post extends CNR_Base {
 		$this->util->extend_client_object('posts', $obj, true);
 	}
 
-	/**
-	 * Add IntURL CSS to editor
-	 * @uses `mce_css` filter hook to add file
-	 * @param string $mce_css Comma-separated list of CSS files to be added for editor
-	 * @return string Modified list of CSS files
-	 */
-	function admin_mce_css($mce_css) {
-		$mce_css .= ',' . $this->util->get_file_url('mce/mce_styles.css') . '?v=' . $this->util->get_plugin_version();
-		return $mce_css;
-	}
-	
-	/**
-	 * Register custom TinyMCE plugin
-	 * @param array $plugin_array Array of TinyMCE plugins
-	 * @return array Modified array of TinyMCE plugins
-	 */
-	function admin_mce_external_plugins($plugin_array) {
-		$plugin_array[$this->add_prefix('inturl')] = $this->util->get_file_url('mce/plugins/inturl/editor_plugin.js');
-		return $plugin_array;
-	}
-	
-	/**
-	 * Add button to TinyMCE toolbar UI
-	 * @param array $buttons Array of toolbar buttons
-	 * @return array Modified toolbar buttons array
-	 */
-	function admin_mce_buttons($buttons) {
-		//Find Link button
-		$pos = array_search('unlink', $buttons);
-		if ($pos !== false)
-			$pos += 1;
-		else
-			$pos = count($buttons);
-		
-		//Insert button into buttons array
-		$start = array_slice($buttons, 0, $pos);
-		$end = array_slice($buttons, $pos);
-		$start[] = $this->add_prefix('inturl');
-		$buttons = array_merge($start, $end);
-		return $buttons;
-	}
-	
 	function page_title_get_sep($pad = true) {
 		$sep = $this->title_sep;
 		if ( $pad )
