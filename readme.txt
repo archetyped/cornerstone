@@ -16,6 +16,9 @@ Cornerstone makes using your favorite web publishing platform (Wordpress) practi
 The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/cnr-0-7-beta/).
 Main changes
 
+#### Beta 3
+* Optimize: Remove legacy files/code
+
 #### Beta 2
 * Fix: Custom content types not displayed in sections (Unflappable Andy)
 
