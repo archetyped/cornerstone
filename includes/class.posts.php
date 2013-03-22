@@ -692,69 +692,6 @@ class CNR_Post extends CNR_Base {
 	function page_title($title, $sep = '', $seplocation = '') {
 		return $this->page_title_get($title, $sep, $seplocation);
 	}
-	
-	/*-** Shortcodes **-*/
-	
-	/**
-	 * Shortcode activation
-	 * @return void
-	 */
-	function sc_activate() {
-		add_shortcode("inturl", $this->m('sc_inturl'));
-	}
-	
-	/**
-	 * Internal URL Shortcode
-	 * 
-	 * Creates links to internal content based on the current permalink structure
-	 * @return string Output for shortcode
-	 */
-	function sc_inturl($atts, $content = null) {
-		$ret = '';
-		$url_default = '#';
-		$format = '<a href="%1$s" title="%2$s">%3$s</a>';
-		$defaults = array(
-						 'id'		=>	0,
-						 'type'		=>	'post',
-						 'title'	=>	'',
-						 'anchor'	=>	''
-						 );
-		
-		extract(shortcode_atts($defaults, $atts));
-		
-		$anchor = trim($anchor);
-		if (!empty($anchor))
-			$anchor = $url_default . $anchor;
-		
-		//Get URL/Permalink
-		if ($type == 'post') {
-			$id = (is_numeric($id)) ? (int) $id : 0;
-			if ($id != 0) {
-				$url = get_permalink($id);
-				if (!$url)
-					$url = $url_default;
-			}
-			else
-				$url = $url_default;
-			
-			//Add anchor to URL
-			if ($url != $url_default)
-				$url .= $anchor;
-			
-			//Link Title
-			$title = trim($title);
-			if ($title == '' && $url != $url_default)
-				$title = get_post_field('post_title', $id);
-			$title = esc_attr($title);
-		
-			if (empty($content) && $url != $url_default)
-				$content = $url;
-				
-			$ret = sprintf($format, $url, $title, $content);
-		}
-		
-		return $ret;
-	}
 }
 
 ?>
