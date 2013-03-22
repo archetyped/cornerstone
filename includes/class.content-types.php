@@ -2118,12 +2118,14 @@ class CNR_Content_Utilities extends CNR_Base {
 		$pt =& $q->query_vars['post_type'];
 		/* Do not continue processing if:
 		 * > In admin section
+		 * > Not main query
 		 * > Single object requested
 		 * > More than one post type is already specified
 		 * > Post type other than 'post' is supplied
 		 */
 		if ( is_admin()
-		|| $q->is_singular
+		|| !$q->is_main_query()
+		|| $q->is_singular()
 		|| ( is_array($pt)
 			&& ( count($pt) > 1 
 				|| 'post' != $pt[0] )
