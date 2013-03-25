@@ -109,7 +109,7 @@ class CNR_Post_Query extends CNR_Base {
 		$this->count = 0;
 		$this->found = 0;
 		$this->arg_fetch = $this->add_prefix($this->arg_fetch);
-		$this->args = array($this->arg_fetch => true);
+		$this->args = array($this->arg_fetch => true, $this->get_prefix() => true);
 		$this->fetched = false;
 	}
 	
