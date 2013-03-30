@@ -3,8 +3,8 @@ Contributors: Archetyped
 Donate: http://mycharitywater.org/archetyped-2012-fall
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
-Requires at least: 3.4.2
-Tested up to: 3.5
+Requires at least: 3.5.1
+Tested up to: 3.5.1
 Stable tag: trunk
 
 Enhanced content management for Wordpress
@@ -15,6 +15,10 @@ Cornerstone makes using your favorite web publishing platform (Wordpress) practi
 ### BETA NOTES
 The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/cnr-0-7-beta/).
 Main changes
+
+#### Beta 4
+* Update: Remove legacy shortcode code
+* Optimize: Custom content types only added to main and CNR-initiated queries (Props Andy Owen)
 
 #### Beta 3
 * Optimize: Remove legacy files/code
