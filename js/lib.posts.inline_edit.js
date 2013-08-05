@@ -16,9 +16,9 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 			if ( inlineEditPost.initSaved )
 				inlineEditPost.initSaved();
 			//Unbind quick edit click events
-			$('a.editinline').die('click');
+			$('a.editinline').unbind('click');
 			//Bind new quick edit click handler
-			$('a.editinline').live('click', function() { t.editHandler(this); return false; });
+			$('.wp-list-table tbody').on('click', 'a.editinline', function() { t.editHandler(this); return false; });
 			var qeRow = $('#inline-edit');
 			$('a.save', qeRow).click(function() { return t.save(this); });
 			$('td', qeRow).keydown(function(e) { if (e.which == 13) { return t.save(this); } });
