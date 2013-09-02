@@ -11,79 +11,6 @@ var CNR = {};
 
 $('html').addClass('js');
 
-/* Prototypes */
-
-//Array
-
-if ( !Array.compare ) {
-	/**
-	 * Compares another array with this array
-	 * @param array arr Array to compare this array with
-	 * @return bool Whether arrays are equal or not
-	 */
-	Array.prototype.compare = function(arr) {
-		if (typeof arr == 'object' && this.length == arr.length) {
-			for (var x = 0; x < this.length; x++) {
-				//Nested array check
-				if (this[x].compare && !this.compare(arr[x])) {
-					return false;
-				}
-				if (this[x] !== arr[x])
-					return false;
-			}
-			return true;
-		}
-		return false;
-	}
-}
-
-if ( !Array.intersect ) {
-	Array.prototype.intersect = function(arr) {
-		var ret = [];
-		if ( !$.isArray(arr) || !arr.length || !this.length )
-			return ret;
-		//Compare elements in arrays
-		var a1;
-		var a2;
-		var val;
-		if ( this.length < arr.length ) {
-			a1 = this;
-			a2 = arr;
-		} else {
-			a1 = arr;
-			a2 = this;
-		}
-
-		for ( var x = 0; x < a1.length; x++ ) {
-			//Add mutual elements into intersection array
-			val = a1[x];
-			if ( a2.indexOf(val) != -1 && ret.indexOf(val) == -1 )
-				ret.push(val);
-		}
-		
-		//Return intersection results
-		return ret;
-	}
-}
-
-//String
-
-if ( !String.trim ) {
-	String.prototype.trim = function() {
-		return this.replace(/^\s+|\s+$/g,"");
-	}
-}
-if ( !String.ltrim ) {
-	String.prototype.ltrim = function() {
-		return this.replace(/^\s+/,"");
-	}
-}
-if ( !String.rtrim ) {
-	String.prototype.rtrim = function() {
-		return this.replace(/\s+$/,"");
-	}
-}
-
 /* Classes */
 
 /* CNR */
@@ -206,8 +133,9 @@ CNR.extend('util', {
 		//Validate context
 		if ( typeof ctx == 'string' )
 			ctx = [ctx];
-		if ( $.isArray(ctx) && this.get_context().intersect(ctx).length )
+		if ( $.isArray(ctx) && this.arr_intersect(this.get_context(), ctx).length ) {
 			ret = true;
+		}
 		return ret;
 	},
 	
@@ -219,6 +147,43 @@ CNR.extend('util', {
 	 */
 	esc_selector: function(id_value) {
 		return id_value.toString().replace(/(\[|\])/gi, '\\$1');
+	},
+	
+	/**
+	 * Find common elements of 2 arrays
+	 * @param array arr1 First array
+	 * @param array arr2 Second array
+	 * @return array Elements common to both arrays
+	 */
+	arr_intersect: function(arr1, arr2) {
+		var ret = [];
+		if ( arr1 == arr2 ) {
+			return arr2;
+		}
+		if ( !$.isArray(arr2) || !arr2.length || !arr1.length ) {
+			return ret;
+		}
+		//Compare elements in arrays
+		var a1;
+		var a2;
+		var val;
+		if ( arr1.length < arr2.length ) {
+			a1 = arr1;
+			a2 = arr2;
+		} else {
+			a1 = arr2;
+			a2 = arr1;
+		}
+
+		for ( var x = 0; x < a1.length; x++ ) {
+			//Add mutual elements into intersection array
+			val = a1[x];
+			if ( a2.indexOf(val) != -1 && ret.indexOf(val) == -1 )
+				ret.push(val);
+		}
+		
+		//Return intersection results
+		return ret;
 	}
 });
 
