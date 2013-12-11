@@ -3,8 +3,8 @@ Contributors: Archetyped
 Donate: http://mycharitywater.org/archetyped-2012-fall
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
-Requires at least: 3.6
-Tested up to: 3.6
+Requires at least: 3.8
+Tested up to: 3.8
 Stable tag: trunk
 
 Enhanced content management for Wordpress
