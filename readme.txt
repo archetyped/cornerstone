@@ -1,6 +1,6 @@
 === Cornerstone ===
 Contributors: Archetyped
-Donate: http://mycharitywater.org/archetyped-2012-fall
+Donate: https://gum.co/cnr-donate
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
 Requires at least: 3.8
@@ -10,15 +10,15 @@ Stable tag: trunk
 Enhanced content management for Wordpress
 
 == Description ==
-Cornerstone makes using your favorite web publishing platform (Wordpress) practical for any type of site by enhancing its content management capabilities.  Too long have we had to resort to hacks like using categories in menus to build a pseudo site structure (you know what I'm talking about).
+Cornerstone makes WordPress practical for **any type of site** by enhancing its content management capabilities.  Too long have we had to resort to hacks like using categories in menus to build a pseudo site structure (you know what I'm talking about).
 
-The public beta of Cornerstone includes several enhancements, the primary focus of this release being a feature that allows Wordpress to be used for sites that go beyond just blogging-- **Posts in Sections**.  Create a section, add posts to it, they show up when you navigate to that section.  Simple as that.  It really is, but [here's a tutorial on how to do it](http://archetyped.com/know/how-to-organize-posts-in-sections-in-wordpress-with-cornerstone/) just because I think you're awesome.
+Cornerstone enhances your WordPress site in several ways.  One of the most useful features is one that allows Wordpress to be used for sites that go beyond just blogging-- **Posts in Sections**.  Create a section, add posts to it, they show up when visitors navigate to that section.  Simple as that.  It really is, but because you're awesome [here's a tutorial on how to do it](http://archetyped.com/know/how-to-organize-posts-in-sections-in-wordpress-with-cornerstone/).
 
-### Your feedback makes a difference
+### Thanks for the Support!
 
-Cornerstone has been in private development for some time and is currently in use on several sites on the web.  Therefore, the public beta is quite stable and safe to use.  The main purpose of the beta is to get a wider range of user feedback to refine the feature set to something that will benefit users the most.
+The support from the users that love Cornerstone is huge.  You can support Cornerstone's future development and help to make it even better by donating or even just by sending me a nice message :)
 
-[Post your feedback on Cornerstone](http://archetyped.com/lab/cnr-0-7-beta/)
+[Donate to Cornerstone](https://gum.co/cnr-donate)
 
 ### Features
 * ''NEW: Content Types'' - Add custom fields to default (posts, pages, etc.) and custom (events, properties, etc.) post types
@@ -47,7 +47,7 @@ No upgrade notices
 
 == Frequently Asked Questions ==
 
-Post your questions/comments on the [plugin's beta release page](http://archetyped.com/lab/cnr-0-7-beta/).
+Post your questions/comments at [Cornerstone's official issue tracker](https://github.com/archetyped/cornerstone/wiki/Reporting-Issues).
 
 == Screenshots ==
 
