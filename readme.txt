@@ -56,6 +56,9 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 1. Quickly modify a post's section
 
 == Changelog ==
+= 0.7.1 =
+* Update: WordPress 3.8 support
+* Update: Readme content (description, features, links)
 
 = 0.7 =
 * Update: WordPress 3.6 support
