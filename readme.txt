@@ -12,30 +12,6 @@ Enhanced content management for Wordpress
 == Description ==
 Cornerstone makes using your favorite web publishing platform (Wordpress) practical for any type of site by enhancing its content management capabilities.  Too long have we had to resort to hacks like using categories in menus to build a pseudo site structure (you know what I'm talking about).
 
-### BETA NOTES
-The current release is a beta version.  Please test and [provide feedback on the beta release page](http://archetyped.com/lab/cnr-0-7-beta/).
-Main changes
-
-#### Beta 5
-* Update: WordPress 3.6 support
-* Update: Remove deprecated jQuery code
-
-#### Beta 4
-* Update: Remove legacy shortcode code
-* Optimize: Custom content types only added to main and CNR-initiated queries (Props Andy Owen)
-
-#### Beta 3
-* Optimize: Remove legacy files/code
-
-#### Beta 2
-* Fix: Custom content types not displayed in sections (Unflappable Andy)
-
-#### Beta 1
-* Optimize: Permalink structure reset when plugin activated/deactivated
-* Optimize: Post Editor: Update permalink preview when section changed
-* Optimize: Improved client-side file loading
-* Optimize: Encapsulate client-side code
-
 The public beta of Cornerstone includes several enhancements, the primary focus of this release being a feature that allows Wordpress to be used for sites that go beyond just blogging-- **Posts in Sections**.  Create a section, add posts to it, they show up when you navigate to that section.  Simple as that.  It really is, but [here's a tutorial on how to do it](http://archetyped.com/know/how-to-organize-posts-in-sections-in-wordpress-with-cornerstone/) just because I think you're awesome.
 
 ### Your feedback makes a difference
@@ -80,6 +56,18 @@ Post your questions/comments on the [plugin's beta release page](http://archetyp
 1. Quickly modify a post's section
 
 == Changelog ==
+
+= 0.7 =
+* Update: WordPress 3.6 support
+* Update: Remove deprecated jQuery code
+* Update: Remove legacy shortcode code
+* Optimize: Custom content types only added to main and CNR-initiated queries (Props Andy Owen)
+* Optimize: Remove legacy files/code
+* Optimize: Permalink structure reset when plugin activated/deactivated
+* Optimize: Post Editor: Update permalink preview when section changed
+* Optimize: Improved client-side file loading
+* Optimize: Encapsulate client-side code
+* Fix: Custom content types not displayed in sections (Unflappable Andy)
 
 = 0.6 =
 * Add: Content type support
