@@ -33,9 +33,7 @@ function cnr_autoload($classname) {
 //spl_autoload_register('cnr_autoload');
 
 /* Load Assets */
-/*
 $path = dirname(__FILE__) . '/';
 require_once $path . 'controller.php';
 $GLOBALS['cnr'] = new Cornerstone();
 require_once $path . 'functions.php';
-*/

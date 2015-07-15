@@ -6,10 +6,18 @@ Description: Enhanced content management for Wordpress
 Version: dev (BETA)
 Author: Archetyped
 Author URI: http://archetyped.com
+Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
 */
-
+/*
+Copyright 2015 Archetyped (support@archetyped.com)
+*/
+$cnr = null;
 /**
- * @package Cornerstone 
+ * Initialize CNR
  */
-require_once('model.php');
-$cnr = new Cornerstone();
+function cnr_init() {
+	$path = dirname(__FILE__) . '/';
+	require_once $path . 'load.php';
+}
+
+add_action('init', 'cnr_init', 1);
