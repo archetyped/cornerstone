@@ -1,8 +1,5 @@
 <?php
 
-require_once 'class.base.php';
-require_once 'class.posts.php';
-
 /**
  * Core properties/methods for Media management
  * @package Cornerstone

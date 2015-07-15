@@ -1,7 +1,5 @@
 <?php
 
-require_once 'class.base.php';
-
 /* Variables */
 
 //Global content type variables

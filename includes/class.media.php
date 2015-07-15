@@ -1,6 +1,4 @@
 <?php
-require_once 'class.base.php';
-require_once 'class.content-types.php';
 
 /**
  * Core properties/methods for Media management

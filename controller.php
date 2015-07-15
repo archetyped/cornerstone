@@ -1,12 +1,5 @@
 <?php
 
-require_once 'includes/class.base.php';
-require_once 'includes/class.content-types.php';
-require_once 'includes/class.media.php';
-require_once 'includes/class.posts.php';
-require_once 'includes/class.structure.php';
-require_once 'includes/class.feeds.php';
-
 /**
  * @package Cornerstone
  */
