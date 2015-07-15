@@ -13,13 +13,6 @@ require_once 'class.posts.php';
 class CNR_Feeds extends CNR_Base {
 	
 	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Feeds() {
-		$this->__construct();
-	}
-	
-	/**
 	 * Constructor
 	 */
 	function __construct() {

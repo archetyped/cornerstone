@@ -153,13 +153,6 @@ class CNR_Content_Base extends CNR_Base {
 	 * @var array
 	 */
 	var $hooks = array();
-	
-	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Content_Base($id = '', $parent = null) {
-		$this->__construct($id, $parent);
-	}
 
 	/**
 	 * Constructor
@@ -760,13 +753,6 @@ class CNR_Field_Type extends CNR_Content_Base {
 	var $caller = null;
 
 	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Field_Type($id = '', $parent = null) {
-		$this->__construct($id, $parent);
-	}
-
-	/**
 	 * Constructor
 	 */
 	function __construct($id = '', $parent = null) {
@@ -1218,7 +1204,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param callback $handler Function to set as a handler
 	 * @param int $priority (optional) Priority of handler
 	 */
-	function register_placeholder_handler($placeholder, $handler, $priority = 10) {
+	static function register_placeholder_handler($placeholder, $handler, $priority = 10) {
 		if ( 'all' == $placeholder )
 			$placeholder = '';
 		else
@@ -1439,15 +1425,6 @@ class CNR_Content_Type extends CNR_Content_Base {
 	var $groups = array();
 
 	/* Constructors */
-
-	/**
-	 * Legacy constructor
-	 * @param string $id Content type ID
-	 */
-	function CNR_Content_Type($id, $parent = false, $properties = null) {
-		$args = func_get_args();
-		call_user_func_array(array(&$this, '__construct'), $args);
-	}
 
 	/**
 	 * Class constructor

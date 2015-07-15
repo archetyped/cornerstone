@@ -98,10 +98,6 @@ class Cornerstone extends CNR_Base {
 	var $feeds = null;
 	
 	/* Constructor */
-	
-	function Cornerstone()  {
-		$this->__construct();
-	}
 							
 	function __construct() {
 		//Parent Constructor
