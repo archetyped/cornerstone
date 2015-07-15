@@ -1204,7 +1204,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param callback $handler Function to set as a handler
 	 * @param int $priority (optional) Priority of handler
 	 */
-	function register_placeholder_handler($placeholder, $handler, $priority = 10) {
+	static function register_placeholder_handler($placeholder, $handler, $priority = 10) {
 		if ( 'all' == $placeholder )
 			$placeholder = '';
 		else

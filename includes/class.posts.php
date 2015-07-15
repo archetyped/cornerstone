@@ -493,7 +493,7 @@ class CNR_Post extends CNR_Base {
 	 * @param $depth Unused
 	 * @return array of Post Objects/Properties
 	 */
-	function get_parents($post, $prop = '', $depth = '') {
+	static function get_parents($post, $prop = '', $depth = '') {
 		$parents = get_post_ancestors($post = get_post($post, OBJECT, ''));
 		if ( is_object($post) && !empty($parents) && ('id' != strtolower(trim($prop))) ) {
 			//Retrieve post data for parents if full data or property other than post ID is required
