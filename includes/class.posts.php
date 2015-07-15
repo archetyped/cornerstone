@@ -80,10 +80,6 @@ class CNR_Post_Query extends CNR_Base {
 	 */
 	var $fetched;
 	
-	function CNR_Post_Query( $args = null ) {
-		$this->__construct($args);
-	}
-	
 	function __construct( $args = null ) {
 		parent::__construct();
 		

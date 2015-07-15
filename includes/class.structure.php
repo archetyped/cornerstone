@@ -86,13 +86,6 @@ class CNR_Structure extends CNR_Base {
 	/* Constructor */
 	
 	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Structure() {
-		$this->__construct();
-	}
-	
-	/**
 	 * Constructor
 	 */
 	function __construct() {
