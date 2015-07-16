@@ -291,7 +291,7 @@ class CNR_Media extends CNR_Base {
 		$upload = false;
 		if (isset($_REQUEST[$action]))
 			$ret = true;
-		else {
+		elseif (isset($_SERVER['HTTP_REFERER']) ) {
 			$qs = array();
 			$ref = parse_url($_SERVER['HTTP_REFERER']);
 			if ( isset($ref['query']) )
