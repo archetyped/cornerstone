@@ -1,7 +1,5 @@
 <?php
 
-require_once 'class.utilities.php';
-
 /**
  * @package Cornerstone
  * @subpackage Base
