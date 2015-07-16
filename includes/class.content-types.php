@@ -12,64 +12,6 @@ if ( !isset($cnr_field_types) )
 $cnr_content_utilities = new CNR_Content_Utilities();
 $cnr_content_utilities->init();
 
-/* Functions */
-
-/**
- * Register handler for a placeholder in a content type template
- * Placeholders allow templates to be populated with dynamic content at runtime
- * Multiple handlers can be registered for a placeholder,
- * thus allowing custom handlers to override default processing, etc.
- * @uses CNR_Field_Type::register_placeholder_handler() to register placeholder
- * @param string $placeholder Placeholder identifier
- * @param callback $handler Callback function to use as handler for placeholder
- * @param int $priority (optional) Priority of registered handler (Default: 10)
- */
-function cnr_register_placeholder_handler($placeholder, $handler, $priority = 10) {
-	CNR_Field_Type::register_placeholder_handler($placeholder, $handler, $priority);
-}
-
-/**
- * Checks if data exists for specified field
- * @global $cnr_content_utilities
- * @param string $field_id ID of field to check for data
- * @param int|obj $item (optional) Post ID or object to check for field data (Default: global post)
- * @return bool TRUE if field data exists
- */
-function cnr_has_data($field_id = null, $item = null) {
-	global $cnr_content_utilities;
-	return $cnr_content_utilities->has_item_data($item, $field_id);
-}
-
-/**
- * Retrieve data from a field
- * @global $cnr_content_utilities
- * @see CNR_Content_Utilities::get_item_data() for more information
- * @param string $field_id ID of field to retrieve
- * @param string $layout (optional) Name of layout to use when returning data
- * @param array $attr (optional) Additional attributes to pass to field
- * @param int|object $item (optional) Post object to retrieve data from (Default: global post object)
- * @param mixed $default Default value to return in case of errors (invalid field, no data, etc.)
- * @return mixed Specified field data
- */
-function cnr_get_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
-	global $cnr_content_utilities;
-	return $cnr_content_utilities->get_item_data($item, $field_id, $layout, $default, $attr);
-}
-
-/**
- * Prints an item's field data
- * @see CNR_Content_Utilities::the_item_data() for more information
- * @param string $field_id Name of field to retrieve
- * @param string $layout(optional) Layout to use when returning field data (Default: display)
- * @param array $attr Additional items to pass to field
- * @param int|object $item(optional) Content item to retrieve field from (Default: null - global $post object will be used)
- * @param mixed $default Default value to return in case of errors, etc.
- */
-function cnr_the_data($field_id = null, $layout = 'display', $attr = null, $item = null, $default = '') {
-	global $cnr_content_utilities;
-	$cnr_content_utilities->the_item_data($item, $field_id, $layout, $default, $attr);
-}
-
 /* Hooks */
 
 //Default placeholder handlers
