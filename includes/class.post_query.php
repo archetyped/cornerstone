@@ -436,5 +436,4 @@ class CNR_Post_Query extends CNR_Base {
 		
 		return $this->post_ids;
 	}
-	
 }

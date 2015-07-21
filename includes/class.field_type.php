@@ -695,5 +695,4 @@ class CNR_Field_Type extends CNR_Content_Base {
 		$out = ob_get_clean();
 		return $out;
 	}
-
 }

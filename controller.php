@@ -233,5 +233,3 @@ class Cornerstone extends CNR_Base {
 		return false;
 	}
 }
-
-?>

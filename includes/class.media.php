@@ -628,4 +628,3 @@ class CNR_Media extends CNR_Base {
 		<?php
 	}
 }
-?>

@@ -212,4 +212,3 @@ class CNR_Feeds extends CNR_Base {
 		echo $this->get_links();
 	}
 }
-?>
