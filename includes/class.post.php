@@ -146,7 +146,7 @@ class CNR_Post extends CNR_Base {
 	 *
 	 * @return mixed post's section data (Default: ID value) 
 	 */
-	function get_section($post = null, $data = null) {
+	static function get_section($post = null, $data = null) {
 		$p = get_post($post);
 		$retval = 0;
 		if ( is_object($p) && isset($p->post_parent) )
@@ -169,7 +169,7 @@ class CNR_Post extends CNR_Base {
 	 * @uses CNR_Post::get_section()
 	 * @param string $type (optional) Type of data to return (Default: ID)
 	 */
-	function the_section($post = null, $data = 'ID') {
+	static function the_section($post = null, $data = 'ID') {
 		if ( empty($data) )
 			$data = 'ID';
 		echo CNR_Post::get_section($post, $data);

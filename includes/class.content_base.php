@@ -308,7 +308,7 @@ class CNR_Content_Base extends CNR_Base {
 	 * Retrieve base_class property
 	 * @return string base_class property of current class/instance object
 	 */
-	function get_base_class() {
+	static function get_base_class() {
 		$ret = '';
 		if ( isset($this) )
 			$ret = $this->base_class;

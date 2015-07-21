@@ -140,8 +140,10 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 * @param string|CNR_Field $field Object or Field ID to remove 
 	 */
 	function remove_field($field) {
-		$field = CNR_Field_Type::get_id($field);
-		if ( !$field )
+		if ( $field instanceof CNR_Field_Type ) {
+			$field = $field->get_id();
+		}
+		if ( !is_string($field) || empty($field) )
 			return false;
 
 		//Remove from fields array
@@ -224,8 +226,10 @@ class CNR_Content_Type extends CNR_Content_Base {
 	 */
 	function remove_from_group($field, $group = '') {
 		//Get ID of field to remove or stop execution if field invalid
-		$field = CNR_Field_Type::get_id($field);
-		if ( !$field )
+		if ( $field instanceof CNR_Field_Type ) {
+			$field = $field->get_id();
+		}
+		if ( !is_string($field) || empty($field) )
 			return false;
 
 		//Remove field from group
@@ -328,8 +332,10 @@ class CNR_Content_Type extends CNR_Content_Base {
 		if ( 1 == func_num_args() && is_array($field) )
 			$this->data = $field;
 		else {
-			$field = CNR_Field_Type::get_id($field);
-			if ( empty($field) )
+			if ( $field instanceof CNR_Field_Type ) {
+				$field = $field->get_id();
+			}
+			if ( !is_string($field) || empty($field) )
 				return false;
 			$this->data[$field] = $value;
 		}

@@ -82,7 +82,7 @@ class CNR_Feeds extends CNR_Base {
 	/**
 	 * Retrieves a section's child content for output in a feed 
 	 */
-	function get_children() {
+	static function get_children() {
 		if ( is_page() && is_feed() ) {
 			global $wp_query;
 			//Get children of current page

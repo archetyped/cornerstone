@@ -527,7 +527,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @param array $data Extended data for field
 	 * @return string Value to use in place of current placeholder
 	 */
-	function process_placeholder_default($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_default($ph_output, $field, $placeholder, $layout, $data) {
 		//Validate parameters before processing
 		if ( empty($ph_output) && is_a($field, 'CNR_Field_Type') && is_array($placeholder) ) {
 			//Build path to replacement data
@@ -572,7 +572,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_id($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_id($ph_output, $field, $placeholder, $layout, $data) {
 		//Get attributes
 		$args = wp_parse_args($placeholder['attributes'], array('format' => 'attr_id')); 
 		return $field->get_id($args);
@@ -584,7 +584,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_name($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_name($ph_output, $field, $placeholder, $layout, $data) {
 		//Get attributes
 		$args = wp_parse_args($placeholder['attributes'], array('format' => 'default')); 
 		return $field->get_id($args);
@@ -595,7 +595,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_data($ph_output, $field, $placeholder, $layout) {
+	static function process_placeholder_data($ph_output, $field, $placeholder, $layout) {
 		$val = $field->get_data();
 		if ( !is_null($val) ) {
 			$ph_output = $val;
@@ -620,7 +620,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_loop($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_loop($ph_output, $field, $placeholder, $layout, $data) {
 		//Setup loop options
 		$attr_defaults = array (
 								'layout'		=> '',
@@ -668,7 +668,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_data_ext($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_data_ext($ph_output, $field, $placeholder, $layout, $data) {
 		if ( isset($placeholder['attributes']['id']) && ($key = $placeholder['attributes']['id']) && isset($data[$key]) ) {
 			$ph_output = strval($data[$key]);
 		}
@@ -681,7 +681,7 @@ class CNR_Field_Type extends CNR_Content_Base {
 	 * @see CNR_Field_Type::process_placeholder_default for parameter descriptions
 	 * @return string Placeholder output
 	 */
-	function process_placeholder_rich_editor($ph_output, $field, $placeholder, $layout, $data) {
+	static function process_placeholder_rich_editor($ph_output, $field, $placeholder, $layout, $data) {
 		$id = $field->get_id( array (
 			'format' => 'attr_id'
 		));
