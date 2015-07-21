@@ -813,4 +813,3 @@ class CNR_Structure extends CNR_Base {
 		return !!$this->status_processing;
 	}
 }
-?>

@@ -399,5 +399,4 @@ class CNR_Content_Type extends CNR_Content_Base {
 	function get_meta_value() {
 		return serialize(array($this->id));
 	}
-
 }
