@@ -197,7 +197,7 @@ class CNR_Post_Query extends CNR_Base {
 		add_filter($filter, $f_callback);
 		add_action($action, $a_callback);
 		//Get posts
-		$posts =& get_posts($this->args);
+		$posts = get_posts($this->args);
 		//Remove filter after query has completed
 		remove_action($action, $a_callback);
 		remove_filter($filter, $f_callback);
