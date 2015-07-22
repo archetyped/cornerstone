@@ -3,7 +3,7 @@
 Plugin Name: Cornerstone
 Plugin URI: http://archetyped.com/tools/cornerstone/
 Description: Enhanced content management for Wordpress
-Version: dev (BETA)
+Version: 0.0.0-dev
 Author: Archetyped
 Author URI: http://archetyped.com
 Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
