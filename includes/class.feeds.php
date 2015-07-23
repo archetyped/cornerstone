@@ -1,8 +1,5 @@
 <?php
 
-require_once 'class.base.php';
-require_once 'class.posts.php';
-
 /**
  * Core properties/methods for feed management
  * @package Cornerstone
@@ -11,13 +8,6 @@ require_once 'class.posts.php';
  * @uses CNR_Post
  */
 class CNR_Feeds extends CNR_Base {
-	
-	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Feeds() {
-		$this->__construct();
-	}
 	
 	/**
 	 * Constructor
@@ -92,7 +82,7 @@ class CNR_Feeds extends CNR_Base {
 	/**
 	 * Retrieves a section's child content for output in a feed 
 	 */
-	function get_children() {
+	static function get_children() {
 		if ( is_page() && is_feed() ) {
 			global $wp_query;
 			//Get children of current page
@@ -222,4 +212,3 @@ class CNR_Feeds extends CNR_Base {
 		echo $this->get_links();
 	}
 }
-?>

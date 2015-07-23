@@ -918,7 +918,7 @@ class CNR_Utilities {
 	 * @param string $property Property name to retrieve
 	 * @return mixed Property value
 	 */
-	function &get_property(&$obj, $property) {
+	static function &get_property($obj, $property) {
 		$property = trim($property);
 		//Object
 		if ( is_object($obj) )

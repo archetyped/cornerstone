@@ -1,8 +1,5 @@
 <?php
 
-require_once 'class.base.php';
-require_once 'class.posts.php';
-
 /**
  * Core properties/methods for Media management
  * @package Cornerstone
@@ -84,13 +81,6 @@ class CNR_Structure extends CNR_Base {
 	);
 	
 	/* Constructor */
-	
-	/**
-	 * Legacy Constructor
-	 */
-	function CNR_Structure() {
-		$this->__construct();
-	}
 	
 	/**
 	 * Constructor
@@ -823,4 +813,3 @@ class CNR_Structure extends CNR_Base {
 		return !!$this->status_processing;
 	}
 }
-?>

@@ -1,7 +1,5 @@
 <?php
 
-require_once 'class.utilities.php';
-
 /**
  * @package Cornerstone
  * @subpackage Base
@@ -359,5 +357,3 @@ class CNR_Base {
 		return call_user_func_array($this->util->m($this->util, 'remove_prefix'), $args);
 	}
 }
-
-?>
