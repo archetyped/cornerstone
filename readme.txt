@@ -4,7 +4,7 @@ Donate: https://gum.co/cnr-donate
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
 Requires at least: 4.2.2
-Tested up to: 4.2.2
+Tested up to: 4.2.3
 Stable tag: trunk
 
 Enhanced content management for Wordpress
@@ -57,7 +57,7 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 
 == Changelog ==
 = 0.7.2 =
-* Update: WordPress 4.2.2 support
+* Update: WordPress 4.2.3 support
 * Optimize: Autoload classes
 * Optimize: Remove legacy PHP code
 
