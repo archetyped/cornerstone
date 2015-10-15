@@ -61,9 +61,14 @@ class CNR_Media extends CNR_Base {
 	 * Register media-specific field types
 	 */
 	function register_field_types($field_types) {
-		$media = new CNR_Field_Type('media');
+		/**
+		 * @var CNR_Content_Utilities
+		 */
+		global $cnr_content_utilities;
+		
+		// Media (Base)
+		$media = new CNR_Field_Type('media', 'base_closed');
 		$media->set_description('Media Item');
-		$media->set_parent('base_closed');
 		$media->set_property('title', 'Select Media');
 		$media->set_property('button','Select Media');
 		$media->set_property('remove', 'Remove Media');
@@ -72,16 +77,17 @@ class CNR_Media extends CNR_Base {
 		$media->set_layout('display', '{media format="display"}');
 		$media->set_layout('display_url', '{media format="display" type="url"}');
 		$media->add_script( array('add', 'edit-item', 'post-new.php', 'post.php', 'media-upload-popup'), $this->add_prefix('script_media'), $this->util->get_file_url('js/lib.media.js'), array($this->add_prefix('core'), $this->add_prefix('admin')));
-		$field_types[$media->id] =& $media;
-		
-		$image = new CNR_Field_Type('image');
+		$cnr_content_utilities->register_field($media);
+
+		// Image
+		$image = new CNR_Field_Type('image', 'media');
 		$image->set_description('Image');
 		$image->set_parent('media');
 		$image->set_property('title', 'Select Image');
 		$image->set_property('button', 'Select Image');
 		$image->set_property('remove', 'Remove Image');
 		$image->set_property('set_as', 'image');
-		$field_types[$image->id] =& $image;
+		$cnr_content_utilities->register_field($image);
 	}
 	
 	/**
