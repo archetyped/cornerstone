@@ -734,7 +734,7 @@ class CNR_Structure extends CNR_Base {
 			echo $this->util->build_script_element($this->util->extend_client_object('posts.data', $data));
 			//echo '<script type="text/javascript">postData["post_' . $post_id . '"] = {"post_parent" : ' . $section->ID . '};</script>'; 
 		} else
-			_e('None');
+			_e('None', 'cornerstone');
 	}
 	
 	/**
