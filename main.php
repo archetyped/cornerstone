@@ -6,6 +6,7 @@ Description: Enhanced content management for Wordpress
 Version: 0.0.0-dev
 Author: Archetyped
 Author URI: http://archetyped.com
+Text Domain: cornerstone
 Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
 */
 /*
