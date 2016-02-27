@@ -786,9 +786,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		?>
 		</ul>
 		<p class="search-box">
-			<label class="screen-reader-text" for="post-search-input"><?php _e( 'Search Posts' ); ?>:</label>
+			<label class="screen-reader-text" for="post-search-input"><?php _e('Search Posts', 'cornerstone'); ?>:</label>
 			<input type="text" id="post-search-input" name="s" value="<?php the_search_query(); ?>" />
-			<input type="submit" value="<?php esc_attr_e( 'Search Posts' ); ?>" class="button" />
+			<input type="submit" value="<?php esc_attr_e('Search Posts', 'cornerstone'); ?>" class="button" />
 		</p>
 		<?php 
 		if ( have_posts() ) {
@@ -806,18 +806,18 @@ class CNR_Content_Utilities extends CNR_Base {
 		?>
 		<div class="alignleft actions">
 		<select name="action">
-			<option value="-1" selected="selected"><?php _e('Bulk Actions'); ?></option>
+			<option value="-1" selected="selected"><?php _e('Bulk Actions', 'cornerstone'); ?></option>
 			<?php if ( $is_trash ) { ?>
-			<option value="untrash"><?php _e('Restore'); ?></option>
+			<option value="untrash"><?php _e('Restore', 'cornerstone'); ?></option>
 			<?php } else { ?>
-			<option value="edit"><?php _e('Edit'); ?></option>
+			<option value="edit"><?php _e('Edit', 'cornerstone'); ?></option>
 			<?php } if ( $is_trash || !EMPTY_TRASH_DAYS ) { ?>
-			<option value="delete"><?php _e('Delete Permanently'); ?></option>
+			<option value="delete"><?php _e('Delete Permanently', 'cornerstone'); ?></option>
 			<?php } else { ?>
-			<option value="trash"><?php _e('Move to Trash'); ?></option>
+			<option value="trash"><?php _e('Move to Trash', 'cornerstone'); ?></option>
 			<?php } ?>
 		</select>
-		<input type="submit" value="<?php esc_attr_e('Apply'); ?>" name="doaction" id="doaction" class="button-secondary action" />
+		<input type="submit" value="<?php esc_attr_e('Apply', 'cornerstone'); ?>" name="doaction" id="doaction" class="button-secondary action" />
 		<?php wp_nonce_field('bulk-posts'); ?>
 
 		<?php // view filters
@@ -832,7 +832,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$m = isset($_GET['m']) ? (int)$_GET['m'] : 0;
 		?>
 		<select name='m'>
-		<option<?php selected( $m, 0 ); ?> value='0'><?php _e('Show all dates'); ?></option>
+		<option<?php selected( $m, 0 ); ?> value='0'><?php _e('Show all dates', 'cornerstone'); ?></option>
 		<?php
 		foreach ($arc_result as $arc_row) {
 			if ( $arc_row->yyear == 0 )
@@ -857,11 +857,11 @@ class CNR_Content_Utilities extends CNR_Base {
 		wp_dropdown_categories($dropdown_options);
 		do_action('restrict_manage_posts');
 		?>
-		<input type="submit" id="post-query-submit" value="<?php esc_attr_e('Filter'); ?>" class="button-secondary" />
+		<input type="submit" id="post-query-submit" value="<?php esc_attr_e('Filter', 'cornerstone'); ?>" class="button-secondary" />
 		<?php } 
 
 		if ( $is_trash && current_user_can('edit_others_posts') ) { ?>
-		<input type="submit" name="delete_all" id="delete_all" value="<?php esc_attr_e('Empty Trash'); ?>" class="button-secondary apply" />
+		<input type="submit" name="delete_all" id="delete_all" value="<?php esc_attr_e('Empty Trash', 'cornerstone'); ?>" class="button-secondary apply" />
 		<?php } ?>
 		</div>
 
@@ -881,9 +881,9 @@ class CNR_Content_Utilities extends CNR_Base {
 		<div class="clear"></div>
 		<p><?php
 		if ( $is_trash )
-			_e('No posts found in the trash');
+			_e('No posts found in the trash', 'cornerstone');
 		else
-			_e('No posts found');
+			_e('No posts found', 'cornerstone');
 		?></p>
 		<?php } ?>
 		</form>
