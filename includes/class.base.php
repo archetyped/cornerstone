@@ -86,7 +86,12 @@ class CNR_Base {
 		$this->register_hooks();
 		
 		/* Environment */
-		add_action('init', $this->m('init_env'), 1);
+		$hook = 'init';
+		if ( did_action( $hook ) ) {
+			$this->init_env();
+		} else {
+			add_action( $hook, $this->m('init_env'), 1 );
+		}
 	}
 	
 	function register_hooks() {
