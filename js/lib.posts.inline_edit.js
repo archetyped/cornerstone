@@ -1,5 +1,4 @@
 (function($) {
-
 if ( inlineEditPost && CNR && CNR.posts ) {
 	//Move init method to guarantee execution order
 	inlineEditPost.initSaved = inlineEditPost.init;
@@ -16,9 +15,14 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 			if ( inlineEditPost.initSaved )
 				inlineEditPost.initSaved();
 			//Unbind quick edit click events
-			$('a.editinline').unbind('click');
+			$('.wp-list-table tbody').off( 'click',  '.editinline' );
 			//Bind new quick edit click handler
-			$('.wp-list-table tbody').on('click', 'a.editinline', function() { t.editHandler(this); return false; });
+			$('.wp-list-table tbody').on( 'click', '.editinline',
+				function() {
+					t.editHandler(this);
+					return false;
+				}
+			);
 			var qeRow = $('#inline-edit');
 			$('a.save', qeRow).click(function() { return t.save(this); });
 			$('td', qeRow).keydown(function(e) { if (e.which == 13) { return t.save(this); } });
