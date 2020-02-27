@@ -248,6 +248,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			'menu_position'			=> 5,
 			'supports'				=> array('title', 'editor', 'author', 'thumbnail', 'excerpt', 'trackbacks', 'custom-fields', 'comments', 'revisions'),
 			'taxonomies'			=> get_object_taxonomies('post'),
+			'show_in_rest'			=> true,
 		);
 		
 		return $args;
