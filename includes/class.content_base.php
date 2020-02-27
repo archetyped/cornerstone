@@ -363,6 +363,12 @@ class CNR_Content_Base extends CNR_Base {
 	 */
 	function get_id($field = null) {
 		$ret = false;
+		
+		// Get options.
+		$num_args = func_num_args();
+		$options = ( $num_args > 0 && ( $last_arg = func_get_arg($num_args - 1) ) && is_array($last_arg) ) ? $last_arg : array();
+		
+		// Validate field parameter.
 		if ( ( !is_object($field) || !is_a($field, 'cnr_field_type') ) && isset($this) ) {
 			$field =& $this;
 		}
@@ -373,12 +379,8 @@ class CNR_Content_Base extends CNR_Base {
 		if ( is_string($id) )
 			$ret = trim($id);
 		
-		//Setup options
-		$options_def = array('format' => null);
-		 //Get options array
-		$num_args = func_num_args();
-		$options = ( $num_args > 0 && ( $last_arg = func_get_arg($num_args - 1) ) && is_array($last_arg) ) ? $last_arg : array();
-		$options = wp_parse_args($options, $options_def); 
+		// Setup options.
+		$options = wp_parse_args( $options, [ 'format' => null ] );
 		//Check if field should be formatted
 		if ( is_string($ret) && !empty($options['format']) ) {
 			//Clear format option if it is an invalid value
@@ -408,7 +410,7 @@ class CNR_Content_Base extends CNR_Base {
 			$field_id[] = 'attributes';
 
 			//Convert array to string
-			return $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . ( $wrap_trailing ? $wrap['close'] : '');
+			$ret = $field->prefix . $wrap['open'] . implode($wrap['close'] . $wrap['open'], array_reverse($field_id)) . ( $wrap_trailing ? $wrap['close'] : '');
 		}
 		return $ret;
 	}
