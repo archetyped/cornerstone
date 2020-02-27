@@ -15,8 +15,9 @@ if ( CNR && CNR.extend ) CNR.extend('structure', {
 	 * Init
 	 */
 	init: function() {
-		if ( this.base.util.is_context(['admin_page_post-new', 'admin_page_post']) )
+		if ( this.base.util.is_context(['admin_page_post-new', 'admin_page_post']) ) {
 			this.setup_item_edit();
+		}
 	},
 	
 	/**
@@ -38,8 +39,9 @@ if ( CNR && CNR.extend ) CNR.extend('structure', {
 			var f_par = $('#' + this.options.field_parent);
 			//Define event handler
 			var setParent = function(p) {
-				if ( typeof p == 'undefined' || p.toString().length == 0 )
+				if ( typeof p == 'undefined' || p.toString().length == 0 ) {
 					p = 0;
+				}
 				$(sel).val(p);
 			};
 			//Set initial value

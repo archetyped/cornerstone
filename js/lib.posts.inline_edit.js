@@ -12,8 +12,9 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 			this.field_parent = this.base.add_prefix('post_parent');
 			var t = this;
 			//Execute default init method
-			if ( inlineEditPost.initSaved )
+			if ( inlineEditPost.initSaved ) {
 				inlineEditPost.initSaved();
+			}
 			//Unbind quick edit click events
 			$('.wp-list-table tbody').off( 'click',  '.editinline' );
 			//Bind new quick edit click handler
@@ -27,15 +28,17 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 			$('a.save', qeRow).click(function() { return t.save(this); });
 			$('td', qeRow).keydown(function(e) { if (e.which == 13) { return t.save(this); } });
 			//Restore original init method for future use
-			if ( inlineEditPost.initSaved )
+			if ( inlineEditPost.initSaved ) {
 				inlineEditPost.init = inlineEditPost.initSaved;
+			}
 		},
 	
 		save: function(id) {
 			var t = this, post_parent;
 			//Update post data
-			if (typeof(id) == 'object')
+			if (typeof(id) == 'object') {
 				id = t.getId(id);
+			}
 			if (id) {
 				//Get post parent
 				post_parent = $('#edit-' + id + ' #' + t.field_parent + ' option:selected');
@@ -55,8 +58,9 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 		
 		preEdit: function(id) {
 			var t = this, post_id, section_select, parent_id;
-			if (typeof(id) == 'object')
+			if (typeof(id) == 'object') {
 				id = t.getId(id);
+			}
 			//Get master section selection
 			section_select = $('#inline-edit #' + t.field_parent);
 			//Get Parent ID
@@ -73,7 +77,8 @@ if ( inlineEditPost && CNR && CNR.posts ) {
 	});
 }
 
-if ( CNR && CNR.admin && CNR.posts.inline_edit && CNR.posts.inline_edit.init )
+if ( CNR && CNR.admin && CNR.posts.inline_edit && CNR.posts.inline_edit.init ) {
 	$(document).ready(function() { CNR.posts.inline_edit.init(); });
+}
 	
 })(jQuery);
