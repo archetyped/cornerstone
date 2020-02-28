@@ -36,7 +36,7 @@ The support from the users that love Cornerstone is huge.  You can support Corne
 
 == Installation ==
 
-Install and Activate the plugin from the Wordpress.org Plugins Repository
+Install and Activate the plugin from the WordPress.org Plugins Repository
 
 #### Tutorials
 
