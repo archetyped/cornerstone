@@ -1,18 +1,22 @@
 <?php
-/* 
-Plugin Name: Cornerstone
-Plugin URI: http://archetyped.com/tools/cornerstone/
-Description: Enhanced content management for Wordpress
-Version: 0.0.0-dev
-Requires at least: 5.3
-Author: Archetyped
-Author URI: http://archetyped.com
-Text Domain: cornerstone
-Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
+/**
+ * Cornerstone
+ *
+ * @package Cornerstone
+ * @author Archetyped <support@archetyped.com>
+ * @copyright 2020 Archetyped
+ *
+ * Plugin Name: Cornerstone
+ * Plugin URI: http://archetyped.com/tools/cornerstone/
+ * Description: Enhanced content management for Wordpress
+ * Version: 0.0.0-dev
+ * Requires at least: 5.3
+ * Text Domain: cornerstone
+ * Author: Archetyped
+ * Author URI: http://archetyped.com
+ * Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
 */
-/*
-Copyright 2015 Archetyped (support@archetyped.com)
-*/
+
 $cnr = null;
 /**
  * Initialize CNR
