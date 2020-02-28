@@ -36,7 +36,7 @@ The support from the users that love Cornerstone is huge.  You can support Corne
 
 == Installation ==
 
-Install and Activate the plugin from the Wordpress.org Plugins Repository
+Install and Activate the plugin from the WordPress.org Plugins Repository
 
 #### Tutorials
 
@@ -59,6 +59,10 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 1. Quickly modify a post's section
 
 == Changelog ==
+
+= 0.7.7 =
+
+* Fix: Spelling.
 
 = 0.7.6 =
 
