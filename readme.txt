@@ -60,6 +60,10 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 
 == Changelog ==
 
+= 0.7.7 =
+
+* Fix: Spelling.
+
 = 0.7.6 =
 
 * Add: Block editor support for Custom Post Types (CPTs).
