@@ -60,6 +60,16 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 
 == Changelog ==
 
+= 0.7.6 =
+
+* Add: Block editor support for Custom Post Types (CPTs).
+* Update: WordPress 5.3 Compatibility confirmed.
+* Update: WordPress minimum version requirement (5.3).
+* Fix: Plugin initialization.
+* Fix: Display/Save custom field data in post/page editor.
+* Fix: Display/Save section in Quick Editor.
+* Optimize: Code cleanup.
+
 = 0.7.5 =
 
 * Update: Use plugin-specific text domain for localized strings
