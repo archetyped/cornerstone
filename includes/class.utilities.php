@@ -847,34 +847,36 @@ class CNR_Utilities {
 	 * @param mixed $default (optional) Default action if no action exists
 	 * @return string Current action
 	 */
-	function get_action($default = null) {
+	function get_action( $default = null ) {
 		$action = '';
-		
-		//Check if action is set in URL
-		if ( isset($_GET['action']) )
-			$action = $_GET['action'];
-		//Otherwise, Determine action based on plugin plugin admin page suffix
-		elseif ( isset($_GET['page']) && ($pos = strrpos($_GET['page'], '-')) && $pos !== false && ( $pos != count($_GET['page']) - 1 ) )
-			$action = trim(substr($_GET['page'], $pos + 1), '-_');
 
-		//Determine action for core admin pages
-		if ( ! isset($_GET['page']) || empty($action) ) {
+		// Check if action is set in URL
+		if ( isset( $_GET['action'] ) ) {
+			$action = $_GET['action'];
+		} elseif ( isset( $_GET['page'] ) && ( $pos = strrpos( $_GET['page'], '-' ) ) && $pos !== false && ( $pos != strlen( $_GET['page'] ) - 1 ) ) {
+			// Otherwise, Determine action based on plugin admin page suffix
+			$action = trim( substr( $_GET['page'], $pos + 1 ), '-_' );
+		}
+
+		// Determine action for core admin pages
+		if ( ( ! isset( $_GET['page'] ) || empty( $action ) ) && isset( $_SERVER['SCRIPT_NAME'] ) ) {
 			$actions = array(
-				'add'			=> array('page-new', 'post-new'),
-				'edit-item'		=> array('page', 'post'),
-				'edit'			=> array('edit', 'edit-pages')
+				'add'       => array( 'page-new', 'post-new' ),
+				'edit-item' => array( 'page', 'post' ),
+				'edit'      => array( 'edit', 'edit-pages' ),
 			);
-			$page = basename($_SERVER['SCRIPT_NAME'], '.php');
-			
+			$page    = basename( $_SERVER['SCRIPT_NAME'], '.php' );
+
 			foreach ( $actions as $act => $pages ) {
-				if ( in_array($page, $pages) ) {
+				if ( in_array( $page, $pages ) ) {
 					$action = $act;
 					break;
 				}
 			}
 		}
-		if ( empty($action) )
+		if ( empty( $action ) ) {
 			$action = $default;
+		}
 		return $action;
 	}
 	
