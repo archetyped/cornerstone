@@ -4,7 +4,7 @@ Donate: https://gum.co/cnr-donate
 Tags: cornerstone, cms, content, management, system, structure, organization, sections
 Plugin Link: http://archetyped.com/tools/cornerstone/
 Requires at least: 5.3
-Tested up to: 5.6
+Tested up to: 5.8
 Stable tag: trunk
 
 Enhanced content management for WordPress
