@@ -50,7 +50,7 @@ No upgrade notices
 
 == Frequently Asked Questions ==
 
-Post your questions/comments at [Cornerstone's official issue tracker](https://github.com/archetyped/cornerstone/wiki/Reporting-Issues).
+Post your questions/comments at [Cornerstone's official issue tracker](https://github.com/archetyped/cornerstone/wiki/Support-&-Feedback).
 
 == Screenshots ==
 

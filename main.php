@@ -14,7 +14,7 @@
  * Text Domain: cornerstone
  * Author: Archetyped
  * Author URI: http://archetyped.com
- * Support URI: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues
+ * Support URI: https://github.com/archetyped/cornerstone/wiki/Support-&-Feedback
 */
 
 $cnr = null;
