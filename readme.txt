@@ -60,6 +60,10 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 
 == Changelog ==
 
+= 0.8.0 =
+
+* Update: Custom permalink structure option integration for WordPress 6.1+.
+
 = 0.7.8 =
 
 * Fix: Utilities: `count()` used on non-Countable value. (props @nikelaos)
