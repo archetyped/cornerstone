@@ -8,5 +8,5 @@ Cornerstone transforms WordPress into a full-fledged Content Management System. 
 ## Support
 Found a bug or otherwise experiencing an issue with Cornerstone?  [Report the issue here][issue-report]
 
-[issue-report]: https://github.com/archetyped/cornerstone/wiki/Reporting-Issues "Report an issue"
+[issue-report]: https://github.com/archetyped/cornerstone/wiki/Support-&-Feedback "Report an issue"
 [home]: http://archetyped.com/tools/cornerstone/ "Cornerstone home page"
