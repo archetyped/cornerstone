@@ -604,7 +604,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$q['m']   = isset($g['m']) ? (int) $g['m'] : 0;
 		//Category
 		$q['cat'] = isset($g['cat']) ? (int) $g['cat'] : 0;
-		$post_stati  = array(	//	array( adj, noun )
+		$post_stati  = array(
 					'publish' => array(_x('Published', 'post'), __('Published posts'), _n_noop('Published <span class="count">(%s)</span>', 'Published <span class="count">(%s)</span>')),
 					'future' => array(_x('Scheduled', 'post'), __('Scheduled posts'), _n_noop('Scheduled <span class="count">(%s)</span>', 'Scheduled <span class="count">(%s)</span>')),
 					'pending' => array(_x('Pending Review', 'post'), __('Pending posts'), _n_noop('Pending Review <span class="count">(%s)</span>', 'Pending Review <span class="count">(%s)</span>')),
@@ -645,7 +645,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			$q['paged'] = (int) $g['paged'];
 		$q['posts_per_page'] = apply_filters( 'edit_posts_per_page', $posts_per_page );
 		//Search
-		$q[s] = ( isset($g['s']) ) ? $g[s] : '';
+		$q['s'] = ( isset($g['s']) ) ? $g['s'] : '';
 		$wp_query->query($q);
 
 		return array($post_stati, $avail_post_stati);
@@ -729,6 +729,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$user_posts = false;
 		if ( !current_user_can('edit_others_posts') ) {
 			$user_posts_count = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(1) FROM $wpdb->posts p JOIN $wpdb->postmeta m ON m.post_id = p.id WHERE m.meta_key = '_cnr_post_type' AND m.meta_value = %s AND p.post_status != 'trash' AND p.post_author = %d", $type->get_meta_value(), $current_user->ID) );
+			$user_posts_count = intval( $user_posts_count );
 			$user_posts = true;
 			if ( $user_posts_count && empty($_GET['post_status']) && empty($_GET['all_posts']) && empty($_GET['author']) )
 				$_GET['author'] = $current_user->ID;
@@ -738,7 +739,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		?>
 		<div class="wrap">
 		<?php screen_icon('edit'); ?>
-		<h2><?php echo esc_html( $title ); ?> <a href="<?php echo $add_url; ?>" class="button add-new-h2"><?php echo esc_html_x('Add New', 'post'); ?></a> <?php
+		<h2><?php echo esc_html( $title ); ?> <a href="<?php echo sanitize_url( $add_url ); ?>" class="button add-new-h2"><?php echo esc_html_x('Add New', 'post'); ?></a> <?php
 		if ( isset($_GET['s']) && $_GET['s'] )
 			printf( '<span class="subtitle">' . __('Search results for &#8220;%s&#8221;') . '</span>', esc_html( get_search_query() ) ); ?>
 		</h2>
@@ -755,7 +756,7 @@ class CNR_Content_Utilities extends CNR_Base {
 			$num_posts = $this->count_posts($type, 'readable');
 			$class = '';
 			$allposts = '';
-			$curr_page = $_SERVER['PHP_SELF'] . '?page=' . $_GET['page'];
+			$curr_page = sanitize_url( $_SERVER['PHP_SELF'] . '?page=' . $_GET['page'] );
 			if ( $user_posts ) {
 				if ( isset( $_GET['author'] ) && ( $_GET['author'] == $current_user->ID ) )
 					$class = ' class="current"';

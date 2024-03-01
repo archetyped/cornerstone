@@ -197,7 +197,7 @@ class CNR_Feeds extends CNR_Base {
 		$title = ( !empty($links) ) ? __('Subscribe to All updates') : __('Subscribe to Updates');
 		$links[get_feed_link()] = $title;
 		foreach ($links as $href => $title) {
-			$text[] = sprintf($link_template, $href, $title, esc_attr($title));
+			$text[] = sprintf( $link_template, esc_attr( $href ), $title, esc_attr( $title ) );
 		}
 		$text = implode(' or ', $text);
 		return $text;

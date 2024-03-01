@@ -75,7 +75,7 @@ class CNR_Content_Base extends CNR_Base {
 	 */
 	function __construct($id = '', $parent = null) {
 		parent::__construct();
-		$id = trim($id);
+		$id = sanitize_key($id);
 		$this->id = $id;
 		if ( is_bool($parent) && $parent )
 			$parent = $id;
