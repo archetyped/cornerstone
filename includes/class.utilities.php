@@ -1199,7 +1199,7 @@ class CNR_Utilities {
 		if ( is_object($attr) )
 			$attr = (array) $attr;
 		if ( is_array($attr) ) {
-			array_map('esc_attr', $attr);
+			$attr = array_map('esc_attr', $attr);
 			$attr_str = array();
 			foreach ( $attr as $key => $val ) {
 				$attr_str[] = $key . '="' . $val . '"';
