@@ -60,6 +60,12 @@ Post your questions/comments at [Cornerstone's official issue tracker](https://g
 
 == Changelog ==
 
+= 0.8.1 =
+
+* Optimize: Confirm WordPress 6.4 Compatibility
+* Optimize: Data validation/formatting
+* Optimize: Internal code cleanup
+
 = 0.8.0 =
 
 * Update: Custom permalink structure option integration for WordPress 6.1+.
