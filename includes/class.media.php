@@ -186,13 +186,16 @@ class CNR_Media extends CNR_Base {
 			//Get Attachment ID
 			$field_var = $this->add_prefix('field');
 			$args = new stdClass();
-			$args->id = array_shift( array_keys($_POST['setmedia']) );
+			$keys = array_keys($_POST['setmedia']);
+			$args->id = esc_attr( array_shift($keys) );
+			unset($keys);
 			$args->field = '';
 			if ( isset($_REQUEST['attachments'][$args->id][$this->var_field]) )
 				$args->field = $_REQUEST['attachments'][$args->id][$this->var_field];
 			elseif ( isset($_REQUEST[$this->var_field]) )
 				$args->field = $_REQUEST[$this->var_field];
-			$a =& get_post($args->id);
+			$args->field = esc_attr( $args->field );
+			$a = get_post($args->id);
 			if ( ! empty($a) ) {
 				$args->url = wp_get_attachment_url($a->ID);
 				$args->type = get_post_mime_type($a->ID);
@@ -220,7 +223,7 @@ class CNR_Media extends CNR_Base {
 		//Display default UI
 					
 		//Determine media type
-		$type = ( isset($_REQUEST['type']) ) ? $_REQUEST['type'] : 'cnr_field_media';
+		$type = ( isset($_REQUEST['type']) ) ? esc_attr( $_REQUEST['type'] ) : 'cnr_field_media';
 		//Determine UI to use (disk or URL upload)
 		$upload_form = ( isset($_GET['tab']) && 'type_url' == $_GET['tab'] ) ? 'media_upload_type_url_form' : 'media_upload_type_form';
 		//Load UI
@@ -242,7 +245,7 @@ class CNR_Media extends CNR_Base {
 	function attachment_fields_to_edit($form_fields, $attachment) {
 		
 		if ( $this->is_custom_media() ) {
-			$post =& get_post($attachment);
+			$post = get_post($attachment);
 			//Clear all form fields
 			$form_fields = array();
 			//TODO Display custom buttons based on mime type defined in content type's field
@@ -263,7 +266,7 @@ class CNR_Media extends CNR_Base {
 			$field = array(
 							'label'		=> '',
 							'input'		=> 'html',
-							'html'		=> '<input type="submit" class="button" value="' . $set_as . '" name="setmedia[' . $post->ID . ']" />'
+							'html'		=> '<input type="submit" class="button" value="' . esc_attr( $set_as ) . '" name="setmedia[' . $post->ID . ']" />'
 							);
 			$form_fields['buttons'] = $field;
 			//Add field ID value as hidden field (if set)
@@ -284,7 +287,7 @@ class CNR_Media extends CNR_Base {
 	 * @return bool TRUE if item is media, FALSE otherwise
 	 */
 	function is_media($media) {
-		$media =& get_post($media);
+		$media = get_post($media);
 		return ( ! empty($media) && 'attachment' == $media->post_type );	
 	}
 	
@@ -317,7 +320,7 @@ class CNR_Media extends CNR_Base {
 		$vars = array ($this->var_action, $this->var_field);
 		foreach ( $vars as $var ) {
 			if ( isset($_REQUEST[$var]) )
-				echo '<input type="hidden" name="' . $var . '" id="' . $var . '" value="' . esc_attr($_REQUEST[$var]) . '" />';
+				echo '<input type="hidden" name="' . esc_attr( $var ) . '" id="' . esc_attr( $var ) . '" value="' . esc_attr( $_REQUEST[$var] ) . '" />';
 		}
 	}
 	
@@ -495,7 +498,7 @@ class CNR_Media extends CNR_Base {
 	 */
 	function get_media_output($media, $type = 'url', $attr = array()) {
 		$ret = '';
-		$media =& get_post($media);
+		$media = get_post($media);
 		//Continue processing valid media items
 		if ( $this->is_media($media) ) {
 			//URL - Same for all attachments
@@ -536,7 +539,7 @@ class CNR_Media extends CNR_Base {
 	
 	function get_link($media, $attr = array()) {
 		$ret = '';
-		$media =& get_post($media);
+		$media = get_post($media);
 		if ( $this->is_media($media) ) {
 			$attr['href'] = wp_get_attachment_url($media->ID);
 			$text = ( isset($attr['text']) ) ? $attr['text'] : basename($attr['href']);
