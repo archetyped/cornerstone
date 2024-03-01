@@ -604,7 +604,7 @@ class CNR_Content_Utilities extends CNR_Base {
 		$q['m']   = isset($g['m']) ? (int) $g['m'] : 0;
 		//Category
 		$q['cat'] = isset($g['cat']) ? (int) $g['cat'] : 0;
-		$post_stati  = array(	//	array( adj, noun )
+		$post_stati  = array(
 					'publish' => array(_x('Published', 'post'), __('Published posts'), _n_noop('Published <span class="count">(%s)</span>', 'Published <span class="count">(%s)</span>')),
 					'future' => array(_x('Scheduled', 'post'), __('Scheduled posts'), _n_noop('Scheduled <span class="count">(%s)</span>', 'Scheduled <span class="count">(%s)</span>')),
 					'pending' => array(_x('Pending Review', 'post'), __('Pending posts'), _n_noop('Pending Review <span class="count">(%s)</span>', 'Pending Review <span class="count">(%s)</span>')),
