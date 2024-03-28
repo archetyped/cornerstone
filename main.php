@@ -4,7 +4,7 @@
  *
  * @package Cornerstone
  * @author Archetyped <support@archetyped.com>
- * @copyright 2022 Archetyped
+ * @copyright 2024 Archetyped
  *
  * Plugin Name: Cornerstone
  * Plugin URI: http://archetyped.com/tools/cornerstone/
